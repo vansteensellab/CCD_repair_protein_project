@@ -1,0 +1,335 @@
+---
+title: "xv20211230_4_epistasis_model"
+output: html_document
+---
+
+# Script to generate figure #4 in the paper. This figure describes how epistatic interactions are present between chromatin features and protein KOs. Figure outline:
+A- Step by Step for KAT5 and H3K9me2
+B- Matrix for all hits
+C- Hits per library
+D- Hits per pathway
+E- Strong hits examples
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 5:
+A- All proteins matrix
+B- Balance perturbation strong hits
+
+This script generates the plots for figure 4 and S5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+library(STRINGdb)
+
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+chromatin.followup_CCDs <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220503_follow_up_experiment_mll.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% dplyr::select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+  <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220317_DDR_CCD_mean_significance.rds")
+
+non.targetting.CCD_data <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220317_non_targetting_DDR_CCD_mean_significance.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+step2.epistasis <- readRDS( "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220318_CCD_analysis_preprocessing.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+CCD_inhibitors_data <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220318_DDR_CCD_mean_significant.rds")
+
+#Import chromatin data significant
+chromatin_significant_CCD <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220328_chromatin_CCD_mean_significance.rds")
+
+#Import chromatin data significant
+chromatin_all_CCD <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220412_chromatin_CCD_mean_significance_all.rds")
+
+#Import processed SV data for BRCA1, FANCA, BRCA2 mutants
+SV_MH_del_data_tumors <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220530_SCC_SV_MH_deletions.rds")
+```
+
+
+#Figure 3D: ATMi ATRi
+
+```{r}
+#dcast epistatic interactions (PARP proteins)
+ATM.proteins.CCD <- slope.protein.features.all %>% filter(gene %in% c("ATM", "CHEK2"))
+
+#dcast epistatic interactions (PARP inhibitors)
+ATM_inhibitors <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi"))
+
+
+#Cosine distance between all of them
+#Prepare for binding
+ATM.inhibitor.sel <- ATM_inhibitors %>% select(gene = drug, feature, CCD_value)
+ATM.combined <- ATM.proteins.CCD %>% select(gene, feature, CCD_value) %>% bind_rows(ATM.inhibitor.sel) 
+ATM.dcast <- ATM.combined %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value") %>% column_to_rownames(var = "feature")
+cosine.d.ATM<- cosine(as.matrix(ATM.dcast))
+
+#Heatmap order
+FANC_heatmap <- pheatmap(t(FA.proteins.dcast), silent = T, clustering_method = "ward.D", cluster_rows = F)
+FANC.gene.order <- rownames(FA.proteins.dcast[FANC_heatmap$tree_col[["order"]],])
+
+
+#PARP combined heatmap
+ggplot(ATM.combined) + 
+  geom_tile(aes(fct_relevel(gene, c("ATM","ATMi","CHEK2")), fct_relevel(feature,heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+#Figure : SMC5
+
+```{r}
+#dcast epistatic interactions (PARP proteins)
+SMC5_compl <- slope.protein.features.all %>% filter(gene %in% c("SMC5","NSMCE1","NSMCE3","NSMCE2","NSMCE4","SMC6")) %>% na.omit()
+
+SMC5.dcast <- SMC5_compl %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value") %>% column_to_rownames(var = "feature")
+cosine.d.SMC5<- cosine(as.matrix(SMC5.dcast))
+
+#Heatmap order
+SMC5_heatmap <- pheatmap(SMC5.dcast, silent = T, clustering_method = "ward.D", cluster_rows = F)
+SMC5.gene.order <- colnames(SMC5.dcast[SMC5_heatmap$tree_col[["order"]]])
+
+#PARP combined heatmap
+ggplot(SMC5_compl) + 
+  geom_tile(aes(fct_relevel(gene,SMC5.gene.order), fct_relevel(feature,heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+
+#Figure 3E: FA complex
+```{r}
+# Filter FANC proteins
+FA.proteins.CCD <- slope.protein.features.all %>% filter(gene %in% c("FANCL","FAAP100","FAAP24","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","FANCM","FANCD2","FANCI")) 
+
+# dCast FANC proteins
+FA.proteins.dcast <- FA.proteins.CCD %>% reshape2::dcast(gene ~ feature, value.var = "CCD_value") %>% column_to_rownames(var = "gene")
+
+#Cosine distance between all of them
+cosine.d.FANC <- cosine(as.matrix(t(FA.proteins.dcast)))
+
+#Heatmap order
+FANC_heatmap <- pheatmap(t(FA.proteins.dcast), silent = T, clustering_method = "ward.D", cluster_rows = F)
+FANC.gene.order <- rownames(FA.proteins.dcast[FANC_heatmap$tree_col[["order"]],])
+
+#Plot heatmap
+ggplot(FA.proteins.CCD) + 
+  geom_tile(aes(fct_relevel(gene,FANC.gene.order), fct_relevel(feature,heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",  breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15))  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+
+# Figure 4A: DNAPKi
+```{r}
+#dcast epistatic interactions (PARP proteins)
+DNAPK.proteins.CCD <- slope.protein.features.all %>% filter(gene == "PRKDC") %>% select(gene, feature, CCD_value)
+DNAPK.inhibitors <- CCD_inhibitors_data %>% filter(drug == "DNAPKi") %>% select(gene = drug, feature, CCD_value)
+
+# Bind rows
+DNAPK.perturbations <- bind_rows(DNAPK.proteins.CCD, DNAPK.inhibitors)
+
+# DNAPK inhibition
+ggplot(DNAPK.perturbations) + 
+    geom_tile(aes(fct_relevel(gene, c("PRKDC","DNAPKi")), fct_relevel(feature,heatmap.chromatin.order), fill = CCD_value)) +
+    scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), breaks = c(-0.1,0, 0.1), oob = squish)  + 
+    coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# Calculate cosine distance between both (0.68 cosine similarity)
+DNAPK.dcast <- DNAPK.perturbations %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value") %>% column_to_rownames(var = "feature")
+DNAPK.perturbations.dcast <- DNAPK.perturbations %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value")
+cosine.d.DNAPK <- cosine(as.matrix(DNAPK.dcast))
+```
+
+
+
+# Figure 4C: UIMC1 BRCC3
+```{r}
+# Separate data based on the significant IPRs that they have (based on z-score)
+UIMC1_BRCC3<- slope.protein.features.all %>% filter(gene %in% c("BRCC3","UIMC1","BRCA1","PRKDC",""))  %>% na.omit()
+
+# heatmap: All heatmaps together
+ggplot(UIMC1_BRCC3) + 
+  geom_tile(aes(fct_relevel(gene,c("UIMC1","BRCC3","BRCA1")),fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+# Cosine distances
+UIMC1_BRCC3.dcast <- UIMC1_BRCC3 %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value") %>% column_to_rownames(var = "feature")
+cosine.d.BRCC3 <- cosine(as.matrix(UIMC1_BRCC3.dcast))
+```
+
+#Cosine distances of all highlighted pairs
+```{r}
+cosine.highlights.genes <- slope.protein.features.all %>% filter(gene %in% c("BRCC3","UIMC1","BRCA1","FANCL","FAAP100","FAAP24","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","FANCM","FANCD2","FANCI","SMC5","NSMCE1","NSMCE3","NSMCE2","NSMCE4","SMC6","ATM", "CHEK2","PRKDC")) %>% na.omit()
+
+cosine.highlights.drugs <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi", "DNAPKi")) %>% select(gene = drug, feature, CCD_value)
+
+cosine.highlights.all <- bind_rows(cosine.highlights.genes, cosine.highlights.drugs) 
+
+#highlight order
+highlight.order <- c("ATM","ATMi","CHEK2","SMC6","NSMCE3","NSMCE1","SMC5","FANCL","FANCD2","FANCI","FAAP100","FANCE","FANCB","FANCC","FAAP24","FANCG","FANCM","FANCA","FANCF","PRKDC","DNAPKi","UIMC1","BRCC3","BRCA1")
+
+#dcast
+cosine.highlights.dcast <- cosine.highlights.all %>% reshape2::dcast(feature ~ gene, value.var = "CCD_value") %>% column_to_rownames(var = "feature")
+
+#Cosine distance
+cosine.d.highlingts <- cosine(as.matrix(cosine.highlights.dcast)) %>% melt()
+
+#A
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("ATM","ATMi","CHEK2") & Var2 %in% c("ATM","ATMi","CHEK2"))) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#9e0142", mid = "#fee08b", high = "#5e4fa2", limits = c(-1,1))  + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+#B
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("SMC5","SMC6","NSMCE1","NSMCE3") & Var2 %in% c("SMC5","SMC6","NSMCE1","NSMCE3"))) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#9e0142", mid = "#fee08b", high = "#5e4fa2", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+#C
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("FANCL","FANCD2","FANCI","FAAP100","FANCE","FANCB","FANCC","FAAP24","FANCG","FANCM","FANCA","FANCF") & Var2 %in% c("FANCL","FANCD2","FANCI","FAAP100","FANCE","FANCB","FANCC","FAAP24","FANCG","FANCM","FANCA","FANCF"))) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#9e0142", mid = "#fee08b", high = "#5e4fa2", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+#D
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("FANCL","FANCD2","FANCI","FANCE","FANCB","FANCC","FAAP24","FANCG","FANCM","FANCA","FANCF") & Var2 %in% c("FANCL","FANCD2","FANCI","FANCE","FANCB","FANCC","FAAP24","FANCG","FANCM","FANCA","FANCF"))) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#9e0142", mid = "#fee08b", high = "#5e4fa2", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+#E
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("PRKDC","DNAPKi") & Var2 %in% c("PRKDC","DNAPKi")) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#9e0142", mid = "#fee08b", high = "#5e4fa2", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+
+
+
+```
+
+
+# Figure 4F: BRCA2-/- tumors structural variants
+```{r}
+#Plot split by LAD and iLAD
+LAD.data.mut <- SV_MH_del_data_tumors %>% dplyr::group_by(type,del_class, LAD_status) %>% dplyr::summarise(count = n()) %>% left_join(mut_per_tumour) %>% rowwise() %>% mutate(mean_c_LAD = count/s_count) %>% ungroup()
+LAD.data.mut.filtered <- LAD.data.mut %>% filter(LAD_status %in% c("ciLAD","cLAD") & del_class == "MH" & HPV == FALSE & type %in% c("spo","BRCA2mut"))
+
+ggplot(LAD.data.mut.filtered) + geom_col(aes(LAD_status, mean_c_LAD, fill = LAD_status)) + theme_bw() + ylab("Average MH deletions per tumour") + xlab("Chromatin type") + facet_wrap(~ fct_relevel(type, c("spo","BRCA2mut")))
+```
+

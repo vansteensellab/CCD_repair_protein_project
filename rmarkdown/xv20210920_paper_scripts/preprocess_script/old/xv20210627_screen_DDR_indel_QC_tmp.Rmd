@@ -1,0 +1,233 @@
+---
+title: "xv20210526_screen_DDR_indel_final"
+output: html_document
+---
+
+#In this Rmarkdown file I will add all the variables needed:
+    - Clean data-set: Only keep essential columns (If needed always can go back to "xv20200320_screen_R1_indel_data.rds")
+    - Gene names: Import data from library
+    - Essentiality data: CRISPR screenings & Pickles database
+    
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+```{r}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(readxl)
+library(grid)
+library(gridExtra)
+library(platetools)
+library(plyr)
+```
+
+## Read RDS file that contains all the indel data
+```{r}
+#Load files
+setwd("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/")
+
+#Data set that will compute all indels
+screen.tib.ddr <- readRDS(file = "xv20210526_screen_DDR_indel_data.rds")
+#Data table with all the ddr library
+DDR.library <- readRDS(file = "xv20210609_ddr_library.rds")
+```
+
+# Clean data-set remove unnecessary columns: 
+```{r}
+
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.ddr <- screen.tib.ddr %>% 
+  separate(exp, into = c("plate","replicate","bio.rep","well"), remove = F) %>% 
+  filter(del_7 + ins_1 > 30) %>% 
+  mutate(indelreads = rowSums(.[, indel_cols]),
+         MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+         NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+         freqMMEJ = pct_del_7,
+         freqNHEJ = pct_ins_1,
+         freqCut = 1 - pct_wt,
+         NHEJMMEJratio = ins_1 / del_7) %>% 
+  mutate(type = case_when(well %in% c("D6","E6","F6","G6") ~ "WT",
+                            plate == "P6" & well %in% c("H3","H4","H5","H7","H8","H9","H10","H11","H12") ~ "WT",
+                            well == "C6" ~ "POLQ",
+                            well %in% c("A6","B6","H6") ~ "other_controls",
+                            TRUE ~ "KO"))
+
+screen.data.tib <- screen.data.ddr %>%
+  select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN","exp"),indelreads) %>% 
+  distinct()
+
+```
+
+# QC plots in read number and efficiency
+## Data loading read number
+
+These are data from the crispr-trip.snake script, and a text file that has has been obtained as explained above.  
+
+```{r load and process the data}
+# First I load the statistics data from the mapping.
+setwd("/DATA/projects/DSBrepair/data/AGM20210205_DDR_screen_reseq_f/parsed/")
+file.list <- list.files(pattern='statistics.txt', full.names = TRUE)
+getwd()
+indel.statistics.list <- lapply(file.list, 
+                                read.table, 
+                                header = TRUE)
+
+names(indel.statistics.list)<- gsub('mutation.(.*?).statistics.txt', 
+                                    '', 
+                                    file.list)
+# we need to remove the index column for the time being
+indel.statistics.list <- lapply(indel.statistics.list, function(x) { x["index"] <- NULL; x })
+indel.statistics.df <- do.call(rbind.data.frame, 
+                               indel.statistics.list)
+# Extract the information from the sample names
+indel.statistics.df$sample.well <- rownames(indel.statistics.df)
+indel.statistics.df$run <- str_extract(indel.statistics.df$sample.well,"(?<=./)....")
+indel.statistics.df$replicate <- str_extract(indel.statistics.df$sample.well,"(?<=_R).")
+indel.statistics.df$sample <- str_extract(indel.statistics.df$sample.well,"(?<=_)R.*(?=_.*stat)")
+indel.statistics.df$plate <- str_extract(indel.statistics.df$sample.well,"(?<=_P).")
+indel.statistics.df$well <- str_extract(indel.statistics.df$sample.well,"(?<=P._).*(?=.stat)")
+
+```
+
+#Plot reads per well
+```{r plotting the reads per plate}
+setwd("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/reports/")
+pdf("xv20210609_QCplot.pdf", width = 12, height = 4)
+for (i in unique(indel.statistics.df$sample)) {
+  
+  # Select the flowjo data set
+  data <- indel.statistics.df %>% filter(sample== i)
+  
+  limits <- c(5000,max(data$reads))
+
+  # Plot this, first the PI staining with a custom color-coded density
+  y <- density(data$reads)
+  plt1 <- ggplot(data.frame(x = y$x, y = y$y),
+                 aes(x = x, y = y)) +
+    geom_line() +
+    geom_segment(aes(xend = x, yend = 0, colour = x)) +
+    xlim(limits) + xlab("reads") + ylab("frequency") +
+    ggtitle(paste("Read counts -",
+                unique(data$sample))) +
+    scale_color_distiller(type = "div", limits = limits, name = "PI_area") +
+    theme_bw() +
+    theme(legend.position="none")
+  
+  # Then the plate with color-coded wells
+  plt2 <- raw_map(data$reads, 
+                 data$well) +
+    ggtitle(unique(data$sample)) +
+    scale_fill_distiller(type = "div", limits = limits, name = "reads")
+  grid.arrange(plt1, plt2, ncol = 2, widths = c(1, 1.3))
+}
+dev.off()
+```
+
+#Plot cutting efficiency
+```{r plotting the reads per plate}
+#Arrange screen.data.tib
+cut.QC.tib <-  screen.data.tib %>% select(freqCut, barcode, Plate, well, Rep,BioRep) %>% dplyr::group_by(Plate,well,BioRep,Rep) %>% dplyr::summarize(meancuteff = mean(freqCut)) %>% mutate(sample = paste0(BioRep, "_", Rep, "_",Plate))
+  
+  
+setwd("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/export")
+pdf("xv20210607_QCplot_cuteff.pdf", width = 12, height = 4)
+for (i in unique(indel.statistics.df$sample)) {
+  
+  # Select the flowjo data set
+  data <- cut.QC.tib %>% filter(sample== i)
+  
+  limits <- c(0,1)
+
+  # Plot this, first the PI staining with a custom color-coded density
+  y <- density(data$meancuteff)
+  plt1 <- ggplot(data.frame(x = y$x, y = y$y),
+                 aes(x = x, y = y)) +
+    geom_line() +
+    geom_segment(aes(xend = x, yend = 0, colour = x)) +
+    xlim(limits) + xlab("Cutting efficiency") + ylab("frequency") +
+    ggtitle(paste("Cuting efficiency -",
+                unique(data$sample))) +
+    scale_color_distiller(type = "div", limits = limits, name = "PI_area") +
+    theme_bw() +
+    theme(legend.position="none")
+  
+  # Then the plate with color-coded wells
+  plt2 <- raw_map(data$meancuteff, 
+                 data$well) +
+    ggtitle(unique(data$sample)) +
+    scale_fill_distiller(type = "div", limits = limits, name = "reads")
+  grid.arrange(plt1, plt2, ncol = 2, widths = c(1, 1.3))
+}
+dev.off()
+
+#Plot freqpoly per plate
+ggplot(cut.QC.tib) + geom_density(aes(meancuteff,fill = sample, color = sample), alpha = 0.1) + facet_wrap(~ Rep) + theme_bw()
+```
+
+#Save files 
+The final version with selected columns but also, the data frame that contains all the indel data. I will use the second data set to check for effects in other mutations, in extreme cases such as POLL.
+```{r}
+setwd("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/")
+
+#Save ddr screen data for z-score analysis, only selected columns
+saveRDS(screen.data.tib, file = "xv20210609_ddr_screen_data.rds")
+
+#Save ddr screen with all mutation data for extreme cases
+saveRDS(screen.data.ddr, file = "xv20210609_ddr_all_indel_data.rds")
+```
+

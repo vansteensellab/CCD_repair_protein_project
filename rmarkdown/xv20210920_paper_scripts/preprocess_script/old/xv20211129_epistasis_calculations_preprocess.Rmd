@@ -1,0 +1,148 @@
+---
+title: "xv20211121_epistasis_model_bas"
+output: html_document
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r, include= FALSE}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+#Chromatin data
+clone5_chrom_tib <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200519_clone5_newdoms_chromatin.RDS")
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+# Inhibitor experiment
+inhibitor.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210716_E1627_ATR_inhibitor/data/xv20210716_E1627_indel_script_ATRi.rds") %>% left_join(inhibitor.table)
+
+```
+
+# Put both screens together
+```{r}
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+```
+
+#Example with three genes (POLL, FANCM, POLQ) & I will use "H3K4me1" as example
+1st step = Compare POLL, FANCM, POLQ and WT data points vs. H3K4me1 (in lin or log space)
+
+step 1 = plot 
+
+```{r}
+# Data table and compute log2MMEJ
+log2.MMEJ.screen.detail.all <- both.screen.detail %>% select(t.rep, MMEJscore,library, gene,barcode) %>% mutate(log2MMEJ = log2(MMEJscore)) %>% filter(!(gene == "KAT5" & library == "DNA_repair"))
+
+# WT data table set
+wt.set <- filter(both.screen.controls, gene == "WT") %>% select(t.rep, MMEJscore,library, gene,barcode) %>% mutate(log2MMEJ = log2(MMEJscore)) %>% dplyr::group_by(barcode, t.rep,library) %>% dplyr::summarise(wt.log2MMEJ = mean(log2MMEJ, na.rm = T), wt.MMEJ = mean(MMEJscore, na.rm = T))
+
+# Plot differences
+data.for.plotting.all <- wt.set %>% mutate(gene = "WT") %>% select(t.rep, MMEJscore = wt.MMEJ, library, gene, barcode,log2MMEJ = wt.log2MMEJ) %>% bind_rows(log2.MMEJ.screen.detail.all) %>% mutate(rep_lib = paste(t.rep,library, sep = "_")) %>% dplyr::group_by(gene,barcode) %>% dplyr::summarise(m.log2MMEJ = mean(log2MMEJ, na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+```
+
+
+# 2nd step check compute distances and plot them
+```{r}
+# Each replicate has a different value (compute differences by replicate)
+log2.distance.mmej.all <- log2.MMEJ.screen.detail.all %>% left_join(wt.set) %>% mutate(log2.dist = sqrt((log2MMEJ - wt.log2MMEJ)^2)) 
+mean.log2.distance.mmej.all <- log2.distance.mmej.all %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(m.log2.dist = mean(log2.dist, na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+```
+# Extract slopes for all genes
+```{r}
+# Perform analysis across all features for three test genes
+chromatin.features <- colnames(mean.log2.distance.mmej.all)[6:30]
+
+slope.protein.features.all <- tibble(gene = NA, feature = NA, slope.log2 = NA, term = NA)
+
+for (i in unique(mean.log2.distance.mmej.all$gene)) {
+  for (j in colnames(mean.log2.distance.mmej.all)[6:30]) {
+    model.dt <- mean.log2.distance.mmej.all %>% filter(gene == i)
+    model.epistasis.log2 <- lm(formula = m.log2.dist ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+    slope.protein.features.all <- slope.protein.features.all %>% add_row(gene = i, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term))
+  }
+}
+
+```
+#Save every step
+```{r}
+# Step 1
+saveRDS(data.for.plotting.all,  file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_1_step.rds")
+
+#Step 2
+saveRDS(mean.log2.distance.mmej.all, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_2_step.rds")
+
+# Save all proteins correlation final
+saveRDS(slope.protein.features.all, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_all_genes.rds")
+
+```
+

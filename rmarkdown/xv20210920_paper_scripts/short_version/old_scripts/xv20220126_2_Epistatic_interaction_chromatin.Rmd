@@ -1,0 +1,485 @@
+---
+title: "xv20211230_4_epistasis_model"
+output: html_document
+---
+
+# Script to generate figure #4 in the paper. This figure describes how epistatic interactions are present between chromatin features and protein KOs. Figure outline:
+A- Step by Step for KAT5 and H3K9me2
+B- Matrix for all hits
+C- Hits per library
+D- Hits per pathway
+E- Strong hits examples
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 5:
+A- All proteins matrix
+B- Balance perturbation strong hits
+
+This script generates the plots for figure 4 and S5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220128b_ratio_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_kinase_inhib_epistasis.rds")
+```
+# Figure 2B-D: Examples
+  #2B: Favors MMEJ - RAD50 & LMNB1
+```{r}
+# Plot RAD50 with LMNB1
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("RAD50")),
+       aes(LMNB1,m.log2.ratio.dist, color = gene)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor() +
+  scale_color_manual(values = "#EF6817") +
+  theme_bw() + ylab("log2(FC NHEJ:MMEJ balance)")
+
+```
+
+#2C: No interaction - MDC1 and H2AFZ
+```{r}
+# Plot RAD50 with LMNB1
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("MDC1")),
+       aes(H2AFZ,m.log2.ratio.dist)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor()+
+  theme_bw() + ylab("log2(FC NHEJ:MMEJ balance)") + 
+```
+# Protein that favors NHEJ - POLL and H3K4me1
+```{r}
+# Plot POLL with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("POLL")),
+       aes(H3K36me3,m.log2.ratio.dist, color = gene)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor() +
+  scale_color_manual(values = "#EF6817") +
+  theme_bw() + ylab("log2(FC NHEJ:MMEJ balance)")
+```
+
+#Figure 4A: Step by step explanation KAT5
+```{r}
+#Step 1: IPR WT vs. KAT5
+ggplot(step2.epistasis %>% filter(gene %in% c("WT","KAT5"))) + geom_col(aes(fct_reorder(barcode,m.log2.ratio.dist), m.log2.ratio.dist, fill = gene)) + scale_color_manual(values = c("#EF6817","#21201F")) + theme_bw() +  ylab("log2(MMEJ:NHEJ ratio)") + theme(axis.text.x = element_blank(), legend.position = "top") + ylim(c(0,0.8))
+
+# Difference vs. mean effect
+step2.epistasis.effect <- step2.epistasis %>%
+  group_by(gene) %>%
+  dplyr::summarise(diff = max(m.log2.ratio.dist) - min(m.log2.ratio.dist), mean = abs(mean(m.log2.ratio.dist))) %>% melt()
+
+
+
+ggplot(step2.epistasis.effect %>% filter(gene == "KAT5")) +
+  geom_quasirandom(aes(variable,value)) + theme_bw()
+
+hits.fdr <- test.log2.dist %>% filter(p.adj < 0.001) %>% pull(gene)
+
+#Step2: Distance vs H3K9me2
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("KAT5")),
+       aes(H3K9me2,m.log2.ratio.dist, color = gene)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor() +
+  scale_color_manual(values = "#EF6817") +
+  theme_bw() + ylab("Distance WT vs. KO")
+
+# Gent intercept and slope
+slope.protein.features.all %>% filter(gene == "KAT5" & feature == "H3K9me2")
+
+#Plot KAT5 interactions
+ggplot(slope.protein.features.all %>% filter(gene == "KAT5")) +
+  geom_col(aes(fct_relevel(feature,clone5_chromatin_cluster),epistasis.final, fill = gene)) + geom_vline(aes(xintercept = 0)) + theme_bw() + coord_flip() + scale_fill_manual(values = "#EF6817")
+
+```
+
+# Figure 4B: Matrix for hits
+```{r}
+#genes to select
+IPR.significance <- filter(per_19IPR_data, abs(IPR.z.score) > 1.95) %>% dplyr::group_by(gene) %>% mutate(significant.pert = case_when(IPR.z.score < 0 ~ "MMEJ", IPR.z.score > 0 ~ "NHEJ")) %>% dplyr::select(gene,significant.pert) %>% distinct() %>% reshape2::dcast(gene ~ significant.pert) %>% mutate(signif.pert = case_when(NHEJ == "NHEJ" & is.na(MMEJ) ~ "NHEJ", MMEJ == "MMEJ" & is.na(NHEJ) ~ "MMEJ", T ~ "both")) %>% dplyr::select(gene,signif.pert)
+
+#Add genes that
+number.IPR.significant <- filter(per_19IPR_data, abs(IPR.z.score) > 1.95) %>% dplyr::group_by(gene) %>% dplyr::summarise(count = n()) %>% filter(count > 2)
+# Filter slopes
+selected.slopes <-  slope.protein.features.all %>% left_join(IPR.significance, by = "gene") %>% na.omit() %>% mutate(epistasis.final.b = case_when(signif.pert == "MMEJ" & epistasis.final < 0 ~ 0, signif.pert == "NHEJ" & epistasis.final > 0 ~ 0, T ~ epistasis.final))
+
+tmp.gene.hits <- filter(test.log2.dist, p.adj < 0.0001) %>% pull(gene)
+
+hit.genes <- filter(hits.both.screens, pathway != "NA") %>% separate(ID_gene, into = "gene") %>% pull(gene) %>% unique()
+
+#Select 200 genes with highest differences
+big.rearrangement.2 <- selected.slopes %>% 
+  filter(epistasis.final != 0) %>%
+  group_by(gene) %>%
+  summarise(delta = max(slope) - min(slope),
+            stdev = sd(slope),
+            highest = max(abs(epistasis.final)),
+            med.interaction = median(abs(epistasis.final), na.rm = T)) %>%
+  slice_max(med.interaction, n = 200) %>%
+  pull(gene)
+
+# dcaast with selected
+slope.prot.features.dcast.hits <- selected.slopes %>% filter(gene %in% big.rearrangement.2) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.hits <- pheatmap(slope.prot.features.dcast.hits, silent = F)
+top200 <- dist(slope.prot.features.dcast.hits)
+row_dend = hclust(top200)
+row_dend.hits <- as.dendrogram(row_dend)
+row_dend.hits <- seriate_dendrogram(row_dend.hits, top200, method="OLO")
+
+heatmap.gene.order.slope.diff.hits <- rownames(slope.prot.features.dcast.hits[as.hclust(row_dend.hits)[["order"]],])
+heatmap.chromatin.order.slope.diff.hits <- colnames(slope.prot.features.dcast.hits[,heatmap.slope.diff.hits$tree_col[["order"]]])
+
+# This are the effects
+
+# heatmap
+ggplot(selected.slopes %>% filter(gene %in% big.rearrangement.2)) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.hits),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_blank(), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + coord_fixed(expand = F,ratio = 2)
+
+ggplot(slope.protein.features.all %>% filter(gene %in% big.rearrangement.2)) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.hits),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + coord_fixed(expand = F,ratio = 2)
+
+# Dendrogram
+ggdendrogram(heatmap.slope.diff.hits$tree_row)
+
+
+```
+#split by positive and negative interactions
+```{r}
+# How many genes have interactions in NHEJ, MMEJ or both
+interaction.summary <- selected.slopes %>% dplyr::group_by(gene) %>% dplyr::summarise(mmej.ep = sum(epistasis.final > 0), nhej.ep = sum(epistasis.final < 0)) %>% mutate(gene.class = case_when(mmej.ep == 0 & nhej.ep > 0 ~ "all.nhej",nhej.ep == 0 & mmej.ep > 0 ~ "all.mmej", nhej.ep > 0 & mmej.ep > 0 ~ "both.ep", T ~ "no.ep"))
+
+#slope.with.gene.feature
+gene.f.slope.protein <- selected.slopes %>% left_join(interaction.summary)
+
+epistasis.summary <- selected.slopes %>% 
+  left_join(interaction.summary) %>%
+  filter(epistasis.final != 0) %>%
+  group_by(gene,gene.class) %>%
+  summarise(delta = max(slope) - min(slope),
+            stdev = sd(slope),
+            highest = max(abs(epistasis.final)),
+            med.interaction = median(abs(epistasis.final), na.rm = T)) 
+
+
+#Summary for all.nhej
+all.nhej.matrix <- epistasis.summary %>% filter(gene.class == "all.nhej") %>% arrange(desc(med.interaction))
+nhej.genes.highlight <- all.nhej.matrix[1:60,] %>% pull(gene)
+
+#Summary for all.nhej
+all.mmej.matrix <- epistasis.summary %>% filter(gene.class == "all.mmej") %>% arrange(desc(med.interaction))
+mmej.genes.highlight <- all.mmej.matrix[1:100,] %>% pull(gene)
+
+#Summary for all mixed
+mixed.matrix <- epistasis.summary %>% filter(gene.class == "both.ep")
+mix.genes.highlight <- mixed.matrix[1:43,] %>% pull(gene)
+
+
+# dcaast with selected
+slope.prot.features.dcast.mmej <- gene.f.slope.protein %>% filter(gene %in% mmej.genes.highlight) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.mmej <- pheatmap(slope.prot.features.dcast.mmej, silent = F)
+mmej <- dist(slope.prot.features.dcast.mmej)
+row_dend.mmej = hclust(mmej)
+row_dend.hits.mmej <- as.dendrogram(row_dend.mmej)
+row_dend.hits.mmej <- seriate_dendrogram(row_dend.hits.mmej, mmej, method="OLO")
+
+heatmap.gene.order.slope.diff.mmej <- rownames(slope.prot.features.dcast.mmej[as.hclust(row_dend.hits.mmej)[["order"]],])
+heatmap.chromatin.order.slope.diff.hits <- colnames(slope.prot.features.dcast.hits[,heatmap.slope.diff.hits$tree_col[["order"]]])
+
+# Both sides
+ggplot(selected.slopes %>% left_join(interaction.summary, by = "gene") %>% filter(gene %in% mmej.genes.highlight)) + 
+  geom_tile(aes(fct_relevel(gene,rev(heatmap.gene.order.slope.diff.mmej)),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final.b)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(ratio = 1)
+
+```
+
+```{r}
+# dcaast with selected
+slope.prot.features.dcast.nhej <- gene.f.slope.protein %>% filter(gene %in% nhej.genes.highlight) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.nhej <- pheatmap(slope.prot.features.dcast.nhej, silent = F)
+nhej <- dist(slope.prot.features.dcast.nhej)
+row_dend.nhej = hclust(nhej)
+row_dend.hits.nhej <- as.dendrogram(row_dend.nhej)
+row_dend.hits.nhej <- seriate_dendrogram(row_dend.hits.nhej, nhej, method="OLO")
+
+heatmap.gene.order.slope.diff.nhej <- rownames(slope.prot.features.dcast.nhej[as.hclust(row_dend.hits.nhej)[["order"]],])
+heatmap.chromatin.order.slope.diff.hits <- colnames(slope.prot.features.dcast.hits[,heatmap.slope.diff.hits$tree_col[["order"]]])
+
+# Both sides
+ggplot(selected.slopes %>% left_join(interaction.summary, by = "gene") %>% filter(gene %in% nhej.genes.highlight)) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.nhej),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top",axis.title = element_blank()) + coord_fixed(ratio = 2)
+
+
+ggplot(slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK) %>% filter(drug %in% c("DNAPKi","PRKDC"))) + geom_tile(aes(drug,fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top",axis.title = element_blank()) + coord_fixed(ratio = 2)
+
+```
+
+```{r}
+# dcaast with selected
+slope.prot.features.dcast.both <- gene.f.slope.protein %>% filter(gene %in% mix.genes.highlight) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.both <- pheatmap(slope.prot.features.dcast.both, silent = F)
+both <- dist(slope.prot.features.dcast.both)
+row_dend.both = hclust(both)
+row_dend.hits.both <- as.dendrogram(row_dend.both)
+row_dend.hits.both <- seriate_dendrogram(row_dend.hits.both, both, method="OLO")
+
+heatmap.gene.order.slope.diff.both <- rownames(slope.prot.features.dcast.both[as.hclust(row_dend.hits.both)[["order"]],])
+heatmap.chromatin.order.slope.diff.hits <- colnames(slope.prot.features.dcast.hits[,heatmap.slope.diff.hits$tree_col[["order"]]])
+
+# Both sides
+ggplot(selected.slopes %>% left_join(interaction.summary, by = "gene") %>% filter(gene %in% mix.genes.highlight)) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.both),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 0.5), legend.position = "top") +facet_wrap(~ gene.class, scales = "free")
+
+```
+
+
+# Figure 4: Nuclear envelope
+```{r}
+nuclear.env <- slope.protein.features.all %>% mutate(nucl.env = case_when(gene %in% tmp$V2 ~ "nuclear.env", T ~ "others"))
+
+LMNB1.fisher.test <-  nuclear.env %>% dplyr::group_by(feature,nucl.env) %>% dplyr::summarise(epistasis = sum(abs(epistasis.final) > 0.02) , no.epistasis = sum(abs(epistasis.final) < 0.02))
+
+test.fc.nuclear.env.proteins <- LMNB1.fisher.test  %>% fisher_test(filter(LMNB1.fisher.test, feature == "LMNB1"))
+
+
+
+# try fisher test
+
+
+```
+
+# Figure 4C: Epistasis per library
+```{r}
+slope.library <- slope.protein.features.all %>% left_join(hits.both.screens %>% separate(ID_gene, into = "gene", remove = T) %>% select(gene,library,pathway) %>% distinct()) %>% filter(library %in% c("Chromatin","DNA_repair"))
+
+# Plot per library(all)
+ggplot(slope.library) + geom_quasirandom(aes(library,abs(epistasis), color = library)) + theme_bw() + scale_color_manual(values = levels(as_factor(library.colors$color))) + theme(legend.position = "top")
+
+#test
+chromatin.genes.slope <- slope.library %>% filter(library == "Chromatin") %>% pull(epistasis) %>% abs()
+dna_repair.genes.slope <- slope.library %>% filter(library == "DNA_repair") %>% pull(epistasis) %>% abs()
+
+ks.test.library <- ks.test(chromatin.genes.slope,dna_repair.genes.slope)
+```
+
+#Figure 4D: Epistasis per pathway
+```{r}
+# Plot per library 
+ggplot(slope.library %>% filter(pathway != "NA")) + geom_quasirandom(aes(pathway, abs(epistasis), color = pathway)) + theme_bw() + scale_color_manual(values = c("#EB2030","#2E358F")) + theme(legend.position = "top")
+
+#test
+NHEJ.genes.slope <- slope.library %>% filter(pathway == "NHEJ") %>% pull(epistasis) %>% abs()
+MMEJ.genes.slope <- slope.library %>% filter(pathway == "MMEJ") %>% pull(epistasis) %>% abs()
+
+ks.test.pathway <- ks.test(NHEJ.genes.slope,MMEJ.genes.slope)
+```
+
+
+#Figure 4E: Strong genes
+```{r}
+#Plot this for POLL, POLQ and RAD50
+# Plot per library 
+POLQ.POLL.RAD50 <- slope.library %>% filter(gene %in% c("POLL","POLQ","RAD50")) %>% select(gene,epistasis, library) %>% distinct()
+
+ggplot(POLQ.POLL.RAD50, aes(gene,epistasis)) + geom_quasirandom() + theme_bw() + scale_color_manual(values = library.colors)
+
+```
+
+# Number in text
+
+#NOTE: This will change, but every number that I refer in the text will available in this chunk
+```{r}
+```
+
+#Supplementary figures
+
+#Figure S5A: slope with all proteins
+```{r}
+# dcast all genes
+slope.prot.features.dcast.all <- slope.protein.features.all %>% reshape2::dcast(gene ~ feature, value.var = "epistasis") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.all <- pheatmap(slope.prot.features.dcast.all, silent = T)
+
+heatmap.gene.order.slope.diff.all <- rownames(slope.prot.features.dcast.all[heatmap.slope.diff.all$tree_row[["order"]],])
+heatmap.feature.order.slope.diff.all <- colnames(slope.prot.features.dcast.all[,heatmap.slope.diff.all$tree_col[["order"]]])
+# heatmap
+ggplot(slope.protein.features.all) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.all),fct_relevel(feature, heatmap.feature.order.slope.diff.all), fill = epistasis)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + 
+  theme_bw() + theme(axis.text.x = element_blank(), axis.title.y = element_blank(), legend.position = "top",) + 
+  coord_fixed(expand = F,ratio = 20)
+
+# Dendrogram
+ggdendrogram(heatmap.slope.diff.all$tree_row, labels = F)
+```
+
+#Figure S5B: genes in plot
+```{r}
+# Filter proteins highlighted 
+ggplot(per_19IPR_data %>% filter(gene %in% c("POLL","RAD50","POLQ"))) +
+  geom_quasirandom(aes(gene,IPR.z.score)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme_bw()
+```
+
+#Figure S5C: Slope is correlated with perturbation
+```{r}
+#
+effect.size <- slope.protein.features.all %>% filter(complete.cases(.) & gene %in% hit.genes)
+# Plot slope vs effect size
+summ.slope.library <- effect.size %>% dplyr::group_by(gene) %>% dplyr::summarise(med.slope = mean(epistasis, na.rm = T), mean.intercept = mean(intercept))
+
+ggplot(summ.slope.library, aes(med.slope, mean.intercept)) + geom_point() + stat_cor(method = "spearman",cor.coef.name = "rho") + geom_smooth(method = "lm") +
+  theme_bw()
+
+```

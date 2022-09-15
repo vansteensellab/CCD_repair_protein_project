@@ -1,0 +1,183 @@
+---
+title: "xv20220712_S2_CCDs_z_score"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S2 in the short version of the paper. This figure describes the z-score normalization and CCDs calculations. 
+A- Plate design
+B- Correlation in log2 pathway balance
+C- Positive control effect size
+
+
+This script generates the plots for figure 1
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+```
+
+
+
+# Import data tables
+```{r}
+setwd(in.dir)
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","ChIP_zscore_selection")
+
+#
+diff_KO_chromatin <- readRDS_proof("/data/processed_data/CCD_analysis","differentials_chromatin_KO")
+
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+```
+
+#Calculate PCR for a single protein RAD50
+```{r}
+# Filter RAD50 data
+RAD50_data_diff <- filter(diff_KO_chromatin, gene == "RAD50")
+
+#Run PCR and calculate all the components
+PCR_example <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=RAD50_data_diff , validation="CV") #Run principal component regression
+
+#Predict the values with the model with 3PCs
+RAD50_pred <- predict(PCR_example, RAD50_data_diff, ncomp = 3) 
+
+```
+
+#Supplementary Figures
+
+#Figure S3A: Cartoon
+```{r}
+# PC1 vs PC2 plot
+PC_plot <- PCR_example$scores[,c(1,2)] %>% as.data.frame()
+
+#Plot scatterplot
+ggplot(PC_plot) + geom_point(aes(`Comp 1`,`Comp 2`)) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  coord_fixed() +
+  xlab("PC1 (37.4%)") +
+  ylab("PC2 (25%)")
+
+# Example of predicted vs. measured plot
+pred_vs_measured <- tibble(measured = RAD50_data_diff$mean.log2foldchange, predicted = as.numeric(RAD50_pred)) #Set dataframe
+
+#Plot scatter plot and correlations
+ggplot(pred_vs_measured, aes(predicted,measured)) + 
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  coord_cartesian()
+
+```
+
+#Figure S3B: Percentage of variance explained per PC
+```{r}
+#Accumulated variance explained
+acc_var <- c(0,37.37,62.36,72.95,79.09,83.93)
+
+#Extract variance explained by each component
+pc_variance <- sapply(acc_var[-1], FUN = function(x) {
+  x - acc_var[which(acc_var == x) - 1]
+})
+
+#dt to plot
+var_plot_tib <- tibble(pc = c(1:5), var = pc_variance)
+#plot
+ggplot(var_plot_tib) +
+  geom_col(aes(pc, var)) +
+  theme_bw()
+```
+#Figure S3C: Orientation
+```{r}
+#Axis orientation
+PC1_3_projections <- PCR_example$projection[,c(1:3)] %>% as.data.frame() %>% 
+  rownames_to_column(var = "feature") %>%
+  reshape2::melt()
+
+#Plot
+ggplot(PC1_3_projections) +
+  geom_col(aes(fct_relevel(feature, heatmap.chromatin.order),value)) +
+  facet_wrap(~ variable, ncol = 1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+

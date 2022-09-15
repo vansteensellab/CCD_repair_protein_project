@@ -1,0 +1,177 @@
+---
+title: "xv20211121_epistasis_model_bas"
+output: html_document
+---
+
+# Script to generate figure #5 in the paper. This figure describes the layout of the screen and technical issues. Figure outline:
+A- Pathway balance perturbation inhibitors
+B- Heatmap matrix
+C- Bigger epistatic interactions than KO
+D- Correlation with olaparib
+E- Correlation with ATMi
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 6:
+A- Veliparib vs. PARP1
+B- Talazoparib vs. PARP1
+C- VE821 vs. ATR
+D- VE822 vs. ATR
+
+This script generates the plots for figure 4 and S5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+library(rstatix)
+```
+
+
+# Import data tables Inhibitors
+```{r libraries}
+#Chromatin data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#inhibitor table
+inhibitor.table <- tibble(exp = as.character(c(15:21,36:42,57:63)), drug = rep(c("DMSO","DNAPKi","ATMi","PARPi","ATRi_VE821","ATRi_VE822","GFP"),3),replicate = rep(c("R1","R2","R3"), each = 7))
+
+# Inhibitor experiment
+inhibitor.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210716_E1627_ATR_inhibitor/data/xv20210716_E1627_indel_script_ATRi.rds") %>% left_join(inhibitor.table)
+PARPi.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210922_E1664_PARPi_follow_up/rmarkdown/xv20210922_E1664_indel_script_PARPi.rds")
+
+```
+
+# Data processing
+```{r}
+# Process inhibitors data
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+# Create a dt with all the descriptive variables
+sample.table.PARPi <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv20210922_E1664_PARPi_follow_up/data/xv20210922_E1664_sample_file.txt", header = T)
+
+PARPi.data.processed <- PARPi.data %>% mutate(MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+                                                  NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+                                                  freqMMEJ = pct_del_7,
+                                                  freqNHEJ = pct_ins_1,
+                                                  freqCut = 1 - pct_wt,
+                                                  NHEJMMEJratio = ins_1 / del_7
+                                                  ) %>%
+                                select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN")) %>% distinct()%>% left_join(sample.table.PARPi)
+# Without vorinostat data
+PARPi.data.processed.DMSO <- filter(PARPi.data.processed, is.na(Vorinostat)) %>% select(replicate = Replicate, drug = Sample, barcode, MMEJscore) %>% mutate(exp = "E1664")
+
+# Process kinase inhibitor data
+inhibitor.data.processed <- inhibitor.data %>% 
+                                  mutate(MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+                                                  NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+                                                  freqMMEJ = pct_del_7,
+                                                  freqNHEJ = pct_ins_1,
+                                                  freqCut = 1 - pct_wt,
+                                                  NHEJMMEJratio = ins_1 / del_7
+                                                  ) %>%
+                                select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf")) %>% distinct()
+
+
+sel.inhibitor.data <- inhibitor.data.processed %>% select(replicate, drug, barcode, MMEJscore) %>% mutate(exp = "PIKK")
+#Combine with log2.inhibitor 
+combined.inhibitor.data <- bind_rows(PARPi.data.processed.DMSO,sel.inhibitor.data) %>% mutate(drug = case_when(drug == "PARPi" ~ "olaparib", T ~ drug))
+```
+
+step 1 = plot 
+
+```{r}
+# Data table and compute log2MMEJ
+log2.inhibitors <- combined.inhibitor.data  %>% select(replicate, MMEJscore, drug,barcode, exp) %>% mutate(log2MMEJ = log2(MMEJscore))
+
+# Plot differences
+data.for.plotting.inhibitors <- log2.inhibitors %>% dplyr::group_by(drug,barcode,exp) %>% dplyr::summarise(m.log2MMEJ = mean(log2MMEJ, na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+# Plot in log2 space
+ggplot(data.for.plotting.inhibitors %>% filter(drug != "GFP"), aes(H3K4me1,m.log2MMEJ, color = drug)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(method = "spearman") +
+  theme_bw() +
+  facet_wrap(~ exp)
+
+```
+
+# 2nd step check compute distances and plot them
+```{r}
+#Calculate DMSO condition
+DMSO.mmejscore <- data.for.plotting.inhibitors %>% filter(drug == "DMSO") %>% ungroup() %>%  select(barcode,DMSO.log2MMEJ = m.log2MMEJ, exp) 
+
+# Each replicate has a different value (compute differences by replicate)
+log2.distance.mmej.inhibitors <- data.for.plotting.inhibitors  %>% left_join(DMSO.mmejscore, by = c("barcode","exp")) %>% dplyr::group_by(drug, barcode,exp) %>% mutate(log2.dist = sqrt((m.log2MMEJ - DMSO.log2MMEJ)^2)) 
+mean.log2.distance.mmej.inhibitors <- log2.distance.mmej.inhibitors %>% dplyr::group_by(barcode,drug,exp) %>% dplyr::summarise(m.log2.dist = mean(log2.dist, na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% filter(drug != "GFP")
+
+#Plot slopes
+ggplot(mean.log2.distance.mmej.inhibitors %>% 
+         filter(drug != "GFP"),
+       aes(H3K4me1,m.log2.dist, color = drug)) + 
+  geom_point() + 
+  stat_cor(method = "spearman") + 
+  geom_smooth(method = "lm") + 
+  theme_bw() +
+  facet_wrap(~exp)
+
+```
+
+# Extract slopes for all genes
+```{r}
+# Perform analysis across all features for three test genes
+chromatin.features <- colnames(mean.log2.distance.mmej.inhibitors)[7:31]
+
+slope.protein.features.inhibitors <- tibble(drug = NA, feature = NA, slope.log2 = NA, term = NA, exp = NA)
+
+for (i in unique(mean.log2.distance.mmej.inhibitors$drug)) {
+  for (j in colnames(mean.log2.distance.mmej.inhibitors)[7:31]) {
+    for (k in unique(mean.log2.distance.mmej.inhibitors$exp)) {
+    model.dt <- mean.log2.distance.mmej.inhibitors %>% filter(drug == i & exp == k)
+    if (nrow(model.dt) < 1){
+      next
+    }
+    model.epistasis.log2 <- lm(formula = m.log2.dist ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+    slope.protein.features.inhibitors <- slope.protein.features.inhibitors %>% add_row(drug = i, feature = j, exp = k, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term))
+    }
+  }
+}
+
+# Plot matrix without scaling
+# log2 space
+ggplot(slope.protein.features.inhibitors %>% filter(term != "(Intercept)" & complete.cases(.))) + geom_tile(aes(drug,feature, fill = slope.log2)) + scale_fill_gradient2() + theme_bw() +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + facet_wrap(~ exp, scales = "free")
+
+#Prepare for dcast
+mean.slope.protein.featurese.inh <- slope.protein.features.inhibitors %>% filter(term == "unlist(model.dt[j])" & drug != "DMSO") %>% dplyr::group_by(drug,feature) %>% dplyr::summarise(slope.log2 = mean(slope.log2))
+
+slope.prot.features.scale.dcast.inhibitors <- mean.slope.protein.featurese.inh %>% reshape2::dcast(drug ~ feature, value.var = "slope.log2") %>% column_to_rownames(var = "drug")
+
+```
+
+#Export data for figures and plotting
+```{r}
+#Export inhibitor perturbation data
+saveRDS(combined.inhibitor.data, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds")
+
+#Export epistasis interactions
+saveRDS(slope.protein.features.inhibitors, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_epistasis.rds")
+
+```

@@ -1,0 +1,176 @@
+---
+title: "xv20220329_FA_SCC_mutations_analysis"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+```
+
+## Libraries:
+
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+```
+
+## Import data
+
+```{r pressure, echo=FALSE}
+setwd(in.dir)
+#Import FA mutations
+FA_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 1, skip = 1)
+
+#Import sporadic mutations
+sporadic_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 2, skip = 1)
+
+#Import sporadic mutations
+BRCA2_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 3, skip = 1)
+BRCA1_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 4, skip = 1)
+
+#Select tumours that are FANCA mutants
+FA_tumour_type <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T1_FA_SCC_tumor_features.xlsx", col_names = T, skip = 1) #Import
+FA_tumour_type_cg <- FA_tumour_type %>% select(sample = "Individual ID Family/Patient/Sample", CD = "Complementation group") %>% na.omit() #Select complementation group
+FANCA_mut_tumours <- FA_tumour_type_cg %>% filter(CD == "A") %>% pull(sample) %>% unique() #Pull FANCA mutants only
+```
+
+
+#Curate data tables: What are the features that I am interested (only select deletions)
+```{r}
+#Select only deletions (in all four files)
+FA_mutation_del_dt <- FA_mutation_dt %>% filter(svclass == "deletion")
+sporadic_mutation_del_dt <- sporadic_mutation_dt %>% filter(svclass == "deletion" & grepl("Neg", sample))
+BRCA2_mutation_del_dt <- BRCA2_mutation_dt %>% filter(svclass == "deletion")
+BRCA1_mutation_del_dt <- BRCA1_mutation_dt %>% filter(svclass == "deletion")
+```
+
+#Data table select columns I will use in the analysis
+```{r}
+#select data table (select only useful columns)
+FA_mutation_del_sel_dt <- FA_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+sporadic_mutation_del_sel_dt <- sporadic_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+BRCA2_mutation_del_sel_dt <- BRCA2_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+BRCA1_mutation_del_sel_dt <- BRCA1_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+
+#Combine dataframes together
+all_tumour_deletions <- FA_mutation_del_sel_dt %>% filter(sample %in% FANCA_mut_tumours) %>% bind_rows(sporadic_mutation_del_sel_dt) %>% bind_rows(BRCA2_mutation_del_sel_dt) %>% bind_rows(BRCA1_mutation_del_sel_dt)
+```
+
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+
+```
+
+#Data create MH_length data_table where I extract only MH mutations
+```{r}
+#Create some useful variables
+all_tumour_deletions_clasified <- all_tumour_deletions %>% 
+  mutate(del_length = start2-start1, #Deletion length
+         del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"), #Deletion class: microhomology or non-templated
+         type = case_when(grepl("BRCA2", sample) ~ "BRCA2mut", grepl("BRCA1", sample) ~ "BRCA1mut",grepl("HNSCC", sample) ~ "spo", grepl("F",sample) ~ "FA")) #Tumour background
+
+#Summary table for tumours
+mutations.summarized <- all_tumour_deletions_clasified %>% dplyr::group_by(del_class, type) %>% dplyr::summarise(FA_count = n())
+```
+
+#Check trend across all tumours: total amount of mutations
+It fits with what the screen predicts
+- BRCA2 (*) = favors NHEJ/ represses MMEJ in euchromatin
+- BRCA1 (ns) = favors MMEJ in triple_het
+- FANCA (ns = 0.07) = favors MMEJ in polycomb
+Expected outcomes:
+- BRCA2mut = Relatively more MH mutations in euchromatin (ciLADs) vs cLADs compared to sporadic tumours
+- BRCA1mut = Relatively less MH mutation in LADs vs iLADs compared compared to sporadic tumours
+- FANCAmut = Relatively less MH mutations in H3K27me3 vs iH3K27me3 compared to sporadic tumours
+Measurement = log2 fc Domain/iDomain
+- BRCA2mut = Down
+- BRCA1mut = Down
+- FANCAmut = Down
+
+```{r}
+#Prepare the data table for export
+mutation_location_export <- all_tumour_deletions_clasified %>% mutate(mut_id = paste(sample, id, sep = "_"), chr = paste0("chr", chr1)) %>% select(chr, start = "start1", end = "start2", strand = "strand1" ,mut_id, del_class, del_length)
+mutation_location_GR <- makeGRangesFromDataFrame(mutation_location_export, keep.extra.columns = T)
+
+#Crate ranges with LADS
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T)
+LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutation_location_GR)
+LAD_overlaps_dt <- tibble(mutation_location_export[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6])
+
+#Put both together
+mut_data_LADs <- LAD_overlaps_dt %>% mutate(type = case_when(grepl("BRCA2", mut_id) ~ "BRCA2mut", grepl("BRCA1", mut_id) ~ "BRCA1mut",grepl("HNSCC", mut_id) ~ "spo", grepl("F",mut_id) ~ "FA"))  %>% separate(mut_id, sep = "_(?=[1-9])", into = c("sample","id"))
+mut_data_LADs$id  <- as.double(mut_data_LADs$id)
+
+# Some deletions are very big and span over LADs and iLADs (filter only deletions that occur within the same iLAD or LAD)
+LAD_counts <- mut_data_LADs %>% dplyr::group_by(sample, id) %>% dplyr::summarize(count = n())
+single_LADs_iLADs <-LAD_counts %>% filter(count == 1) %>% select(sample, id)
+
+#Filter only FANCA tumours
+sim.chrom.status.cd <- mut_data_LADs %>% right_join(single_LADs_iLADs) %>% left_join(FA_tumour_type_cg %>% distinct()) %>% mutate(type_cd = paste(type, CD, sep = "_")) %>% filter(type != "FA" | type_cd == "FA_A")
+
+#Call HPV status of tumors
+sim.chrom.status.cd.hpv <- sim.chrom.status.cd %>% rowwise() %>% mutate(HPV = grepl("HPVPos", sample))
+```
+
+```{r}
+# Export data
+saveRDS_proof(sim.chrom.status.cd.hpv, file = "data/processed_data/xv20220624_SCC_SV_MH_deletions.rds")
+```
+
+#All mutations chromatin environment independent
+```{r}
+mut_per_tumour <- sim.chrom.status.cd.hpv %>% select(type,sample) %>% distinct() %>% dplyr::group_by(type) %>% dplyr::summarise(tumor_number = n())
+
+# Normalize mutations per sample (normalized to total amount of tumours)
+mutations_tumour_norm <- sim.chrom.status.cd.hpv %>% dplyr::group_by(sample,type,del_class) %>% dplyr::summarise(count = n()) %>% ungroup() %>% dplyr::group_by(type,del_class) %>% dplyr::summarise(mean_c = mean(count))
+ggplot(mutations_tumour_norm %>% filter(del_class == "MH")) + geom_col(aes(fct_relevel(type, c("spo")),mean_c)) + theme_bw() + ylab("Mutations per tumour") + xlab("Tumor class")
+
+#Plot split by LAD and iLAD
+LAD.data.mut <- sim.chrom.status.cd.hpv %>% dplyr::group_by(type,del_class, LAD_status,HPV) %>% dplyr::summarise(count = n()) %>% left_join(mut_per_tumour) %>% rowwise() %>% mutate(mean_c_LAD = count/tumor_number) %>% ungroup()
+LAD.data.mut.filtered <- LAD.data.mut %>% filter(LAD_status %in% c("ciLAD","cLAD") & del_class == "MH" & HPV == FALSE)
+LAD.data.mut.filtered_del_class <- LAD.data.mut %>% filter(del_class == "MH")
+
+ggplot(LAD.data.mut.filtered) + geom_col(aes(LAD_status, mean_c_LAD, fill = LAD_status)) + theme_bw() + ylab("Mutations per tumour") + xlab("Tumor class") + facet_wrap(~ type)
+```

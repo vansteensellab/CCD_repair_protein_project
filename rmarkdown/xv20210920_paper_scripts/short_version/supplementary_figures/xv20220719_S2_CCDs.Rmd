@@ -1,0 +1,230 @@
+---
+title: "xv20220712_S2_CCDs_z_score"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S2 in the short version of the paper. This figure describes the z-score normalization and CCDs calculations. 
+A- Plate design
+B- Correlation in log2 pathway balance
+C- Positive control effect size
+
+
+This script generates the plots for figure 1
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+```
+
+
+
+# Import data tables
+```{r}
+setwd(in.dir)
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","ChIP_zscore_selection")
+
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+ddr.screen.all <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data","screen_ddr_all_computations")
+ddr.screen.all.sel <- ddr.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#log2 fold change
+log2_fold_change_IPR_KO <- readRDS_proof( "data/processed_data","fold_change_ratio_KO")
+log2_fold_change_IPR_WT <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_WT")
+log2_fold_change_IPR_POLQ <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_POLQ")
+
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+```
+
+#Supplementary Figures
+
+#Figure S2A: Z-score calculation
+```{r}
+#Create normal distribution
+range_to_plot <- seq(-4,2,0.01)
+
+#Normal distribution for the example
+normal.parameters <- fit.null.distribtution.log2Ratio %>% filter(barcode == "CATTTCTGATCAATAA")
+
+#Plot RAD50 KO example
+RAD50KO_example <- log2.distance.ratio.KO %>% filter(gene == "RAD50") %>% filter(barcode == "CATTTCTGATCAATAA")
+
+distribution.R1 <- tibble(value = range_to_plot, y = dnorm(range_to_plot, mean = normal.parameters$wt.log2ratio[1], sd = normal.parameters$sd.wt.log2ratio[1]))
+distribution.R2 <- tibble(value = range_to_plot, y = dnorm(range_to_plot, mean = normal.parameters$wt.log2ratio[2], sd = normal.parameters$sd.wt.log2ratio[2]))
+distribution.R3 <- tibble(value = range_to_plot, y = dnorm(range_to_plot, mean = normal.parameters$wt.log2ratio[3], sd = normal.parameters$sd.wt.log2ratio[3]))
+
+#Example data normalization 
+#Fitted curve (R1)
+ggplot() + 
+  geom_histogram(data = log2_fold_change_IPR_WT %>% filter(barcode == "CATTTCTGATCAATAA" & t.rep == "R1"), aes(log2ratio), fill = "grey80", bins = 40) + 
+  geom_line(data = distribution.R1 %>% filter(value > -2.5 & value < 0), aes(value,2*y), color = "black", size = 1) + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio + sd.wt.log2ratio, y = 0, xend = wt.log2ratio + sd.wt.log2ratio, yend = 6), color = "red")  + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio - sd.wt.log2ratio, y = 0, xend = wt.log2ratio - sd.wt.log2ratio, yend = 6), color = "red") +
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio, y = 0, xend = wt.log2ratio, yend = 7), color = "black", size = 1) +
+  geom_segment(data = RAD50KO_example %>% filter(t.rep == "R1"), aes(x = log2ratio, y = 0, xend = log2ratio, yend = 7), color = "black", size = 1) +
+  theme_bw() + coord_cartesian(xlim = c(-2.5,0))
+
+#Step 1: Fitted curve (R4)
+ggplot() + 
+  geom_histogram(data = log2_fold_change_IPR_WT %>% filter(barcode == "CATTTCTGATCAATAA" & t.rep == "R4"), aes(log2ratio), fill = "grey80", bins = 40) + 
+  geom_line(data = distribution.R2 %>% filter(value > -2.5 & value < 0), aes(value,2*y), color = "black", size = 1) + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R4"), aes(x = wt.log2ratio + sd.wt.log2ratio, y = 0, xend = wt.log2ratio + sd.wt.log2ratio, yend = 6), color = "red")  + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R4"), aes(x = wt.log2ratio - sd.wt.log2ratio, y = 0, xend = wt.log2ratio - sd.wt.log2ratio, yend = 6), color = "red") +
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R4"), aes(x = wt.log2ratio, y = 0, xend = wt.log2ratio, yend = 7), color = "black", size = 1) +
+  geom_segment(data = RAD50KO_example %>% filter(t.rep == "R4"), aes(x = log2ratio, y = 0, xend = log2ratio, yend = 7), color = "black", size = 1) +
+  theme_bw() + coord_cartesian(xlim = c(-2.5,0))
+
+#Step 1: Fitted curve (R5)
+ggplot() + 
+  geom_histogram(data = log2_fold_change_IPR_WT %>% filter(barcode == "CATTTCTGATCAATAA" & t.rep == "R5"), aes(log2ratio), fill = "grey80", bins = 40) + 
+  geom_line(data = distribution.R3 %>% filter(value > -2.5 & value < 0), aes(value,2*y), color = "black", size = 1) + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio + sd.wt.log2ratio, y = 0, xend = wt.log2ratio + sd.wt.log2ratio, yend = 6), color = "red")  + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio - sd.wt.log2ratio, y = 0, xend = wt.log2ratio - sd.wt.log2ratio, yend = 6), color = "red") +
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio, y = 0, xend = wt.log2ratio, yend = 7), color = "black", size = 1) +
+  geom_segment(data = RAD50KO_example %>% filter(t.rep == "R5"), aes(x = log2ratio, y = 0, xend = log2ratio, yend = 7), color = "black", size = 1) +
+  theme_bw()  + coord_cartesian(xlim = c(-2.5,0))
+
+#+ coord_cartesian(xlim = c(-1.5,0))
+
+ggplot() + 
+  geom_histogram(data = log2_fold_change_IPR_WT %>% filter(barcode == "CATTTCTGATCAATAA" & t.rep == "R1"), aes(log2ratio), fill = "grey80") + 
+  geom_line(data = distribution.R1 %>% filter(value > -1.5 & value < 0), aes(value,2*y), color = "black", size = 1) + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio + 1.95*sd.wt.log2ratio, y = 0, xend = wt.log2ratio + 1.95*sd.wt.log2ratio, yend = 6), color = "red")  + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio - 1.95*sd.wt.log2ratio, y = 0, xend = wt.log2ratio - 1.95*sd.wt.log2ratio, yend = 6), color = "red") +
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R1"), aes(x = wt.log2ratio, y = 0, xend = wt.log2ratio, yend = 7), color = "black", size = 1) +
+  theme_bw() + coord_cartesian(xlim = c(-1.5,0))
+
+ggplot() + 
+  geom_histogram(data = log2_fold_change_IPR_WT %>% filter(barcode == "CATTTCTGATCAATAA" & t.rep == "R5"), aes(log2ratio), fill = "grey80") + 
+  geom_line(data = distribution.R3 %>% filter(value > -1.5 & value < 0), aes(value,2*y), color = "black", size = 1) + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio + 1.95*sd.wt.log2ratio, y = 0, xend = wt.log2ratio + 1.95*sd.wt.log2ratio, yend = 6), color = "red")  + 
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio - 1.95*sd.wt.log2ratio, y = 0, xend = wt.log2ratio - 1.95*sd.wt.log2ratio, yend = 6), color = "red") +
+  geom_segment(data = normal.parameters %>% filter(t.rep == "R5"), aes(x = wt.log2ratio, y = 0, xend = wt.log2ratio, yend = 7), color = "black", size = 1) +
+  theme_bw() + coord_cartesian(xlim = c(-1.5,0))
+
+
+```
+
+
+#Figure S2B: Z-test for each replicate
+```{r}
+example.barcode.z.scores <- fit.z.scores.ratio.IPR %>% filter(barcode == "CATTTCTGATCAATAA") %>% mutate(signif = case_when(z.score.log2ratio > 1.95 ~ "NHEJ", z.score.log2ratio < -1.95 ~ "MMEJ", T ~ "none"))
+
+#R1
+ggplot(example.barcode.z.scores %>% filter(t.rep == "R1" & sample == "KO")) +
+    geom_hline(aes(yintercept = 0), color = "black") +
+  geom_hline(aes(yintercept = 1.95), color = "red") +
+  geom_hline(aes(yintercept = -1.95), color = "red") +
+  geom_quasirandom(aes(t.rep, z.score.log2ratio, color = signif)) + theme_bw() + scale_color_manual(values = c("#8c510a","#01665e","black")) +
+  coord_cartesian(ylim = c(-12,18))  +
+  scale_y_continuous(breaks = c(-10,-5,-1.95,0,1.95,5,10,15)) + theme(legend.position = "none")
+#R2
+ggplot(example.barcode.z.scores %>% filter(t.rep == "R4" & sample == "KO")) +
+    geom_hline(aes(yintercept = 0), color = "black") +
+  geom_hline(aes(yintercept = 1.95), color = "red") +
+  geom_hline(aes(yintercept = -1.95), color = "red") +
+  geom_quasirandom(aes(t.rep, z.score.log2ratio, color = signif)) + theme_bw() + scale_color_manual(values = c("#8c510a","#01665e","black")) +
+  coord_cartesian(ylim = c(-12,18)) +
+  scale_y_continuous(breaks = c(-10,-5,-1.95,0,1.95,5,10,15)) + theme(legend.position = "none")
+
+#R3
+ggplot(example.barcode.z.scores %>% filter(t.rep == "R5" & sample == "KO")) +
+    geom_hline(aes(yintercept = 0), color = "black") +
+  geom_hline(aes(yintercept = 1.95), color = "red") +
+  geom_hline(aes(yintercept = -1.95), color = "red") +
+  geom_quasirandom(aes(t.rep, z.score.log2ratio, color = signif)) + theme_bw() + scale_color_manual(values = c("#8c510a","#01665e","black")) +
+  coord_cartesian(ylim = c(-12,18))  +
+  scale_y_continuous(breaks = c(-10,-5,-1.95,0,1.95,5,10,15)) + theme(legend.position = "none")
+
+```
+
+#Figure S2C: Mean z-score for all barcodes
+```{r}
+all_barcodes_together <- fit.z.scores.ratio.mean %>% mutate(signif = case_when(mean.z.score.IPR > 1.95 ~ "NHEJ", mean.z.score.IPR < -1.95 ~ "MMEJ", T ~ "none"))
+
+#R1
+ggplot(all_barcodes_together %>% filter(sample == "KO")) +
+  geom_hline(aes(yintercept = 0), color = "black") +
+  geom_hline(aes(yintercept = 1.95), color = "red") +
+  geom_hline(aes(yintercept = -1.95), color = "red") +
+  geom_quasirandom(aes(fct_relevel(barcode, clone5_bc_cluster), mean.z.score.IPR, color = signif)) + theme_bw() + scale_color_manual(values = c("#8c510a","#01665e","black")) +
+  coord_cartesian(ylim = c(-20,30))  + theme(legend.position = "none", axis.text.x = element_text(angle = 90)) 
+
+
+```

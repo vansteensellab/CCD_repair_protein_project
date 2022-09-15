@@ -1,0 +1,203 @@
+---
+title: "xv20220814_SCC_mutations_analysis"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+
+```
+
+## Libraries:
+
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+library(vcfR)
+library(GenomicRanges)
+```
+
+## Import data
+
+```{r pressure, echo=FALSE}
+setwd(in.dir)
+
+#Conversion data table
+sample_conversion <- read_xlsx("import/xv20220727_PCAWG_tumor_data/xv20220815_conversion_table_samples_TCGA.xlsx", col_names = T)
+
+#Import sporadic mutations
+sporadic_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 2, skip = 1)
+#New analysis
+sporadic_mutation_dt_bis <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/HNSC/BRASS/summary_shortened.txt")
+
+#Import sporadic mutations
+BRCA2_mutation_dt <- read_xlsx("import/Webster_et_al_2021_FA_tumours/xv20220329_T5_FA_SCC_SV.xlsx", col_names = T, sheet = 3, skip = 1)
+#New analysis
+BRCA2_mutation_dt_bis <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/BRCA2/BRASS/summary_shortened.txt")
+
+
+
+```
+
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+
+```
+
+#Curate data tables: What are the features that I am interested (only select deletions)
+```{r}
+#Select only deletions (in all four files)
+sporadic_mutation_del_dt <- sporadic_mutation_dt %>% filter(svclass == "deletion" & !`micro-homology` %in% c(".","_") & `Brass Notation` != "_")
+sporadic_mutation_del_dt_bis <- sporadic_mutation_dt_bis %>% separate(`# sample`, into = c("sample","other_TCGA_sample"), sep = ",") %>% left_join(sample_conversion, by = c('sample' ='TCGA ID')) %>% filter(svclass == "deletion" & !"micro-homology" %in% c(".","_") & `Brass Notation` != "_")
+
+#Filter out data with FANC anemia mutations
+sporadic_mutation_del_filtered <- sporadic_mutation_del_dt_bis %>% filter(!sample %in% c("de8ef60b-4dbe-4aa8-adef-6f58cdfada29","e52ffa79-557a-4024-81f3-f3826c227ec5"))
+
+#Check by inner join
+common_part_sporadic <- inner_join(sporadic_mutation_del_dt,sporadic_mutation_del_filtered, by = c("start1","end1","chr2","start2","end2"))
+#Numeric brass score
+sporadic_brass_score <- sporadic_mutation_del_dt$`Brass Notation` %>% str_extract("(?<=score ).*(?=\\))") %>% as.numeric()
+sporadic_brass_score_bis <- sporadic_mutation_del_dt_bis$`Brass Notation` %>% str_extract("(?<=score ).*(?=\\))") %>% as.numeric()
+
+#BRCA2 data ()
+BRCA2_mutation_del_dt <- BRCA2_mutation_dt %>% filter(svclass == "deletion"  & !"micro-homology" %in% c(".","_") & `Brass Notation` != "_")
+BRCA2_mutation_del_dt_bis <- BRCA2_mutation_dt_bis  %>% separate(`# sample`, into = c("sample","other_TCGA_sample"), sep = ",") %>% filter(svclass == "deletion"  & !"micro-homology" %in% c(".","_") & `Brass Notation` != "_")
+#Check by inner join
+common_part_BRCA2 <- inner_join(BRCA2_mutation_del_dt,BRCA2_mutation_del_dt_bis, by = c("start1","end1","chr2","start2","end2"))
+#numeric brass score
+BRCA2_brass_score <- BRCA2_mutation_del_dt$`Brass Notation` %>% str_extract("(?<=score ).*(?=\\))") %>% as.numeric()
+BRCA2_brass_score_bis <- BRCA2_mutation_del_dt_bis$`Brass Notation` %>% str_extract("(?<=score ).*(?=\\))") %>% as.numeric()
+```
+
+#Map SV for BRCA2 and sporadic tumors
+```{r}
+#Create function to call unique LADs
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T)
+unique_LADs_call <- function(x) {
+  mutations_GR <- makeGRangesFromDataFrame(x, keep.extra.columns = T)
+  LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutations_GR)
+  LAD_overlaps_dt <- tibble(x[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6])
+  LAD_counts <- LAD_overlaps_dt %>% dplyr::group_by(sample, id) %>% dplyr::summarize(count = n())
+  single_LADs_iLADs <-LAD_counts %>% filter(count == 1) %>% select(sample, id)
+  LAD_overlaps_dt %>% right_join(single_LADs_iLADs)
+}
+
+#Prepare the data table for mapping
+mutation_location_export_spo_SV <- sporadic_mutation_del_dt %>% mutate(mut_id = paste(sample, `id/name`, sep = "_"), chr = paste0("chr", `# chr1`)) %>% select(chr, start = "start1", end = "start2", mut_id, sample, id = `id/name`)
+mutation_location_export_spo_SV_bis <- sporadic_mutation_del_filtered %>% mutate(mut_id = paste(sample, `id/name`, sep = "_"), chr = paste0("chr", `chr1`)) %>% select(chr, start = "start1", end = "start2", mut_id, sample = `Name Supp. Table`, id = `id/name`)
+mutation_location_export_BRCA2_SV <- BRCA2_mutation_del_dt %>% mutate(mut_id = paste(sample, `id/name`, sep = "_"), chr = paste0("chr", `# chr1`)) %>% select(chr, start = "start1", end = "start2", mut_id, sample, id = `id/name`)
+mutation_location_export_BRCA2_SV_bis <- BRCA2_mutation_del_dt_bis %>% mutate(mut_id = paste(sample, `id/name`, sep = "_"), chr = paste0("chr", `chr1`)) %>% select(chr, start = "start1", end = "start2", mut_id, sample, id = `id/name`)
+
+#Run function
+spo_SV_LAD_maps <- unique_LADs_call(mutation_location_export_spo_SV) #526 total MH del
+spo_SV_LAD_maps_bis <- unique_LADs_call(mutation_location_export_spo_SV_bis) #899 total MH del
+BRCA2_SV_LAD_maps <- unique_LADs_call(mutation_location_export_BRCA2_SV) #2022 total MH del
+BRCA2_SV_LAD_maps_bis <- unique_LADs_call(mutation_location_export_BRCA2_SV_bis) #2281 total MH del
+
+#Filter for HPVneg and constitutive LADs or iLADs
+spo_HPVneg_c_maps <- spo_SV_LAD_maps %>% filter(grepl("c", LAD_status) & grepl("Neg", sample))  %>% mutate(dataset = "manuscript", type = "sporadic") #200 total 
+spo_HPVneg_c_maps_bis <- spo_SV_LAD_maps_bis %>% filter(grepl("c", LAD_status) & grepl("Neg", sample)) %>% mutate(dataset = "update", type = "sporadic") #336 total
+BRCA2_SV_c_maps <- BRCA2_SV_LAD_maps %>% filter(grepl("c", LAD_status)) %>% mutate(dataset = "manuscript", type = "BRCA2mut")#997 total
+BRCA2_SV_c_maps_bis <- BRCA2_SV_LAD_maps_bis %>% filter(grepl("c", LAD_status)) %>% mutate(dataset = "update", type = "BRCA2mut")#1116 total
+
+#Calculate mean per sample
+spo_HPVneg_SV_cLAD_maps_tumor <- spo_HPVneg_c_maps %>% dplyr::group_by(sample, LAD_status) %>% dplyr::summarise(mut_n = n())
+spo_HPVneg_SV_cLAD_maps_tumor_bis <- spo_HPVneg_c_maps_bis %>% dplyr::group_by(sample, LAD_status) %>% dplyr::summarise(mut_n = n()) 
+BRCA2_SV_cLAD_maps_tumor <- BRCA2_SV_c_maps %>% dplyr::group_by(sample, LAD_status) %>% dplyr::summarise(mut_n = n()) 
+BRCA2_SV_cLAD_maps_tumor_bis <- BRCA2_SV_c_maps_bis %>% dplyr::group_by(sample, LAD_status) %>% dplyr::summarise(mut_n = n()) 
+
+#dcast these tibbles
+spo_HPVneg_SV_cLAD_maps_tumor_dcast <- spo_HPVneg_SV_cLAD_maps_tumor %>% reshape2::dcast(sample ~ LAD_status, value.var = "mut_n", fill = 0) #mean ciLAD 2.83 & cLAD 5.87
+spo_HPVneg_SV_cLAD_maps_tumor_bis_dcast <- spo_HPVneg_SV_cLAD_maps_tumor_bis %>% reshape2::dcast(sample ~ LAD_status, value.var = "mut_n", fill = 0) #mean ciLAD 4.13 & cLAD 10.48 (median values 4 vs. 9)
+BRCA2_SV_cLAD_maps_tumor_dcast <- BRCA2_SV_cLAD_maps_tumor %>% reshape2::dcast(sample ~ LAD_status, value.var = "mut_n", fill = 0) #mean ciLAD 13.37 & cLAD 11.55
+BRCA2_SV_cLAD_maps_tumor_bis_dcast <- BRCA2_SV_cLAD_maps_tumor_bis %>% reshape2::dcast(sample ~ LAD_status, value.var = "mut_n", fill = 0) #mean ciLAD 14.6 & cLAD 13.3 (median 12 vs. 10.5)
+
+```
+
+#Summary table with all the number in here
+```{r}
+#Bind all data
+mutation_BRCA2_dataset <- bind_rows(spo_HPVneg_c_maps,spo_HPVneg_c_maps_bis,BRCA2_SV_c_maps,BRCA2_SV_c_maps_bis) %>% mutate(del_length = end - start)
+sample_n <- mutation_BRCA2_dataset %>% select(dataset, type, sample) %>% distinct() %>% dplyr::group_by(dataset,type) %>% dplyr::summarise(samp_n = n())
+
+length_summary <- mutation_BRCA2_dataset %>% dplyr::group_by(dataset,type,LAD_status) %>% dplyr::summarise(perc_5_length = quantile(del_length, c(0.05)), perc_95_lenght = quantile(del_length, c(0.95)))
+mut_summary <-  mutation_BRCA2_dataset %>% dplyr::group_by(sample, LAD_status,dataset, type) %>% dplyr::summarise(mut_n = n()) %>% ungroup() %>% dplyr::group_by(dataset, type,LAD_status) %>% dplyr::summarise(sum_mut = sum(mut_n)) %>% left_join(sample_n) %>% mutate(mean_mut = sum_mut/samp_n) %>% dplyr::select(LAD_status,dataset,type,mean_mut)
+# table summarizing mean for each run
+summary_mutation_BRCA2_mut <- length_summary %>% left_join(mut_summary)
+
+print(summary_mutation_BRCA2_mut)
+
+```
+
+#Conclusion: The main message does not change with the new data. Deletion size it's a bit smaller with the new dataset and the numbers higher (it detects more mutations than before).
+

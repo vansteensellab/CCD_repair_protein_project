@@ -1,0 +1,245 @@
+---
+title: "xv20220623_CCD_preprocessing"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(dendextend)
+library(pls)
+library(broom)
+library(stats)
+```
+
+# Import data tables
+```{r, include= FALSE}
+#Import data with all screen values
+ddr.screen.all <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20220110_screen_ddr_all_computations.rds")
+ddr.screen.all.sel <- ddr.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#Chromatin data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+```
+
+#This is a analysis pipeline to study chromatin context dependencies (CCD)
+#This is a proposal to get to a final version where we can infer statistical significance from the data
+
+#I am currently working on these steps:
+  1- log2 MMEJ:NHEJ ratio calculation
+  2- Filter based on z-score of this data: Filter genes that have 1 significant IPR (z-score > 1.95) in at least 2 replicates.
+  3- Compute log2 MMEJ:NHEJ fold changes based on WT values: Compare with WT samples (This shows that data is reproducible and R are better for KO than WT)
+  4- Compute CCDs with WT wells (random CCDs) and KO samples
+    A- Table with mean CCDs
+    B- Table with all CCDs per replicate
+  5- Test for non-random CCDs (KS test, I could even use the WT from the other screen, it won't change much). These are the interactions that matter and they correlate decently between replicates
+    A- non-random genes based on mean CCDs
+    B- non-random genes based on all CCDs per replicate
+  
+
+#Check reproducibility at every step
+#Step 1 = log2 NHEJ:MMEJ ratio
+```{r}
+#Compute the log2 MMEJ:NHEJ balance: Initial dataset
+log2.ratio.screen.detail.ddr <- ddr.screen.all.sel %>% dplyr::select(t.rep, MMEJNHEJratio,library, gene,barcode,sample,well,plate) %>% mutate(log2ratio = log2(MMEJNHEJratio))
+
+#dcast data table for plotting reproducibility of the ratio
+balance.ratio.list <- log2.ratio.screen.detail.ddr %>% reshape2::dcast(gene + library + barcode + sample + well + plate ~ t.rep, value.var = "log2ratio")
+
+#Extract non-targeting samples from this dataset
+wt.set.ratio <- filter(log2.ratio.screen.detail.ddr , sample == "WT") %>% dplyr::group_by(barcode, t.rep,library) %>% dplyr::summarise(wt.log2ratio = mean(log2ratio, na.rm = T))
+```
+#Alternative Step2: fit normal distribution through wt values
+```{r}
+WT.values <- filter(log2.ratio.screen.detail.ddr , sample == "WT")
+
+#data frame to save data
+mean_sd_fits <- tibble(term = NA, estimate = NA, std.error = NA, barcode = NA, t.rep = NA, library = NA)
+
+#Function to fit normal distribution through data
+for (i in unique(WT.values$t.rep)) {
+  for (x in unique(WT.values$barcode)) {
+    single_wt_ratio <- filter(WT.values, t.rep == i & barcode == x) %>% pull(log2ratio)
+    mean_sd_fits_row <- fitdistr(single_wt_ratio, "normal") %>% tidy()
+    mean_sd_fits <- mean_sd_fits %>% add_row(mean_sd_fits_row %>% mutate(barcode = x, t.rep = i, library = "DNA_repair"))
+  }
+}
+
+#Transform the fitted values 
+fit.null.distribtution.log2Ratio <- mean_sd_fits %>% reshape2::dcast(barcode + t.rep + library ~ term, value.var = "estimate") %>% dplyr::select(barcode, t.rep, library, wt.log2ratio = mean, sd.wt.log2ratio = sd)
+
+# Calculate z-scores based on this values
+fit.z.scores.ratio.IPR <- log2.ratio.screen.detail.ddr %>%  left_join(fit.null.distribtution.log2Ratio) %>% na.omit() %>% mutate(z.score.log2ratio = (log2ratio - wt.log2ratio)/sd.wt.log2ratio) %>% dplyr::select(t.rep, library, gene, barcode,z.score.log2ratio,sample, well,plate)
+
+
+#Combine replicates
+fit.z.scores.ratio.mean <- fit.z.scores.ratio.IPR %>% dplyr::group_by(library,gene,barcode,sample,well,plate) %>% dplyr::summarise(mean.z.score.IPR = sum(z.score.log2ratio, na.rm = T)/sqrt(n()), count = n())
+
+# Filter z-scores with two significant IPRs in at least 2 replicates
+fit.z.scores.ratio.IPR.filtered <- filter(fit.z.scores.ratio.mean, abs(mean.z.score.IPR) > 1.95 & count > 1) %>% dplyr::group_by(gene,library, sample,well,plate) %>% dplyr::summarise(MMEJ_signif = sum(mean.z.score.IPR < -1.95), NHEJ_signif = sum(mean.z.score.IPR > 1.95)) %>% filter(MMEJ_signif >= 2 | NHEJ_signif >= 2) %>% mutate(pathway_signif = case_when(MMEJ_signif == 0 ~ "NHEJ", NHEJ_signif == 0 ~ "MMEJ", T ~ "both"))
+
+```
+
+
+#Step 3: Compute log2 MMEJ:NHEJ fold changes
+```{r}
+# Compute log2 fold changes in different set ups for all the KO samples
+log2.distance.ratio.KO <- log2.ratio.screen.detail.ddr %>% na.omit() %>% filter(sample == "KO") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio) 
+
+# Calculate fold changes between WT samples
+log2.distance.ratio.WT <- log2.ratio.screen.detail.ddr %>% filter(sample == "WT") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio) 
+
+# Calculate fold changes between POLQ samples
+log2.distance.ratio.POLQ <- log2.ratio.screen.detail.ddr %>% filter(sample == "POLQ") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio)
+```
+
+# Run the model for KO proteins: For this I need average values => I'll include r.squared and adj.r.squared as well
+```{r}
+#DDR library
+# KO samples per replicate
+DDR.KO.CCD.dt <- log2.distance.ratio.KO %>% dplyr::group_by(library,gene,well,plate,barcode) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% left_join(fit.z.scores.ratio.IPR.filtered) %>% na.omit()
+
+
+#Create an empty dt with CCDs of DDR proteins
+DDR_KO_CCDs_dt <- tibble(library = NA, gene = NA, num_comp = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(DDR.KO.CCD.dt$gene)){
+  for (j in 1:10){
+gene.library.dt <- filter(DDR.KO.CCD.dt, gene == i)
+# Run a model per gene
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV")
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = j)
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred))
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance()
+DDR_KO_CCDs_dt <- DDR_KO_CCDs_dt %>% add_row(gene = i, num_comp = j, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value))
+  }
+}
+
+#Correct model to adjust for multiple testing correction
+adj_p.value_KO_model <- DDR_KO_CCDs_dt %>% dplyr::select(num_comp, p.value, gene) %>% mutate(sample = "ko") %>% filter(num_comp == 3) %>% mutate(p.adj = p.adjust(p.value, method = "BH")) %>% dplyr::select(gene,p.value,p.adj, sample)
+```
+
+#Quality control. Empirical false discovery rate. Run the model for non-targetting controls (n = against all the samples 33)
+```{r}
+# NT samples per replicate
+DDR.NT.CCD.dt <- log2.distance.ratio.WT %>% dplyr::group_by(library,gene,well,plate,barcode) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T))%>% mutate(coordinate = paste0(plate,"_",well)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+#DDR library non-targetting controls (n = 33)
+DDR_NT_CCDs_model <- tibble(library = NA, gene = NA, num_comp = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(DDR.NT.CCD.dt$coordinate)){
+  for (j in 1:10){
+gene.library.dt <- filter(DDR.NT.CCD.dt, coordinate == i)
+# Run a model per gene
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV")
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = j)
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred))
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance()
+DDR_NT_CCDs_model <- DDR_NT_CCDs_model %>% add_row(gene = i, num_comp = j, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value))
+  }
+}
+
+#non-targeting (2 non-targeting values are selected with this value)
+adj_p.value_NT_model <- DDR_NT_CCDs_model %>% dplyr::select(num_comp, p.value, gene) %>% mutate(sample = "nt") %>% filter(num_comp == 3) %>% mutate(p.adj = p.adjust(p.value, method = "BH")) %>% dplyr::select(gene,p.value,p.adj, sample)
+```
+
+#Step 4: Calculate CCDs for DR KO genes
+
+# Calculate CCDs for KO samples: 
+# A) Calculate this after computing the mean
+```{r}
+# Compute slopes for each gene separately
+DR_KO_CCD_slopes <- tibble(library = NA, gene = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+for (k in unique(DDR.KO.CCD.dt$library)) {
+for (h in unique(DDR.KO.CCD.dt$gene)) {
+  for (j in colnames(DDR.KO.CCD.dt)[9:33]) {
+    model.dt <- DDR.KO.CCD.dt %>% filter(library == k & gene == h)
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+   DR_KO_CCD_slopes <- DR_KO_CCD_slopes %>% add_row(library = k,gene = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value))
+  }
+}
+}
+
+#Calculate KO proteins (terms)
+DR_KO_CCD_all_values <- DR_KO_CCD_slopes %>% 
+  reshape2::dcast(library + gene + feature ~ term, value.var = "slope.log2") %>% 
+  dplyr::select(library, gene ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% 
+  left_join(adj_p.value_KO_model %>% 
+              select(gene, model_p.value = p.value, model_p.adj = p.adj)) %>% 
+  left_join(z.scores.ratio.IPR.filtered %>% filter(library == "DNA_repair")) %>% 
+  mutate(cross.x = -intercept/slope, slope_cor = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0)) %>% 
+  mutate(CCD_value = case_when(pathway_signif == "MMEJ" & slope_cor < 0 ~ slope_cor, pathway_signif == "MMEJ" & slope_cor > 0 ~ 0, pathway_signif == "NHEJ" & slope > 0 ~ slope_cor, pathway_signif == "NHEJ" & slope < 0 ~ 0, T ~ slope_cor))
+
+```
+
+#Output files
+```{r}
+setwd(in.dir)
+#Save log2 ratio values
+saveRDS_proof(log2.ratio.screen.detail.ddr, file = "data/processed_data/CCD_analysis/xv20220624_log2_MMEJ_NHEJ_ratios.rds")
+
+#Save z-score values that will be used for data filtering
+saveRDS_proof(z.scores.ratio.mean, file = "data/processed_data/CCD_analysis/xv20220624_z_scores_IPR_log2.rds")
+
+#Save all log2 fold change values
+saveRDS_proof(DDR.KO.CCD.dt, file = "data/processed_data/CCD_analysis/xv20220627_fold_change_ratio_KO.rds") #Will be used for Figure 1B, 2B and 2C
+saveRDS_proof(log2.distance.ratio.WT, file = "data/processed_data/CCD_analysis/xv20220624_fold_change_ratio_WT.rds")
+saveRDS_proof(log2.distance.ratio.POLQ, file = "data/processed_data/CCD_analysis/xv20220624_fold_change_ratio_POLQ.rds")
+
+#Save the model results for nt values
+saveRDS_proof(adj_p.value_NT_model, file = "data/processed_data/CCD_analysis/xv20220624_CCD_model_values_NT.rds")
+
+#Save summary files
+saveRDS_proof(DR_KO_CCD_all_values, file = "data/processed_data/xv20220624_DR_KO_CCD_summary.rds") #This is the data frame that will be mainly used to generate all the figures
+
+```
+

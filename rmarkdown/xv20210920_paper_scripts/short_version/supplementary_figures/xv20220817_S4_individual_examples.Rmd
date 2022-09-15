@@ -1,0 +1,185 @@
+---
+title: "xv20220712_S2_CCDs_z_score"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S2 in the short version of the paper. This figure describes the z-score normalization and CCDs calculations. 
+A- Plate design
+B- Correlation in log2 pathway balance
+C- Positive control effect size
+
+
+This script generates the plots for figure 1
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+library(ggpubr)
+```
+
+
+
+# Import data tables
+```{r}
+setwd(in.dir)
+
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+step2.epistasis <- readRDS_proof( "data/processed_data/CCD_analysis/","log2_MMEJNHEJ_differentials_chromatin")
+
+ 
+```
+
+#Supplementary Figures
+
+#Figure S5A: Examples RAD50 vs LMNB1
+```{r}
+# Plot RAD50 with LMNB1
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("RAD50")),
+       aes(LMNB1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.114),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = -0.7) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5A: Examples RAD50 vs LMNB1
+```{r}
+# Plot RAD50 with H3K4me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("RAD50")),
+       aes(H3K4me3,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.114),method = "lm") +
+  stat_cor(label.x = -0.5, label.y = -0.7) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5A: Examples BRCA2 vs. H3K4me1
+```{r}
+# Plot BRCA2 with H3K4me1
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BRCA2")),
+       aes(H3K4me1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5D: Example BRCA2 vs. LMNB1
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BRCA2")),
+       aes(H3K9me2,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5D: Example BOD1L1 vs. H3K4me1
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BOD1L1")),
+       aes(H3K4me1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BOD1L1 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5E: Example BOD1L1 vs. late_replicating
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BOD1L1")),
+       aes(late_replicating,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BOD1L1 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+
+ 

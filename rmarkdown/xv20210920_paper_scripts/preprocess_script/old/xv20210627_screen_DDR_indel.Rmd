@@ -1,0 +1,216 @@
+---
+title: "xv20200320_screening_indel_processing"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+## Indel processing script - Usual script we use
+
+# This is the processsing that I will use for Screening processing - Modification of ruben's script (IndelProcessing.Rmd)
+
+The aim of this script is to process and clean the dataframe -> Generate dt with as little as possbile varibles for the whole screen.
+
+## Description of Data
+
+For this analysis we need the mapping and the indel data of the TRIP integrations. These 
+files are obtained with the crispr_trip.snake script that C. Leemans edited. This data 
+contains the genomic locations of the TRIP integrations (hg38) and the indel frequencies 
+at each integration.
+
+The mutations were called by counting the distance between two constant regions. These
+were separated by barcode. The barcodes were also filtered on the starcode, to pick out
+the most abundant, and considered real, ones.
+
+Mutations files : *count.table
+
+| barcode  | call | indel | count
+| ------- | --------- | ----- | ------ |
+| TTCTATTCGCACACAA | ins | 1 | 35 |
+| TTTCCCACATCAGGAG | wt | 0 | 67 |
+| CCATAGTAGTGATTAC | del | -4 | 1 |
+
+Barcode files: *starcode file
+
+| barcode | counts | variants |
+| --------|--------|----------|
+|TTCTATTCGCACACAA | 2345 | .... |
+
+Note: Indel python pipeline keeps updating, so its output files. This file might need some minor changes to adjust to snakemake output. 
+
+# Data importing and processing
+## Path, Libraries, Parameters and Useful Functions
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+```{r}
+# libraries:
+library(tidyverse)
+library(data.table)
+# library(car)
+library(parallel)
+library(gtools)
+```
+
+
+## Indel data import
+Indel and bc data will be imported for further analysis, I am writting this in the following two chunks
+
+```{r import}
+# Set directory to the mutation output folder of the CRISPR-TRIP snakemake script
+setwd("/DATA/projects/DSBrepair/data/xv20210525_ddr_screen_complete/indelPCR_counts")
+# Import files in list and make individual tables
+# I use this if all the samples are good. Here however I do not use all the samples. 
+file.list <- list.files("/DATA/projects/DSBrepair/data/xv20210525_ddr_screen_complete/indelPCR_counts/",
+    pattern='*[.]co', full.names=T)
+
+# import the data
+df.list.indel <- mclapply(file.list, read.table, col.names=c('barcode', 'call', 'indel', 'count'), mc.cores = 20, stringsAsFactors = FALSE, header=T)
+
+# rename the lists
+names(df.list.indel) <- str_extract(file.list,"P[:digit:].*(?=.co)")
+
+# count the sample number
+n.samples.indel <- length(df.list.indel)
+
+```
+
+### Some data pre-processing
+Set everything in a dataframe that contains barcodes, indel ratios, and efficiencies.
+```{r indeldataframe}
+# Generate a datatable with the number of indelreads per mutations, sample and barcode (For this script I will modify this function, to sum replicates with the same ID)
+mut.list = mclapply(names(df.list.indel), function(exp){
+    dt = data.table(df.list.indel[[exp]])
+    dt[, indel:=as.character(indel)]
+    dt[call=='wt' & indel=='2', indel:='ssODN']
+    sum_count = data.table(exp=exp,
+                           dt[, list(count=sum(count)),by=c('barcode', 'indel')])
+    count_cast = data.table::dcast(sum_count[!is.na(indel),], exp + barcode ~ indel,
+                      value.var='count')
+    return(count_cast)
+}, mc.cores=10)
+
+#Bind all data frames (one per sample) together
+
+indels.dt = do.call(rbind, c(mut.list, fill=T))
+indels.dt[is.na(indels.dt)] = 0
+
+#Change colnames in indels.dt
+
+indel_cols <- names(indels.dt)[grep("[0-9]|ssODN|Inf", names(indels.dt))]
+indel_cols <- gsub("-", "del_", indel_cols)
+indel_cols[grep("^[0-9].*", indel_cols)] <- gsub("^", "ins_", indel_cols[grep("^[0-9].*", indel_cols)])
+indel_cols[grep("ins_0", indel_cols)] <- "wt"
+names(indels.dt) <- c("exp", "barcode", indel_cols)
+
+
+# List of barcodes that are in the clone #5 
+
+barcodes.list <- c("AGGGCGTAAAATATTT", "TATGGCTGTCGGGTAG", "TGTCCCTTAGTACTTT", "AGAAAATAATATGACG", "CGGCCTGAAGGTCAGG", "TTGAACGCGGGCTCGG", "GCTAACATCACGAATC", "GCGCACCCTTTAATTG", "ACTGTCGAGTTGTCCG", "CCGGGGACGTATGCAC", "TCTTTTGAGGAGCTGA", "ATATCGTTGCTGGAGA", "CATCCACCACACTTCA", "ACCCCTAAAGGCGCTG", "ATACTATATTTAACGG", "GAGCGCGTCACCGGGT", "GTACCTCTCGATAGTG", "TGGCCAATATTTGTCT", "CATTTCTGATCAATAA")
+
+# Filter both indels and counts dt for the barcodes in the clone
+
+indels.dt <- indels.dt %>% filter(barcode %in% barcodes.list)
+
+# Generate indel frequency data table
+
+indels.frequencies.dt = data.frame(indels.dt[,c('exp', 'barcode')],
+                                  indels.dt[, -c(1:2)] /
+                                    rowSums(indels.dt[, -c(1:2)]))
+
+# Rename indels.frequencies.dt
+indel_pct_cols <- gsub("^", "pct_", indel_cols)
+names(indels.frequencies.dt)[3:length(names(indels.frequencies.dt))] <- indel_pct_cols
+
+# Dimensions check
+
+dim(indels.dt)
+dim(indels.frequencies.dt)
+
+
+```
+
+```{r}
+# Save all three data frames as a single tibble
+indels.tib <- as_tibble(indels.dt)
+indels.frequencies.tib <- as_tibble(indels.frequencies.dt)
+
+# Join indels & descr.variables
+
+indels.tib$exp <- gsub("indel_","", indels.tib$exp)
+indels.frequencies.tib$exp <- gsub("indel_","", indels.frequencies.tib$exp)
+
+screen.tib <- left_join(indels.tib,indels.frequencies.tib, by = c("exp","barcode"))
+
+dim(screen.tib)
+
+```
+
+# Save screen data to RDS 
+```{r}
+# Save RDS
+setwd(in.dir)
+saveRDS_proof(screen.tib, file = "data/processed_data/indel_analysis/xv20220627_screen_DDR_indel_data.rds")
+```
+

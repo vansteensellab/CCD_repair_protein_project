@@ -1,0 +1,308 @@
+---
+title: "xv20211230_4_epistasis_model"
+output: html_document
+---
+
+# Script to generate figure #4 in the paper. This figure describes how epistatic interactions are present between chromatin features and protein KOs. Figure outline:
+A- Step by Step for KAT5 and H3K9me2
+B- Matrix for all hits
+C- Hits per library
+D- Hits per pathway
+E- Strong hits examples
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 5:
+A- All proteins matrix
+B- Balance perturbation strong hits
+
+This script generates the plots for figure 4 and S5
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    base::readRDS(file = correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  base::readRDS(file = correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# setwd
+setwd(in.dir)
+
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(umap)
+library(igraph)
+library(lsa)
+library(tibble)
+library(utils)
+library(base)
+library(scales)
+```
+
+# Input files for this script: All these scripts will come from the processed_data
+```{r input files}
+# setwd
+setwd(in.dir)
+
+#DNA repair protein KO CCD analysis
+table_S3_CCDs <- readRDS_proof("data/processed_data/","S3")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+#Inhibitor data
+CCD_inhibitors_data <- readRDS_proof("data/processed_data/","DR_inhibitors")
+
+
+#Tumor analysis
+SV_MH_del_data_tumors <- readRDS_proof("data/processed_data/","SCC_SV_MH_deletions")
+
+```
+#Figure 4A: ATMi and ATM biology
+
+```{r}
+#dcast epistatic interactions (PARP proteins)
+ATM.proteins.CCD <- table_S3_CCDs %>% filter(gene %in% c("ATM", "CHEK2"))
+
+#dcast epistatic interactions (PARP inhibitors)
+ATM_inhibitors <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi"))
+
+
+#Cosine distance between all of them
+#Prepare for binding
+ATM.inhibitor.sel <- ATM_inhibitors %>% select(gene = drug, chrom_feature = feature, CCD_synergy_score = CCD_value)
+ATM.combined <- ATM.proteins.CCD %>% select(gene, chrom_feature, CCD_synergy_score) %>% bind_rows(ATM.inhibitor.sel) 
+ATM.dcast <- ATM.combined %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+cosine.d.ATM<- cosine(as.matrix(ATM.dcast))
+
+#PARP combined heatmap
+ggplot(ATM.combined) + 
+  geom_tile(aes(fct_relevel(gene, c("ATM","ATMi","CHEK2")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+#Figure 4B: FA complex
+```{r}
+#FA proteins order
+FA_prots <- c("FANCM","FAAP24","FANCG","FANCA","FANCF","FANCC","FANCB","FANCL","FANCD2","FANCI")
+
+# Filter FANC proteins
+FA.proteins.CCD <- table_S3_CCDs %>% filter(gene %in% FA_prots) 
+
+# dCast FANC proteins
+FA.proteins.dcast <- FA.proteins.CCD %>% reshape2::dcast(gene ~ chrom_feature, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "gene")
+
+#Cosine distance between all of them
+cosine.d.FANC <- cosine(as.matrix(t(FA.proteins.dcast)))
+
+#Plot heatmap
+ggplot(FA.proteins.CCD) + 
+  geom_tile(aes(fct_relevel(gene,FA_prots), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",  breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15))  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+#
+```
+
+
+#Figure 4C: SMC5
+
+```{r}
+#dcast epistatic interactions (PARP proteins)
+SMC5_compl <- table_S3_CCDs %>% filter(gene %in% c("SMC5","NSMCE1","NSMCE3","NSMCE2","NSMCE4","SMC6")) %>% na.omit()
+
+SMC5.dcast <- SMC5_compl %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+cosine.d.SMC5<- cosine(as.matrix(SMC5.dcast))
+
+#PARP combined heatmap
+ggplot(SMC5_compl) + 
+  geom_tile(aes(fct_relevel(gene,c("NSMCE1","NSMCE3","SMC5","SMC6")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+# Figure 4A: DNAPKi
+```{r}
+#dcast epistatic interactions (PARP proteins)
+DNAPK.proteins.CCD <- table_S3_CCDs %>% filter(gene == "PRKDC") %>% select(gene, chrom_feature, CCD_synergy_score)
+DNAPK.inhibitors <- CCD_inhibitors_data %>% filter(drug == "DNAPKi") %>% select(gene = drug, chrom_feature = feature, CCD_synergy_score = CCD_value)
+
+# Bind rows
+DNAPK.perturbations <- bind_rows(DNAPK.proteins.CCD, DNAPK.inhibitors)
+
+# DNAPK inhibition
+ggplot(DNAPK.perturbations) + 
+    geom_tile(aes(fct_relevel(gene, c("PRKDC","DNAPKi")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+    scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), breaks = c(-0.1,0, 0.1), oob = squish)  + 
+    coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+```
+
+
+
+# Figure 4C: UIMC1 BRCC3
+```{r}
+#BRC1A complex proteins
+BRCA1A_complex <- c("BRCC3","UIMC1","ABRAXAS1","BABAM2")
+
+# Separate data based on the significant IPRs that they have (based on z-score)
+UIMC1_BRCC3<- table_S3_CCDs %>% filter(gene %in% BRCA1A_complex)  %>% na.omit()
+
+# heatmap: All heatmaps together
+ggplot(UIMC1_BRCC3) + 
+  geom_tile(aes(fct_relevel(gene, BRCA1A_complex),fct_relevel(chrom_feature, heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+```
+
+#Cosine distances of all highlighted pairs
+```{r}
+cosine.highlights.genes <- table_S3_CCDs %>% filter(gene %in% c("FANCM","FAAP24","FANCG","FANCA","FANCF","FANCC","FANCB","FANCL","FANCD2","FANCI","SMC5","NSMCE1","NSMCE3","NSMCE2","NSMCE4","SMC6","ATM", "CHEK2","PRKDC","BRCC3","UIMC1","ABRAXAS1","BABAM2")) %>% na.omit()
+
+cosine.highlights.drugs <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi", "DNAPKi")) %>% select(gene = drug, chrom_feature = feature,CCD_synergy_score =  CCD_value)
+
+cosine.highlights.all <- bind_rows(cosine.highlights.genes, cosine.highlights.drugs) 
+
+
+
+#dcast
+cosine.highlights.dcast <- cosine.highlights.all %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+
+#Cosine distance
+cosine.d.highlingts <- cosine(as.matrix(cosine.highlights.dcast)) %>% melt()
+
+
+ggplot(cosine.d.highlingts ) + 
+  geom_tile(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,highlight.order), fct_relevel(Var2,highlight.order),label = round(value, digits = 2)))
+
+#F: ATM signaling
+ATM_order <- c("ATM","ATMi","CHEK2")
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% ATM_order & Var2 %in% ATM_order)) + 
+  geom_tile(aes(fct_relevel(Var1,ATM_order), fct_relevel(Var2,ATM_order), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1))  + geom_text(aes(fct_relevel(Var1,ATM_order), fct_relevel(Var2,ATM_order),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+#DNAPK complex
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% c("PRKDC","DNAPKi") & Var2 %in% c("PRKDC","DNAPKi"))) + 
+  geom_tile(aes(fct_relevel(Var1,c("PRKDC","DNAPKi")), fct_relevel(Var2,c("PRKDC","DNAPKi")), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,c("PRKDC","DNAPKi")), fct_relevel(Var2,c("PRKDC","DNAPKi")),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+#H: FA proteins
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% FA_prots & Var2 %in% FA_prots)) + 
+  geom_tile(aes(fct_relevel(Var1,FA_prots), fct_relevel(Var2,FA_prots), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,FA_prots), fct_relevel(Var2,FA_prots),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+ 
+#BRCA1A complex
+ggplot(cosine.d.highlingts %>% filter(Var1 %in% BRCA1A_complex & Var2 %in% BRCA1A_complex)) + 
+  geom_tile(aes(fct_relevel(Var1,BRCA1A_complex), fct_relevel(Var2,BRCA1A_complex), fill = value)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + geom_text(aes(fct_relevel(Var1,BRCA1A_complex), fct_relevel(Var2,BRCA1A_complex),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+
+
+
+```
+
+
+# Figure 4F: BRCA2-/- tumors structural variants
+```{r}
+#Calculate how many samples per type
+mut_per_tumour <- SV_MH_del_data_tumors %>% dplyr::select(sample,type) %>% distinct() %>% dplyr::group_by(type) %>% dplyr::summarise(s_count = n())
+
+#Plot split by LAD and iLAD
+LAD.data.mut <- SV_MH_del_data_tumors %>% dplyr::group_by(type,del_class, LAD_status) %>% dplyr::summarise(count = n()) %>% left_join(mut_per_tumour) %>% rowwise() %>% mutate(mean_c_LAD = count/s_count) %>% ungroup()
+LAD.data.mut.filtered <- LAD.data.mut %>% filter(LAD_status %in% c("ciLAD","cLAD") & del_class == "MH" & type %in% c("spo","BRCA2mut"))
+
+ggplot(LAD.data.mut.filtered) + geom_col(aes(LAD_status, mean_c_LAD, fill = LAD_status)) + theme_bw() + ylab("Average MH deletions per tumour") + xlab("Chromatin type") + facet_wrap(~ fct_relevel(type, c("spo","BRCA2mut")))
+```
+
+#Fig 4J: Global vs. CCD effects of DR proteins
+```{r}
+##Filter max estimated FC
+max_estimated_FC_CCD_gene <- table_S3_CCDs %>% dplyr::group_by(gene) %>% dplyr::summarise(max_CCD_estim_diff = max(abs(CCD_estim_diff)))
+
+## Filter max(CCDs)
+max_estimated_CCD_FC <- table_S3_CCDs %>% dplyr::select(gene,DR_effect_type,global_diff, CCD_model_p_adj, global_p_adj) %>% distinct() %>% left_join(max_estimated_FC_CCD_gene)
+
+#Highlight proteins
+highlight_prots <- c("RAD50","RBBP8","POLL","FANCM","BOD1L1","RNASEH2A", "ATM")
+
+
+#Plot S7B: Estimated CCD vs. global FC
+ggplot(max_estimated_CCD_FC %>% filter(DR_effect_type %in% c("CCD","both"))) + 
+  geom_point(aes(max_CCD_estim_diff, abs(global_diff), color = DR_effect_type)) +
+  geom_text_repel(data = subset(max_estimated_CCD_FC, gene %in% highlight_prots), aes(max_CCD_estim_diff, abs(global_diff), label = gene), box.padding = 2.5) +
+  scale_color_manual(values = c("#CBCE91","#EA738D")) + theme(legend.position = "top") + geom_abline(linetype = 2) + labs(color = "Favored pathway") + theme_bw() + coord_fixed(xlim = c(0,2), ylim = c(0,2)) + stat_cor(aes(max_CCD_estim_diff, abs(global_diff), color = DR_effect_type), method = "spearman") + geom_smooth(aes(max_CCD_estim_diff, abs(global_diff), color = DR_effect_type), method = "lm")
+
+summary_estimates <- max_estimated_CCD_FC %>% dplyr::group_by(DR_effect_type) %>% dplyr::summarise(c = n())
+
+#95CI of proteins with both global and CCD
+IQR_CCD <- max_estimated_CCD_FC %>% filter(DR_effect_type == "both") %>% pull(max_CCD_estim_diff) %>% quantile(c(0.25,0.75))
+
+IQR_global <- max_estimated_CCD_FC %>% filter(DR_effect_type == "both") %>% pull(global_diff) %>% abs() %>% quantile(c(0.25,0.75))
+
+#New classification for last figure (both p.values = 0.05)
+new_classification <- max_estimated_CCD_FC %>% mutate(new_class = case_when(CCD_model_p_adj < 0.05 & global_p_adj < 0.05 ~ "both", CCD_model_p_adj < 0.05 & global_p_adj > 0.05 ~ "CCD", T ~ "none"))
+
+summary_estimates_new <- new_classification %>% dplyr::group_by(new_class) %>% dplyr::summarise(c = n())
+
+CI95_global <- new_classification %>% filter(new_class == "both") %>% pull(global_diff) %>% abs() %>% quantile(c(0.025,0.975))
+CI95_CCD <- new_classification %>% filter(new_class == "both") %>% pull(max_CCD_estim_diff) %>% quantile(c(0.025,0.975))
+
+ggplot(new_classification %>% filter(DR_effect_type %in% c("CCD","both"))) + 
+  geom_point(aes(max_CCD_estim_diff, abs(global_diff), color = new_class)) +
+  geom_text_repel(data = subset(new_classification, gene %in% highlight_prots), aes(max_CCD_estim_diff, abs(global_diff), label = gene), box.padding = 2.5) +
+  scale_color_manual(values = c("#CBCE91","#EA738D")) + theme(legend.position = "top") + geom_abline(linetype = 2) + labs(color = "Favored pathway") + theme_bw() + coord_fixed(xlim = c(0,2), ylim = c(0,2)) + stat_cor(aes(max_CCD_estim_diff, abs(global_diff), color = new_class), method = "spearman") + geom_smooth(aes(max_CCD_estim_diff, abs(global_diff), color = new_class), method = "lm")
+
+
+```

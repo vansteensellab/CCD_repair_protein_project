@@ -1,0 +1,552 @@
+---
+title: "xv20220329_FA_SCC_mutations_analysis"
+output: html_document
+date: '2022-03-29'
+---
+
+I will use "Fanconi Anemia Pathway Deficiency Drives Copy Number Variation in Squamous Cell Carcinomas" dataset to assess if FA SCC tumors accumulate mutations differently than sporadic tumors.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries:
+
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+```
+
+## Import data
+
+```{r pressure, echo=FALSE}
+#Import FA mutations
+FA_mutation_dt <- read_xlsx("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_FA_SCC_webster_et_al_S5.xlsx", col_names = T, sheet = 1, skip = 1)
+
+#Import sporadic mutations
+sporadic_mutation_dt <- read_xlsx("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_FA_SCC_webster_et_al_S5.xlsx", col_names = T, sheet = 2, skip = 1)
+
+#Import sporadic mutations
+BRCA2_mutation_dt <- read_xlsx("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_FA_SCC_webster_et_al_S5.xlsx", col_names = T, sheet = 3, skip = 1)
+BRCA1_mutation_dt <- read_xlsx("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_FA_SCC_webster_et_al_S5.xlsx", col_names = T, sheet = 4, skip = 1)
+
+FA_tumour_type <- read_xlsx("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_tumor_features.xlsx", col_names = T, skip = 1)
+FA_tumour_type_cg <- FA_tumour_type %>% select(sample = "Individual ID Family/Patient/Sample", CD = "Complementation group") %>% na.omit()
+```
+
+
+#Curate data tables: What are the features that I am interested (only select deletions)
+```{r}
+#Select only deletions
+FA_mutation_del_dt <- FA_mutation_dt %>% filter(svclass == "deletion")
+sporadic_mutation_del_dt <- sporadic_mutation_dt %>% filter(svclass == "deletion")
+BRCA2_mutation_del_dt <- BRCA2_mutation_dt %>% filter(svclass == "deletion")
+BRCA1_mutation_del_dt <- BRCA1_mutation_dt %>% filter(svclass == "deletion")
+
+#Deletion frequency
+del_freq_dt <- c(nrow(sporadic_mutation_del_dt)/nrow(sporadic_mutation_dt), nrow(FA_mutation_del_dt)/nrow(FA_mutation_dt), nrow(BRCA2_mutation_del_dt)/nrow(BRCA2_mutation_dt), nrow(BRCA1_mutation_del_dt)/nrow(BRCA1_mutation_dt))
+deletion_frequency_summary <- tibble(tumor_type = c("sporadic","FA","BRCA1mut","BRCA2mut"), del_freq = del_freq_dt)
+```
+
+#Data table select columns I will use in the analysis
+```{r}
+#select data table
+FA_mutation_del_sel_dt <- FA_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+sporadic_mutation_del_sel_dt <- sporadic_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+BRCA2_mutation_del_sel_dt <- BRCA2_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+BRCA1_mutation_del_sel_dt <- BRCA1_mutation_del_dt %>% select(chr1 = '# chr1', start1, end1, strand1 = strand1...9, chr2, start2, end2,strand2 = strand2...10, id = 'id/name', svclass,non_t = `non-template`,MH = `micro-homology`, sample)
+```
+
+#Data create MH_length data_table where I extract only MH mutations
+```{r}
+FA_mutation_MH_dt <- FA_mutation_del_sel_dt %>% mutate(del_length = case_when(grepl("[A-Z]", MH) ~ nchar(MH)), del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"))
+sporadic_mutation_MH_dt <- sporadic_mutation_del_sel_dt %>% mutate(del_length = case_when(grepl("[A-Z]", MH) ~ nchar(MH)), del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"), HPV_status = case_when(grepl("Neg", sample) ~ "negative", grepl("Pos", sample) ~ "positive"))
+BRCA2_mutation_MH_dt <- BRCA2_mutation_del_sel_dt %>% mutate(del_length = case_when(grepl("[A-Z]", MH) ~ nchar(MH)), del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"))
+BRCA1_mutation_MH_dt <- BRCA1_mutation_del_sel_dt%>% mutate(del_length = case_when(grepl("[A-Z]", MH) ~ nchar(MH)), del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"))
+
+#summaryse data non T
+FA.sum <- FA_mutation_MH_dt %>% dplyr::group_by(del_class) %>% dplyr::summarise(FA_count = n())
+sp.pos.sum <- sporadic_mutation_MH_dt %>% filter(HPV_status == "positive")  %>% dplyr::group_by(del_class) %>% dplyr::summarise(sp_HPVpos_count = n())
+sp.neg.sum <- sporadic_mutation_MH_dt %>% filter(HPV_status == "negative")  %>% dplyr::group_by(del_class) %>% dplyr::summarise(sp_HPVneg_count = n())
+BRCA2.sum <- BRCA2_mutation_MH_dt  %>% dplyr::group_by(del_class) %>% dplyr::summarise(BRCA2_count = n())
+BRCA1.sum <-  BRCA1_mutation_MH_dt  %>% dplyr::group_by(del_class) %>% dplyr::summarise(BRCA1_count = n())
+
+#MH summaries
+del_summary_dy <- sp.pos.sum %>% left_join(sp.neg.sum) %>% left_join(FA.sum) %>% left_join(BRCA2.sum) %>% left_join(BRCA1.sum)
+```
+
+#Import LAD/iLAD coordinates (both coordinates are in hg19)
+```{r}
+LAD_atlas <- as.data.frame(read.table("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#Crate ranges with LADS
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T)
+
+#Create ranges with mutation data (FA data)
+FA_mutation_MH_import_GR <- FA_mutation_MH_dt %>% filter(del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+FA_mutation_ranges <- makeGRangesFromDataFrame(FA_mutation_MH_import_GR, keep.extra.columns = T)
+FA_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, FA_mutation_ranges))
+FA_mutation_LADs_summary <- FA_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(FA_mutation_count = sum(MH_mutations), FA_mutation_freq = sum(MH_mutations)/nrow(FA_mutation_MH_import_GR))
+
+#Create ranges with mutation data (sporadic HPV neg)
+spo_neg_mutation_MH_import_GR <- sporadic_mutation_MH_dt %>% filter(HPV_status == "negative" & del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_neg_mutation_ranges <- makeGRangesFromDataFrame(spo_neg_mutation_MH_import_GR, keep.extra.columns = T)
+spo_neg_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, spo_neg_mutation_ranges))
+spo_neg_mutation_LADs_summary <- spo_neg_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_neg_mutation_count = sum(MH_mutations), spo_neg_mutation_freq = sum(MH_mutations)/nrow(spo_neg_mutation_MH_import_GR))
+
+#Create ranges with mutation data (sporadic HPV pos)
+spo_pos_mutation_MH_import_GR <- sporadic_mutation_MH_dt %>% filter(HPV_status == "positive" & del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_pos_mutation_ranges <- makeGRangesFromDataFrame(spo_pos_mutation_MH_import_GR, keep.extra.columns = T)
+spo_pos_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, spo_pos_mutation_ranges))
+spo_pos_mutation_LADs_summary <- spo_pos_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_pos_mutation_count = sum(MH_mutations), spo_pos_mutation_freq = sum(MH_mutations)/nrow(spo_pos_mutation_MH_import_GR))
+
+#Create ranges with mutation data (sporadic)
+spo_mutation_MH_import_GR <- sporadic_mutation_MH_dt %>% filter(del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_mutation_ranges <- makeGRangesFromDataFrame(spo_mutation_MH_import_GR, keep.extra.columns = T)
+spo_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, spo_mutation_ranges))
+spo_mutation_LADs_summary <- spo_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_mutation_count = sum(MH_mutations), spo_mutation_freq = sum(MH_mutations)/nrow(spo_mutation_MH_import_GR))
+
+#Create ranges with mutation data (BRCA2)
+BRCA2_mutation_MH_import_GR <- BRCA2_mutation_MH_dt %>% filter(del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA2_mutation_ranges <- makeGRangesFromDataFrame(BRCA2_mutation_MH_import_GR, keep.extra.columns = T)
+BRCA2_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, BRCA2_mutation_ranges))
+BRCA2_mutation_LADs_summary <- BRCA2_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(BRCA2_mutation_count = sum(MH_mutations),BRCA2_mutation_freq = sum(MH_mutations)/nrow(BRCA2_mutation_MH_import_GR))
+
+#Create ranges with mutation data (BRCA2)
+BRCA1_mutation_MH_import_GR <- BRCA1_mutation_MH_dt %>% filter(del_class == "MH") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA1_mutation_ranges <- makeGRangesFromDataFrame(BRCA1_mutation_MH_import_GR, keep.extra.columns = T)
+BRCA1_mutations_LADs <- LAD_atlas %>% mutate(MH_mutations = countOverlaps(LAD_atlas_ranges, BRCA1_mutation_ranges))
+BRCA1_mutation_LADs_summary <- BRCA1_mutations_LADs %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(BRCA1_mutation_count = sum(MH_mutations),BRCA1_mutation_freq = sum(MH_mutations)/nrow(BRCA1_mutation_MH_import_GR))
+
+#Summary plot
+summary_mutation_LAD <- spo_mutation_LADs_summary %>% left_join(FA_mutation_LADs_summary) %>% left_join(BRCA2_mutation_LADs_summary)  %>% left_join(BRCA1_mutation_LADs_summary)
+
+#Plot comparing ciLADs vs cLADS
+LAD_plot_FA <- filter(summary_mutation_LAD, LAD_class %in% c("ciLAD","cLAD")) %>% select(LAD_class,colnames(summary_mutation_LAD[grepl("count", colnames(summary_mutation_LAD))])) %>% melt()
+
+ggplot(LAD_plot_FA) + geom_col(aes(variable,value, fill = LAD_class), position = "fill") + theme_bw()
+
+```
+
+```{r}
+#Create ranges with mutation data (FA data)
+FA_mutation_nt_import_GR <- FA_mutation_MH_dt %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+FA_mutation_ranges_nt <- makeGRangesFromDataFrame(FA_mutation_nt_import_GR, keep.extra.columns = T)
+FA_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, FA_mutation_ranges_nt))
+FA_mutation_LADs_summary_nt <- FA_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(FA_mutation_count_nt = sum(nt_mutations), FA_mutation_freq_nt = sum(nt_mutations)/nrow(FA_mutation_nt_import_GR))
+
+#Create ranges with mutation data (sporadic HPV neg)
+spo_neg_mutation_nt_import_GR <- sporadic_mutation_MH_dt %>% filter(HPV_status == "negative") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_neg_mutation_ranges_nt <- makeGRangesFromDataFrame(spo_neg_mutation_nt_import_GR, keep.extra.columns = T)
+spo_neg_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, spo_neg_mutation_ranges_nt))
+spo_neg_mutation_LADs_summary_nt <- spo_neg_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_neg_mutation_count_nt = sum(nt_mutations), spo_neg_mutation_freq_nt = sum(nt_mutations)/nrow(spo_neg_mutation_nt_import_GR))
+
+#Create ranges with mutation data (sporadic HPV pos)
+spo_pos_mutation_nt_import_GR <- sporadic_mutation_MH_dt %>% filter(HPV_status == "positive") %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_pos_mutation_ranges_nt <- makeGRangesFromDataFrame(spo_pos_mutation_nt_import_GR, keep.extra.columns = T)
+spo_pos_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, spo_pos_mutation_ranges_nt))
+spo_pos_mutation_LADs_summary_nt <- spo_pos_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_pos_mutation_count_nt = sum(nt_mutations), spo_pos_mutation_freq_nt = sum(nt_mutations)/nrow(spo_pos_mutation_nt_import_GR))
+
+#Create ranges with mutation data (sporadic)
+spo_mutation_nt_import_GR <- sporadic_mutation_MH_dt  %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_mutation_ranges_nt <- makeGRangesFromDataFrame(spo_mutation_nt_import_GR, keep.extra.columns = T)
+spo_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, spo_mutation_ranges_nt))
+spo_mutation_LADs_summary_nt <- spo_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(spo_mutation_count_nt = sum(nt_mutations), spo_mutation_freq_nt = sum(nt_mutations)/nrow(spo_mutation_nt_import_GR))
+
+#Create ranges with mutation data (BRCA2)
+BRCA2_mutation_nt_import_GR <- BRCA2_mutation_MH_dt  %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA2_mutation_ranges_nt <- makeGRangesFromDataFrame(BRCA2_mutation_nt_import_GR, keep.extra.columns = T)
+BRCA2_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, BRCA2_mutation_ranges_nt))
+BRCA2_mutation_LADs_summary_nt <- BRCA2_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(BRCA2_mutation_count_nt = sum(nt_mutations),BRCA2_mutation_freq_nt = sum(nt_mutations)/nrow(BRCA2_mutation_nt_import_GR))
+
+#Create ranges with mutation data (BRCA2)
+BRCA1_mutation_nt_import_GR <- BRCA1_mutation_MH_dt  %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA1_mutation_ranges_nt <- makeGRangesFromDataFrame(BRCA1_mutation_nt_import_GR, keep.extra.columns = T)
+BRCA1_mutations_LADs_nt <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, BRCA1_mutation_ranges_nt))
+BRCA1_mutation_LADs_summary_nt <- BRCA1_mutations_LADs_nt %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(BRCA1_mutation_count = sum(nt_mutations),BRCA1_mutation_freq_nt = sum(nt_mutations)/nrow(BRCA1_mutation_nt_import_GR))
+
+#Summary plot
+summary_mutation_LAD_nt <- spo_mutation_LADs_summary_nt %>% left_join(FA_mutation_LADs_summary_nt) %>% left_join(BRCA2_mutation_LADs_summary_nt)  %>% left_join(BRCA1_mutation_LADs_summary_nt)
+
+#Plot comparing ciLADs vs cLADS
+LAD_plot_FA_nt <- filter(summary_mutation_LAD_nt, LAD_class %in% c("ciLAD","cLAD")) %>% select(LAD_class,colnames(summary_mutation_LAD_nt[grepl("count", colnames(summary_mutation_LAD_nt))])) %>% melt()
+
+ggplot(LAD_plot_FA_nt) + geom_col(aes(variable,value, fill = LAD_class), position = "fill") + theme_bw()
+
+#Plot comparing iLADs vs LADS
+LAD_state_FA_nt <- summary_mutation_LAD_nt %>% select(LAD_class,colnames(summary_mutation_LAD_nt[grepl("count", colnames(summary_mutation_LAD_nt))])) %>% dplyr::group_by(grepl("iLAD", LAD_class)) %>% dplyr::summarise( (across(colnames(summary_mutation_LAD_nt[grepl("count", colnames(summary_mutation_LAD_nt))]), sum))) %>% melt(id.vars = "grepl(\"iLAD\", LAD_class)") %>% select(LAD_state = "grepl(\"iLAD\", LAD_class)", variable, value)
+
+ggplot(LAD_state_FA_nt) + geom_col(aes(variable,value, fill = rev(LAD_state)), position = "fill") + theme_bw()
+
+```
+
+# Try to run this script per tumour
+```{r}
+FA_mutation_per_tumour <- tibble(LAD_class = NA, mutation_count = NA, sample = NA)
+#Create ranges with mutation data (FA data)
+for (i in unique(FA_mutation_MH_dt$sample)) {
+FA_mutation_import_GR <- FA_mutation_MH_dt %>% filter(del_class == "MH" & sample == i) %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+FA_mutation_r <- makeGRangesFromDataFrame(FA_mutation_import_GR , keep.extra.columns = T)
+FA_mutations_L <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, FA_mutation_r))
+FA_mutation_LADs_s <- FA_mutations_L %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(mutation_count = sum(nt_mutations), sample = i, type = "FA")
+FA_mutation_per_tumour <- FA_mutation_per_tumour %>% bind_rows(FA_mutation_LADs_s)
+}
+
+spo_mutation_per_tumour <- tibble(LAD_class = NA, mutation_count = NA, sample = NA)
+#Create ranges with mutation data (FA data)
+for (i in unique(sporadic_mutation_MH_dt$sample)) {
+spo_mutation_import_GR <- sporadic_mutation_MH_dt %>% filter(del_class == "MH" & sample == i) %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+spo_mutation_r <- makeGRangesFromDataFrame(spo_mutation_import_GR , keep.extra.columns = T)
+spo_mutations_L <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, spo_mutation_r))
+spo_mutation_LADs_s <- spo_mutations_L %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(mutation_count = sum(nt_mutations), sample = i, type = "sporadic")
+spo_mutation_per_tumour <- spo_mutation_per_tumour %>% bind_rows(spo_mutation_LADs_s)
+}
+
+BRCA2_mutation_per_tumour <- tibble(LAD_class = NA, mutation_count = NA, sample = NA)
+#Create ranges with mutation data (FA data)
+for (i in unique(BRCA2_mutation_MH_dt$sample)) {
+BRCA2_mutation_import_GR <- BRCA2_mutation_MH_dt %>% filter(del_class == "MH" & sample == i) %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA2_mutation_r <- makeGRangesFromDataFrame(BRCA2_mutation_import_GR , keep.extra.columns = T)
+BRCA2_mutations_L <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, BRCA2_mutation_r))
+BRCA2_mutation_LADs_s <- BRCA2_mutations_L %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(mutation_count = sum(nt_mutations), sample = i, type = "BRCA2")
+BRCA2_mutation_per_tumour <- BRCA2_mutation_per_tumour %>% bind_rows(BRCA2_mutation_LADs_s)
+}
+
+BRCA1_mutation_per_tumour <- tibble(LAD_class = NA, mutation_count = NA, sample = NA)
+#Create ranges with mutation data (FA data)
+for (i in unique(BRCA1_mutation_MH_dt$sample)) {
+BRCA1_mutation_import_GR <- BRCA1_mutation_MH_dt %>% filter(del_class == "MH" & sample == i) %>% select(chr1, start = "start1", end = "end1", id) %>% mutate(chr = paste0("chr",chr1))
+BRCA1_mutation_r <- makeGRangesFromDataFrame(BRCA1_mutation_import_GR , keep.extra.columns = T)
+BRCA1_mutations_L <- LAD_atlas %>% mutate(nt_mutations = countOverlaps(LAD_atlas_ranges, BRCA1_mutation_r))
+BRCA1_mutation_LADs_s <- BRCA1_mutations_L %>% dplyr::group_by(LAD_class) %>% dplyr::summarise(mutation_count = sum(nt_mutations), sample = i, type = "BRCA1")
+BRCA1_mutation_per_tumour <- BRCA1_mutation_per_tumour %>% bind_rows(BRCA1_mutation_LADs_s)
+}
+
+# Combine both tables
+HPV_neg <- spo_mutation_per_tumour %>% filter(grepl("Neg", sample)) %>% mutate(type = "sporadic_HPVneg")
+HPV_pos <- spo_mutation_per_tumour %>% filter(grepl("Pos", sample)) %>% mutate(type = "sporadic_HPVpos")
+mutations_per_tumour <- FA_mutation_per_tumour %>% bind_rows(HPV_neg) %>% bind_rows(HPV_pos) %>% bind_rows(BRCA2_mutation_per_tumour) %>% bind_rows(BRCA1_mutation_per_tumour) %>% na.omit()
+```
+
+```{r}
+#Plot everything (constitutive LAD vs. iLADs)
+ggplot(mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD")))  + geom_boxplot(aes(type,mutation_count)) + geom_quasirandom(aes(type,mutation_count)) + theme_bw() + facet_wrap(~LAD_class)
+
+#Plot only BRCA2 (constitutive LAD vs. iLADs)
+ggplot(mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","BRCA2","BRCA1")))  + geom_boxplot(aes(type,mutation_count)) + geom_quasirandom(aes(type,mutation_count)) + theme_bw() + facet_wrap(~LAD_class)
+
+mutation_BRCA2_LAD_class <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD")& type %in% c("sporadic_HPVneg","BRCA2")) %>% group_by(LAD_class) %>% wilcox_test(mutation_count ~ type)
+
+#Plot only BRCA2 (constitutive sporadic vs. BRCA2)
+ggplot(mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","BRCA2","BRCA1")))  + geom_boxplot(aes(LAD_class,mutation_count)) + geom_quasirandom(aes(LAD_class,mutation_count)) + theme_bw() + facet_wrap(~type)
+
+mutation_BRCA2_type <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD")& type %in% c("sporadic_HPVneg","BRCA2")) %>% group_by(type) %>% wilcox_test(mutation_count ~ LAD_class)
+
+#Plot LAD iLAD balance (constitutive sporadic vs. BRCA2)
+rel_freq_LAD_iLAD_BRCA2 <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","BRCA2")) %>% dcast(type + sample ~ LAD_class, value.var = "mutation_count") %>% dplyr::group_by(type,sample) %>% dplyr::summarise(iLAD_LAD_mut = ciLAD/(cLAD + ciLAD))
+
+ggplot(rel_freq_LAD_iLAD_BRCA2)  + geom_boxplot(aes(type,iLAD_LAD_mut)) + geom_quasirandom(aes(type,iLAD_LAD_mut)) + theme_bw()
+
+iLAD_LAD_balance_BRCA2 <- wilcox.test(rel_freq_LAD_iLAD_BRCA2 %>% filter(type == "sporadic_HPVneg") %>% pull(iLAD_LAD_mut),rel_freq_LAD_iLAD_BRCA2 %>% filter(type == "BRCA2") %>% pull(iLAD_LAD_mut)) %>% tidy()
+
+
+
+```
+
+#Analyse FA tumors
+```{r}
+#Plot only BRCA2 (constitutive LAD vs. iLADs)
+ggplot(mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","FA")))  + geom_boxplot(aes(type,mutation_count)) + geom_quasirandom(aes(type,mutation_count)) + theme_bw() + facet_wrap(~LAD_class)
+
+mutation_BRCA2_LAD_class <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD")& type %in% c("sporadic_HPVneg","FA")) %>% group_by(LAD_class) %>% wilcox_test(mutation_count ~ type)
+
+#Plot only BRCA2 (constitutive sporadic vs. BRCA2)
+ggplot(mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","FA")))  + geom_boxplot(aes(LAD_class,mutation_count)) + geom_quasirandom(aes(LAD_class,mutation_count)) + theme_bw() + facet_wrap(~type)
+
+mutation_FA_type <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD")& type %in% c("sporadic_HPVneg","FA")) %>% group_by(type) %>% wilcox_test(mutation_count ~ LAD_class)
+
+#Plot LAD iLAD balance (constitutive sporadic vs. BRCA2)
+rel_freq_LAD_iLAD_FA <- mutations_per_tumour %>% filter(LAD_class %in% c("ciLAD","cLAD") & type %in% c("sporadic_HPVneg","FA")) %>% dcast(type + sample ~ LAD_class, value.var = "mutation_count") %>% dplyr::group_by(type,sample) %>% dplyr::summarise(iLAD_LAD_mut = ciLAD/(cLAD + ciLAD))
+
+ggplot(rel_freq_LAD_iLAD_FA)  + geom_boxplot(aes(type,iLAD_LAD_mut)) + geom_quasirandom(aes(type,iLAD_LAD_mut)) + theme_bw()
+
+iLAD_LAD_balance_FA <- wilcox.test(rel_freq_LAD_iLAD %>% filter(type == "sporadic_HPVneg") %>% pull(iLAD_LAD_mut),rel_freq_LAD_iLAD %>% filter(type == "FA") %>% pull(iLAD_LAD_mut)) %>% tidy()
+
+```
+
+# H3K27me3 analysis: I found a paper where they did ChIPseq (H3K27me3) in several HNSCC cell lines (check HPV status)
+CAL27 --> Looks good
+DET562 --> Not good (remove immmediately)
+FaDu --> Looks good
+BICR78 --> Looks good
+SCC4 --> Looks good
+
+```{r}
+#Check bw files of different cell lines
+K27me3_tracks <- list.files("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/5kb/", full.names = T)
+K27me3_import_tracks <- lapply(K27me3_tracks, import)
+list.files("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/5kb/", full.names = F)
+K27me3_import_tracks_names <- list.files("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/5kb/", full.names = F)
+
+
+K27me3.list.scores <- lapply(seq_along(K27me3_import_tracks), FUN = function(x){
+  name <- K27me3_import_tracks_names[x]
+tibble(chr = seqnames(K27me3_import_tracks[[x]]) %>% as.character, 
+       start = start(K27me3_import_tracks[[x]]) %>% as.numeric, 
+       end = end(K27me3_import_tracks[[x]]) %>% as.numeric, score = K27me3_import_tracks[[x]]$score)
+})
+
+```
+
+```{r}
+#Generate the mutation locations
+all_mutation_locations <- FA_mutation_del_sel_dt %>% bind_rows(sporadic_mutation_del_sel_dt) %>% bind_rows(BRCA2_mutation_del_sel_dt) %>% bind_rows(BRCA1_mutation_del_sel_dt)
+
+#Prepare the data table for export
+mutation_location_export <- all_mutation_locations %>% mutate(mut_id = paste(sample, id, sep = "_"), chr = paste0("chr", chr1)) %>% select(chr, start = "start1", end = "end1", strand = "strand1" ,mut_id)
+mutation_location_GR <- makeGRangesFromDataFrame(mutation_location_export, keep.extra.columns = T)
+
+#Convert to hg19
+ch <- import.chain("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/hg19_to_hg38.over.chain")
+c_mutation_location_export_hg19 <- liftOver(mutation_location_GR, ch)
+mutation_location_export_hg38 <- unlist(c_mutation_location_export_hg19)
+
+mutation_location_export_hg38_dt <- tibble(chr = seqnames(mutation_location_export_hg38) %>% as.character)
+mutation_location_export_hg38_dt$start <- start(mutation_location_export_hg38) %>% as.numeric
+mutation_location_export_hg38_dt$end <- end(mutation_location_export_hg38) %>% as.numeric
+mutation_location_export_hg38_dt$strand <- strand(mutation_location_export_hg38) %>% as.character
+mutation_location_export_hg38_dt$mut_id <- mutation_location_export_hg38$mut_id
+df
+
+#Export tsv file
+write_tsv(mutation_location_export_hg38_dt, file = "/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/xv20220330_mutation_coordinate_hg38.tsv", col_names = F)
+
+```
+
+
+#Analyse coverage pipeline results: Can I do the analysis? Do H3K27me3 domains overlap?
+```{r}
+mutation_K27_list <- list.files("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/mutations_mapped/site_means/")
+list_K27_maps_import <- sapply(paste0("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/mutations_mapped/site_means/",mutation_K27_list), read_table)
+list_K27_mut_simpl <- lapply(seq_along(list_K27_maps_import), FUN = function(x) {
+  name_tag <- str_extract(names(list_K27_maps_import[x]), "(?<=2021_).*(?=\\.txt)")
+  binsize_ch <- str_extract(names(list_K27_maps_import[x]), "(?<=pools-).*(?=_Farhang)")
+  pull.down <- colnames(list_K27_maps_import[[x]])[6]
+  list_K27_maps_import[[x]] %>% as_tibble() %>% 
+    dplyr::select(ID, seqnames,hg38_start = "start", hg38_end = "end", z_score, gm_mean,Input, K27me3 = pull.down) %>% 
+    mutate(cell_line = name_tag, binsize = binsize_ch)
+})
+K27_mapping_mut <- do.call("bind_rows",list_K27_mut_simpl)
+K27_mapping_separate <- K27_mapping_mut %>% separate(ID, sep = "_(?=[1-9])", into = c("sample","id")) %>% filter(cell_line != "DET562_GSE149670")
+
+#Check binsizes: how different are they?
+binsize_check <- K27_mapping_separate %>% dcast(sample + id + cell_line ~ binsize, value.var = "z_score")
+
+#Control_plots (BICR78, there is more difference between binsize)
+ggplot(binsize_check,aes(`1000`,`2000`)) + geom_point() + facet_wrap(~ cell_line) + stat_cor()
+ggplot(binsize_check,aes(`1000`,`5000`)) + geom_point() + facet_wrap(~ cell_line) + stat_cor()
+
+#Check binsizes: how different are they?
+cell_line_check <- K27_mapping_separate %>% dcast(sample + id + binsize ~ cell_line, value.var = "z_score")
+cell_line_check_1000 <- cell_line_check %>% filter(binsize == "1000")
+cor_matrix_1000 <- cor(cell_line_check_1000[4:8])
+cell_line_check_2000 <- cell_line_check %>% filter(binsize == "2000")
+cor_matrix_2000 <- cor(cell_line_check_2000[4:8])
+cell_line_check_5000 <- cell_line_check %>% filter(binsize == "5000")
+cor_matrix_5000 <- cor(cell_line_check_5000[4:8])
+corrplot(as.matrix(cor_matrix_1000), method = "number")
+corrplot(as.matrix(cor_matrix_2000), method = "number")
+corrplot(as.matrix(cor_matrix_5000), method = "number")
+
+#individual correlation
+cell_line_check_individual <- K27_mapping_separate %>% dcast(sample + id + binsize ~ cell_line, value.var = "z_score")
+ggplot(cell_line_check_individual,aes(BICR78_GSE149670,CAL27_GSE149670)) + geom_point() + facet_wrap(~ binsize) + stat_cor()
+ggplot(cell_line_check_individual,aes(BICR78_GSE149670,FADU_GSE149670)) + geom_point() + facet_wrap(~ binsize) + stat_cor()
+
+#Check K27me3 overlap
+
+
+#Select all the mutations that are in the top5 % (z-score > 1.65) => Complete overlap is not so common. I will use mean values
+top10_mutations <- K27_mapping_separate %>% filter(z_score > 1 & binsize == "5000")
+top10_overlap <- top10_mutations %>% dcast(sample + id + binsize ~ cell_line, value.var = "z_score") %>% na.omit()
+
+bottom10_mutations <- K27_mapping_separate %>% filter(z_score < -1 & binsize == "5000")
+bottom10_overlap <- bottom10_mutations %>% dcast(sample + id + binsize ~ cell_line, value.var = "z_score") %>% na.omit()
+```
+
+# Perform mean of 2000 binsize and 5000 binsize
+```{r}
+#Check densities
+ggplot(K27_mapping_separate) + geom_density(aes(z_score, color = binsize)) + facet_wrap(~cell_line)
+
+# Average H3K27me3 signal at 2000 binsize and 5000 binsize
+mean_H3K27me3_signal_mutations <- K27_mapping_separate %>% filter(binsize != "1000") %>% dplyr::group_by(binsize, id, sample) %>% dplyr::summarise(mean_H3K27me3_z_score = mean(z_score)) %>% mutate(type = case_when(grepl("BRCA2", sample) ~ "BRCA2mut", grepl("BRCA1", sample) ~ "BRCA1mut", grepl("HNSCC", sample) & grepl("Neg", sample) ~ "spo_HPVneg", grepl("HNSCC",sample) & grepl("Pos", sample) ~ "spo_HPVpos", grepl("F",sample) ~ "FA"))
+mean_H3K27me3_signal_mutations$id <- as.double(mean_H3K27me3_signal_mutations$id)
+
+mean_H3K27me3_signal_mutations_sep <- K27_mapping_separate %>% filter(binsize != "1000") %>% mutate(type = case_when(grepl("BRCA2", sample) ~ "BRCA2mut", grepl("BRCA1", sample) ~ "BRCA1mut", grepl("HNSCC",sample) ~ "sporadic", grepl("F",sample) ~ "FA"))
+mean_H3K27me3_signal_mutations_sep$id <- as.double(mean_H3K27me3_signal_mutations_sep$id)
+
+# Put together with all data set
+mut_location_MH <- all_mutation_locations %>% mutate(del_length = case_when(grepl("[A-Z]", MH) ~ nchar(MH)), del_class = case_when(grepl("[A-Z]", MH) ~ "MH",grepl("[A-Z]", non_t) ~ "non_t", T ~ "none"))
+
+#K27
+mut_MH_K27me3 <- mut_location_MH %>% left_join(mean_H3K27me3_signal_mutations)
+mut_MH_K27me3_cell_line <- mut_location_MH %>% left_join(mean_H3K27me3_signal_mutations_sep) %>% filter(del_class == "MH")
+#Try to call mean mutation per sample
+mean_K27me3_sample <- mut_MH_K27me3 %>% dplyr::group_by(type,sample,binsize) %>% dplyr::summarise(mut_count = n(), mean_K27 = mean(mean_H3K27me3_z_score))
+ggplot()
+mean_K27me3_sample_cl <- mut_MH_K27me3_cell_line %>% dplyr::group_by(type,sample,binsize,cell_line) %>% dplyr::summarise(mut_count = n(), mean_K27 = mean(z_score))
+
+
+domain_values <- mut_MH_K27me3 %>% filter(binsize == "5000") %>% mutate(K27me3_status = case_when(mean_H3K27me3_z_score > 1.5 ~ "H3K27_high", mean_H3K27me3_z_score < 1.5 ~ "H3K27_low", T ~ "H3K27_mid"))  %>% dplyr::group_by(type,sample,K27me3_status) %>% dplyr::summarise(mut_count = n())
+
+domain_values_cl <- mut_MH_K27me3_cell_line %>% filter(binsize == "5000") %>% mutate(K27me3_status = case_when(z_score > 0.5 ~ "H3K27_high", z_score < 0.5 ~ "H3K27_low", T ~ "H3K27_mid"))  %>% dplyr::group_by(type,sample,K27me3_status, cell_line) %>% dplyr::summarise(mut_count = n())
+
+ggplot(domain_values_cl %>% filter(type %in% c("spo_HPVneg","FA", "spo_HPVpos", "FA") & K27me3_status != "H3K27_mid" & cell_line == "FADU_GSE149670")) + geom_quasirandom(aes(type,mut_count)) + facet_wrap(~ K27me3_status) + theme_bw()
+
+wilc_FA <- domain_values_cl %>% filter(type %in% c("spo_HPVneg","FA") & K27me3_status != "H3K27_mid" & cell_line == "FADU_GSE149670") %>% group_by(K27me3_status) %>% wilcox_test(mut_count ~ type)
+
+#Plot LAD iLAD balance (constitutive sporadic vs. BRCA2)
+rel_freq_K27 <- domain_values_cl %>% filter(K27me3_status != "H3K27me3_mid" & type %in% c("spo_HPVneg","FA") & cell_line == "FADU_GSE149670") %>% dcast(type + sample ~K27me3_status, value.var = "mut_count") %>% dplyr::group_by(type,sample) %>% dplyr::summarise(K27_high_low_mut = H3K27_high/(H3K27_high + H3K27_low))
+
+ggplot(rel_freq_K27)  + geom_boxplot(aes(type,K27_high_low_mut)) + geom_quasirandom(aes(type,K27_high_low_mut)) + theme_bw()
+
+iLAD_LAD_balance_FA <- wilcox.test(rel_freq_LAD_iLAD %>% filter(type == "sporadic_HPVneg") %>% pull(iLAD_LAD_mut),rel_freq_LAD_iLAD %>% filter(type == "FA") %>% pull(iLAD_LAD_mut)) %>% tidy()
+
+```
+
+#Load domains and check how much they overlap
+```{r}
+#H3K27me3 domains
+K27_domain_list <- list.files("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/hmm/HNSCC/Farhangdoost2021/10kb/", pattern = ".txt")
+list_K27_domains <- lapply(paste0("/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/hmm/HNSCC/Farhangdoost2021/10kb/",K27_domain_list), read_table, col_names = F)
+names(list_K27_domains) <- K27_domain_list
+list_K27_domains <- lapply(list_K27_domains, setNames ,c("chr","start","end","domain"))
+GR_ranges_K27_domains <- lapply(list_K27_domains,makeGRangesFromDataFrame, keep.extra.columns = T)
+
+domain_overlaps <- lapply(seq_along(list_K27_domains), FUN = function(x){
+  findOverlaps(GR_ranges_K27_domains[[x]],mutation_location_GR)
+})
+
+K27_domain_mutations <- lapply(seq_along(list_K27_domains), FUN = function(x){
+  tibble(mutation_location_export[subjectHits(domain_overlaps[[x]]),], list_K27_domains[[x]][queryHits(domain_overlaps[[x]]),4])
+})
+
+K27_domain_mutations <- lapply(seq_along(K27_domain_mutations), FUN = function(x) {setNames(K27_domain_mutations[[x]],c("chr","start","end", "strand","mut_id",K27_domain_list[x]))})
+
+
+# Summary values
+K27_domain_mutations_summary <- K27_domain_mutations %>% purrr::reduce(left_join, by = c("chr","start","end","strand","mut_id")) %>% select(-DET562_GSE149670.txt)%>% mutate(domain_counts = rowSums(. == "Domain"), idomain_counts = rowSums(. == "iDomain"), H3K27me3_status = case_when(domain_counts %in% c(0,1) ~ "ciH3K27me3", domain_counts %in% c(4,5) ~ "cH3K27me3", domain_counts %in% c(2) ~ "fiH3K27me3", domain_counts %in% c(3) ~ "fH3K27me3")) 
+
+K27_HNSCC_domains <- K27_domain_mutations_summary %>% select(chr,start,end,strand,mut_id,domain_counts,H3K27me3_status)
+
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#Crate ranges with LADS
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T)
+LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutation_location_GR)
+LAD_overlaps_dt <- tibble(mutation_location_export[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6])
+
+#Put both together
+heterochromatin_HNSCC <- K27_HNSCC_domains %>% left_join(LAD_overlaps_dt)
+mut_data_HNSCC_het <- heterochromatin_HNSCC %>%mutate(type = case_when(grepl("BRCA2", mut_id) ~ "BRCA2mut", grepl("BRCA1", mut_id) ~ "BRCA1mut",grepl("HNSCC", mut_id) ~ "spo", grepl("F",mut_id) ~ "FA"))  %>% separate(mut_id, sep = "_(?=[1-9])", into = c("sample","id"))
+mut_data_HNSCC_het$id  <- as.double(mut_data_HNSCC_het$id)
+mut_data_f_HNSCC_het <- mut_data_HNSCC_het %>% left_join(mut_location_MH %>% select(id, sample,del_class))
+
+#deletion class freq per tumour and chromatin type
+simp.chrom.status <- mut_data_f_HNSCC_het %>% 
+  mutate(het_status = case_when(H3K27me3_status == "cH3K27me3" & LAD_status == "cLAD" ~ "cLAD_cH3K27me3",
+                                H3K27me3_status == "cH3K27me3" & LAD_status != "cLAD" ~ "cH3K27me3",
+                                H3K27me3_status != "cH3K27me3" & LAD_status == "cLAD" ~ "cLAD",
+                                H3K27me3_status == "ciH3K27me3" & LAD_status == "ciLAD" ~ "ciLAD_ciH3K27me3",
+                                H3K27me3_status == "ciH3K27me3" & LAD_status != "ciLAD" ~ "ciH3K27me3",
+                                H3K27me3_status != "ciH3K27me3" & LAD_status == "ciLAD" ~ "ciLAD",
+                                T ~ "fac_comb")) %>% na.omit()
+ggplot(simp.chrom.status) + geom_bar(aes(x = het_status, fill = del_class)) + facet_wrap(~type)
+
+het_order <- c("ciLAD_ciH3K27me3","ciH3K27me3","ciLAD","fac_comb","cLAD","cH3K27me3","cLAD_cH3K27me3")
+
+sim.chrom.status.cd <- simp.chrom.status %>% left_join(FA_tumour_type_cg) %>% mutate(type_cd = paste(type, CD, sep = "_")) %>% filter(type != "FA" | type_cd == "FA_A")
+
+```
+
+
+#Check trend across all tumours: total amount of mutations
+It fits with what the screen predicts
+- BRCA2 (*) = favors NHEJ/ represses MMEJ in euchromatin
+- BRCA1 (ns) = favors MMEJ in triple_het
+- FANCA (ns = 0.07) = favors MMEJ in polycomb
+Expected outcomes:
+- BRCA2mut = Relatively more MH mutations in euchromatin (ciLADs) vs cLADs compared to sporadic tumours
+- BRCA1mut = Relatively less MH mutation in LADs vs iLADs compared compared to sporadic tumours
+- FANCAmut = Relatively less MH mutations in H3K27me3 vs iH3K27me3 compared to sporadic tumours
+Measurement = log2 fc Domain/iDomain
+- BRCA2mut = Down
+- BRCA1mut = Down
+- FANCAmut = Down
+
+```{r}
+# Make two plots: one for LADs & one for iLADS (total amount of mutations)
+#LADs
+ggplot(sim.chrom.status.cd %>% filter(del_class == "MH"  & !grepl("f",LAD_status))) + geom_bar(aes(x = LAD_status, fill = del_class)) + facet_wrap(~type)
+
+#fold change differences (K27_me3)
+fc.LAD <- sim.chrom.status.cd %>% filter(del_class == "MH") %>% dplyr::group_by(type, LAD_status) %>% dplyr::summarise(count = n()) %>% dcast(type ~ LAD_status) %>% mutate(LAD_iLAD_ratio = log2(cLAD/ciLAD))
+
+#K27me3 (There's a subtle trend in total amount of mutations)
+ggplot(sim.chrom.status.cd %>% filter(del_class == "MH" & !grepl("f",H3K27me3_status))) + geom_bar(aes(x = H3K27me3_status, fill = del_class)) + facet_wrap(~type) + theme(axis.text.x = element_text(angle = 90)) + theme_bw() + theme_bw()
+
+#fold change differences (K27_me3)
+fc.K27 <- sim.chrom.status.cd %>% filter(del_class == "MH") %>% dplyr::group_by(type, H3K27me3_status) %>% dplyr::summarise(count = n()) %>% dcast(type ~ H3K27me3_status) %>% mutate(K27_iK27_ratio = log2(cH3K27me3/ciH3K27me3))
+
+```
+Results (log2 fold change D/iD): 
+- BRCA2mut: -0.19 (mut) vs 1.03 (spo) => Rel. more MH mut in iLADs (big diff., ~ 1.2)
+- BRCA1mut: 0.29 (mut) vs 1.03 (spo) => Rel. less MH mut in LADs (not so big, ~ 0.75)
+- FANCAmut: -0.2 (mut) vs -0.34 (spo) => Rel. more MH mut in K27me3 (minimal diff, ~ 0.15)
+
+
+# Check by tumour (is this trend consistent)
+```{r}
+# Count ratio per tumour sample (K27me3)
+per_sample_muts_K27 <- sim.chrom.status.cd %>% filter(del_class == "MH") %>% dplyr::group_by(type, H3K27me3_status, sample) %>% dplyr::summarise(mut_count = n() + 1) %>% dcast(type + sample ~ H3K27me3_status)
+per_sample_muts_K27[is.na(per_sample_muts_K27)] <- 1
+per_sample_muts_K27_calc <- per_sample_muts_K27 %>% mutate(K27_iK27_ratio = log2(cH3K27me3/ciH3K27me3))
+
+#Plot H3K27me3
+ggplot(per_sample_muts_K27_calc)  + geom_boxplot(aes(type, K27_iK27_ratio)) + geom_quasirandom(aes(type, K27_iK27_ratio))
+
+#Calculate stats (K27me3_K27me3)
+mut_type_K27 <-per_sample_muts_K27 %>% filter(type != "spo") %>% pull(type) %>% unique()
+stat_K27 <- map_dfr(mut_type, .f = function(x) {
+  spo_mut <- per_sample_muts_K27_calc %>% filter(type == "spo") %>% pull(K27_iK27_ratio)
+  mut_mut <- per_sample_muts_K27_calc %>% filter(type == x) %>% pull(K27_iK27_ratio)
+  wilcox.test(mut_mut,spo_mut) %>% tidy()
+})
+stat_K27_adj <- stat_K27 %>% mutate(p.adj = p.adjust(p.value))
+
+# Count ratio per tumour sample (LADs)
+per_sample_muts_LAD <- sim.chrom.status.cd %>% filter(del_class == "MH") %>% dplyr::group_by(type, LAD_status, sample) %>% dplyr::summarise(mut_count = n() + 1) %>% dcast(type + sample ~ LAD_status)
+per_sample_muts_LAD[is.na(per_sample_muts_LAD)] <- 1
+per_sample_muts_LAD_calc <- per_sample_muts_LAD %>% mutate(LAD_iLAD_ratio = log2(cLAD/ciLAD))
+
+#Plot LAD vs iLAD
+ggplot(per_sample_muts_LAD_calc)  + geom_boxplot(aes(fct_relevel(type, c("spo","BRCA2mut","BRCA1mut","FA"), ), LAD_iLAD_ratio, fill = type), alpha = 0.5,outlier.shape = NA) + geom_quasirandom(aes(type, LAD_iLAD_ratio)) + theme_bw()
+
+#Calculate stats (LAD_iLAD)
+mut_type <-per_sample_muts_LAD %>% filter(type != "spo") %>% pull(type) %>% unique()
+stat_LAD <- map_dfr(mut_type, .f = function(x) {
+  spo_mut <- per_sample_muts_LAD_calc %>% filter(type == "spo") %>% pull(LAD_iLAD_ratio)
+  mut_mut <- per_sample_muts_LAD_calc %>% filter(type == x) %>% pull(LAD_iLAD_ratio)
+  wilcox.test(mut_mut,spo_mut) %>% tidy() %>% mutate(type = x)
+})
+stat_LAD_adj <- stat_LAD %>% mutate(p.adj = p.adjust(p.value))
+
+```
+
+#With this we can show that BRCA2 chromatin specific paterns are mantained

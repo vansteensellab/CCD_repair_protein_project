@@ -1,0 +1,172 @@
+---
+title: "xv20220712_S1_set_up_screening"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S1 in the short version of the paper. This figure describes the layout of the screen and supplementaries to the screening set up. The main point of this figure is to build up confidence in our reporter cell line and describe how these pathways are build up. For the short version, I'll keep the script for supplementary figures separate. Figure outline:
+A- Plate design
+B- Correlation in log2 pathway balance
+C- Positive control effect size
+
+
+This script generates the plots for figure 1
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+```
+
+
+
+# Import data tables
+```{r}
+setwd(in.dir)
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","ChIP_zscore_selection")
+
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+ddr.screen.all <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data","screen_ddr_all_computations")
+ddr.screen.all.sel <- ddr.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#log2 fold change
+log2_fold_change_IPR_KO <- readRDS_proof( "data/processed_data","fold_change_ratio_KO")
+log2_fold_change_IPR_WT <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_WT")
+log2_fold_change_IPR_POLQ <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_POLQ")
+
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+```
+
+#Supplementary Figures
+
+#Figure S1A: Plate design with controls
+
+# Figure S1B: Correlation MMEJ:NHEJ balance
+```{r}
+#Compute the log2 MMEJ:NHEJ balance: Initial dataset
+log2.ratio.screen.detail.ddr <- ddr.screen.all.sel %>% dplyr::select(t.rep, MMEJNHEJratio,library, gene,barcode,sample,well,plate) %>% mutate(log2ratio = log2(MMEJNHEJratio))
+
+#dcast data table for plotting reproducibility of the ratio
+balance.ratio.list <- log2.ratio.screen.detail.ddr %>% reshape2::dcast(gene + library + barcode + sample + well + plate ~ t.rep, value.var = "log2ratio") %>% arrange(sample)
+
+# Plot reproducibility DNA_repair library
+#R1 vs. R2 (Fig. S1B)
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + 
+  geom_point(aes(R1,R4, color = fct_relevel(sample,c("WT","POLQ"))))+ 
+  geom_smooth(aes(R1,R4), method = "lm")+ 
+  xlab("R1 (log2 MMEJ:NHEJ balance))") + ylab("R2 (log2 MMEJ:NHEJ balance)") + 
+  theme_bw() + stat_cor(aes(R1,R4), label.y = 1.5, label.x = -4.25) +
+  scale_color_manual(values = c("#949DCF","#465584","#DADADA")) +
+  theme(legend.position = "top") + coord_fixed(xlim = c(-4.5,2), ylim = c(-4.5,2))
+
+#R1 vs. R5 (Fig. S1C)
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + 
+  geom_point(aes(R1,R5, color = fct_relevel(sample,c("WT","POLQ"))))+ 
+  geom_smooth(aes(R1,R5), method = "lm")+ 
+  xlab("R1 (log2 MMEJ:NHEJ balance))") + ylab("R3 (log2 MMEJ:NHEJ balance)") + 
+  theme_bw() + stat_cor(aes(R1,R5), label.y = 1.5, label.x = -4.25) +
+  scale_color_manual(values = c("#949DCF","#465584","#DADADA")) +
+  theme(legend.position = "top") + coord_fixed(xlim = c(-4.5,2), ylim = c(-4.5,2))
+
+#R4 vs. R5 (Fig. S1D)
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + 
+  geom_point(aes(R4,R5, color = fct_relevel(sample,c("WT","POLQ","KO"))))+ 
+  geom_smooth(aes(R4,R5), method = "lm", color = "red")+ 
+  xlab("R2 (log2 MMEJ:NHEJ balance))") + ylab("R3 (log2 MMEJ:NHEJ balance)") + 
+  theme_bw() + stat_cor(aes(R4,R5), label.y = 1.5, label.x = -4.25) +
+  scale_color_manual(values = c("#949DCF","#465584","#DADADA")) +
+  theme(legend.position = "top") + coord_fixed(xlim = c(-4.5,2), ylim = c(-4.5,2))
+
+
+```
+
+
+#Figure S1E: log2 fold change effects of controls and KO (dynamic range)
+
+```{r}
+log2_fold_change_IPR_POLQ_mean <- log2_fold_change_IPR_POLQ %>% dplyr::group_by(library,gene,barcode,sample,well,plate) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange, na.rm = T))
+
+log2_fold_change_IPR_WT_mean <- log2_fold_change_IPR_WT %>% dplyr::group_by(library,gene,barcode,sample,well,plate) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange, na.rm = T))
+
+log2_fold_change_IPR_bind <- log2_fold_change_IPR_KO %>% bind_rows(log2_fold_change_IPR_POLQ_mean, log2_fold_change_IPR_WT_mean)
+
+#Plot log2 fold changes
+ggplot(log2_fold_change_IPR_bind %>% arrange(sample)) +
+  geom_quasirandom(aes(fct_relevel(barcode,clone5_bc_cluster),mean.log2foldchange, color = sample), dodge.width = 0.5) + theme_bw() + theme(axis.text.x = element_blank(), legend.position = "top") + scale_color_manual(values = c("#DADADA","#465584","#949DCF")) 
+
+```

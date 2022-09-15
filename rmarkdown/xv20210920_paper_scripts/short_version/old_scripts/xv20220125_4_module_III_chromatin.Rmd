@@ -1,0 +1,646 @@
+---
+title: "xv20211230_5_epistasis_inhibitors"
+output: html_document
+---
+# Script to generate figure #5 in the paper. This figure shows that epistatic interactions can be bigger if drugs are used instead of KO. Figure outline:
+A- Effect of drug treatment in MMEJ:NHEJ balance
+B- Matrix for all treatments
+C- Slopes are bigger in inhibition than KO
+D- PARP1 and olaparib correlation
+E- ATM and ATMi correlation
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 6:
+A- PARP1 vs. veliparib
+B- PARP1 vs. talazoparib
+C- ATRi vs. VE-821
+D- ATRi vs. VE-822
+
+This script generates the plots for figure 5 and S6
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+library(rstatix)
+library(ggdendro)
+```
+
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220119_ratio_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220128_ratio_kinase_inhib_epistasis.rds")
+
+# Chromatin follow up experiment
+epistasis.ratio.followup <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220128_ratio_epistasis_followup.rds")
+
+```
+
+# Figure 3A: Chromatin vs. DNA repair 
+```{r}
+# For this we select
+module_I_tripl_het_features <- tibble(feature = c("late_replicating","H3K9me3","H3K9me2","LMNB1"), module = "triple_het")
+module_II_polycomb_features <- tibble(feature = c("EZH2","H3K27me3"), module = "polycomb")
+module_III_euchr_features <- tibble(feature = c("H3K4me1","H3K27ac","H3K4me2","H3K4me3","H4K5acK8ac","TTseq","POL2","POL2AS2"), module = "euchromatin")
+# Module summary
+module_summary <- bind_rows(module_I_tripl_het_features,module_II_polycomb_features, module_III_euchr_features)
+
+
+# First plot: what library
+gene_library <- both.screen.detail %>% select(gene,library) %>% distinct() %>% dplyr::group_by(gene) %>% dplyr::summarise(librar = case_when(n() == 1 ~ library, n() == 2 ~ "both")) %>% distinct()
+
+#Left_join data
+module.summary <- slope.protein.features.all %>% left_join(module_summary, by = "feature") %>% dplyr::group_by(module,gene) %>% dplyr::summarise(mean = mean(epistasis.final, na.rm = T)) %>% left_join(gene_library, by = "gene")
+module_III_genes <- module.summary %>% filter(module == "euchromatin" & mean > 0.02)
+module_II_genes <- module.summary %>% filter(module == "polycomb" & mean > 0.02)
+module_I_genes <- module.summary %>% filter(module == "triple_het" & mean > 0.02)
+
+#
+ggplot(module.summary %>% filter(mean > 0.02) %>% na.omit() %>% ungroup() %>% select(librar,gene,module)  %>% distinct() %>% group_by(module) %>% summarise(counts = n())) + geom_col(aes(module, counts)) + theme_bw() + coord_cartesian()
+
+# 
+ggplot(module.summary %>% filter(mean > 0.02) %>% na.omit() %>% ungroup() %>% select(librar,gene,module)  %>% distinct() %>% group_by(librar,module) %>% summarise(counts = n())) + geom_col(aes(module, counts, fill = fct_relevel(librar,c("DNA_repair","both","Chromatin"))), position = "fill") + theme_bw() + coord_cartesian(expand = F) + theme(legend.position = "top")
+```
+# CORUM database
+```{r}
+#Triple heterochromatin
+module_I_gene_set <- module_I_genes %>% pull(gene) %>% unique()
+module_I_gost <- gost(module_I_gene_set, organism = "hsapiens",sources = "CORUM")
+# Signalling factors
+# MLL4 complex
+ggplot(module_I_gost$result %>% dplyr::group_by(term_name, term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)), CORUM_name = paste0(term_name, term_id, sep = "_")) %>% filter(p_val > 2)) + geom_col(aes(p_val,reorder(CORUM_name,p_val)), fill = "#EB2030") + coord_cartesian(expand = F) + theme_bw() + xlab("-log10(p-adj)") + ylab("")
+
+
+```
+# Followup experiment: POLQ
+```{r}
+
+POLQ.screen <- slope.protein.features.all %>% 
+  filter( gene == "POLQ") %>% mutate(gRNA = "Screen")
+
+POLQ.followup <- epistasis.ratio.followup %>% filter(gene == "POLQ")
+
+POLQ.combined <- bind_rows(POLQ.screen, POLQ.followup)
+
+ggplot(POLQ.combined, aes(fct_relevel(gRNA, c("Screen","Combo")),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits))) +
+  geom_tile(aes(fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+#Test for this slopes different than 0
+test.POLQ <- POLQ.combined %>% group_by(feature) %>% filter(gRNA != 4) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+
+
+ggplot(POLQ.combined %>% select(gene,gRNA,mean.fc) %>% distinct(), aes(fct_relevel(gRNA, c("Screen","Combo")), "log2FC")) +
+  geom_tile(aes(fill = mean.fc)) +
+  scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red"))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+# Follow up experiment: SAP130
+```{r}
+
+SAP130.screen <- slope.protein.features.all %>% 
+  filter( gene == "SAP130") %>% mutate(gRNA = "Screen")
+
+SAP130.followup <- epistasis.ratio.followup %>% filter(gene == "SAP130")
+
+SAP130.combined <- bind_rows(SAP130.screen, SAP130.followup)
+
+ggplot(SAP130.combined, aes(fct_relevel(gRNA, c("Screen","Combo")),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits))) +
+  geom_tile(aes(fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+ggplot(SAP130.combined %>% select(gene,gRNA,mean.fc) %>% distinct(), aes(fct_relevel(gRNA, c("Screen","Combo")), "log2FC")) +
+  geom_tile(aes(fill = mean.fc)) +
+  scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red"))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+## ALL MLL3/4 proteins
+
+# Follow up experiment: RBBP5 (FDR < 0.1 = H3K9me2,H3K9me3 and LMNB1)
+```{r}
+
+RBBP5.screen <- slope.protein.features.all %>% 
+  filter( gene == "RBBP5") %>% mutate(gRNA = "Screen")
+
+RBBP5.followup <- epistasis.ratio.followup %>% filter(gene == "RBBP5")
+
+RBBP5.combined <- bind_rows(RBBP5.screen, RBBP5.followup)
+
+ggplot(RBBP5.combined, aes(fct_relevel(gRNA, c("Screen","Combo")),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits))) +
+  geom_tile(aes(fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+RBBP5.test <- RBBP5.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+## FDR < 0.1 = H3K9me2,H3K9me3 and LMNB1
+
+ggplot(RBBP5.combined %>% select(gene,gRNA,mean.fc) %>% distinct(), aes(fct_relevel(gRNA, c("Screen","Combo")), "log2FC")) +
+  geom_tile(aes(fill = mean.fc)) +
+  scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red"))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+# Follow up experiment: PAXIP1 (FDR < 0.1 all four)
+```{r}
+
+PAXIP1.screen <- slope.protein.features.all %>% 
+  filter( gene == "PAXIP1") %>% mutate(gRNA = "Screen")
+
+PAXIP1.followup <- epistasis.ratio.followup %>% filter(gene == "PAXIP1")
+
+PAXIP1.combined <- bind_rows(PAXIP1.screen, PAXIP1.followup)
+
+ggplot(PAXIP1.combined, aes(fct_relevel(gRNA, c("Screen","Combo")),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits))) +
+  geom_tile(aes(fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+PAXIP1.test <- PAXIP1.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+# FDR < 0.1 = All four features
+
+```
+
+# Test for the whole complex with follow up
+#Figure 4B: LMNB1
+```{r}
+screen.ASCOM <- slope.protein.features.all %>% 
+  filter(gene %in% c("ASH2L","DPY30","RBBP5","WDR5")) %>% select(gene,feature,epistasis.final) %>% mutate(gRNA = "Screen")
+
+ASCOM.followup <- epistasis.ratio.followup %>% filter(gene %in% c("ASH2L","DPY30","RBBP5","WDR5")) %>% select(gene,feature, epistasis.final,gRNA)
+
+ASCOM.combined <- bind_rows(screen.ASCOM,ASCOM.followup) %>% mutate(gene_gRNA = paste(gene,gRNA, sep = "_")) %>% filter(feature %in% c("H3K9me3","H3K9me2","LMNB1","late_replicating"))
+
+ASCOM.combined.dcast <- ASCOM.combined %>% dcast(gene_gRNA ~ feature, value.var = "epistasis.final") %>% column_to_rownames("gene_gRNA")
+
+ASCOM.heatmap <- pheatmap(t(ASCOM.combined.dcast))
+ASCOM.dist <- dist(ASCOM.combined.dcast)
+row_dend.ascom = hclust(ASCOM.dist)
+row_dend.hits.ascom <- as.dendrogram(row_dend.ascom)
+row_dend.hits.ascom <- seriate_dendrogram(row_dend.hits.ascom,ASCOM.dist, method="OLO")
+
+
+
+ascom.gene.order <- rownames(ASCOM.combined.dcast[as.hclust(row_dend.hits.ascom)[["order"]],])
+mll3.4.feature.order<- colnames(mll3.4.combined.dcast[,mll3.4.heatmap$tree_row[["order"]]])
+
+ggplot(ASCOM.combined) +
+  geom_tile(aes(fct_relevel(gene_gRNA,ascom.gene.order), fct_relevel(feature,mll3.4.feature.order), fill = epistasis.final)) + scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", limits = c(-0.05,0.1))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# Complex perturbation
+ASCOM.comined.test <- ASCOM.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+```
+
+#Figure 4D
+```{r}
+screen.PA1 <- slope.protein.features.all %>% 
+  filter(gene %in% c("PAXIP1","PAGR1")) %>% select(gene,feature,epistasis.final) %>% mutate(gRNA = "Screen")
+
+PA1.followup <- epistasis.ratio.followup %>% filter(gene %in% c("PAXIP1","PA1")) %>% select(gene,feature, epistasis.final,gRNA)
+
+PA1.combined <- bind_rows(screen.PA1,PA1.followup) %>% mutate(gene_gRNA = paste(gene,gRNA, sep = "_")) %>% filter(feature %in% c("H3K9me3","H3K9me2","LMNB1","late_replicating"))
+
+PA1.combined.dcast <- PA1.combined %>% dcast(gene_gRNA ~ feature, value.var = "epistasis.final") %>% column_to_rownames("gene_gRNA")
+
+PA1.heatmap <- pheatmap(t(PA1.combined.dcast))
+PA1.dist <- dist(PA1.combined.dcast)
+row_dend.pa1 = hclust(PA1.dist)
+row_dend.hits.pa1 <- as.dendrogram(row_dend.pa1)
+row_dend.hits.pa1 <- seriate_dendrogram(row_dend.hits.pa1,PA1.dist, method="OLO")
+
+pa1.gene.order <- rownames(PA1.combined.dcast[as.hclust(row_dend.hits.pa1)[["order"]],])
+.feature.order<- colnames(mll3.4.combined.dcast[,mll3.4.heatmap$tree_row[["order"]]])
+
+ggplot(PA1.combined) +
+  geom_tile(aes(fct_relevel(gene_gRNA,pa1.gene.order), fct_relevel(feature,mll3.4.feature.order), fill = epistasis.final)) + scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", limits = c(-0.05,0.1))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# Complex perturbation
+PA1.combined.test <- PA1.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+```
+
+
+#Figure 4D: NCOA
+```{r}
+screen.NCOA6 <- slope.protein.features.all %>% 
+  filter(gene %in% c("NCOA6")) %>% select(gene,feature,epistasis.final) %>% mutate(gRNA = "Screen")
+
+NCOA6.followup <- epistasis.ratio.followup %>% filter(gene %in% c("NCOA6")) %>% select(gene,feature, epistasis.final,gRNA)
+
+NCOA6.combined <- bind_rows(screen.NCOA6,NCOA6.followup) %>% mutate(gene_gRNA = paste(gene,gRNA, sep = "_")) %>% filter(feature %in% c("H3K9me3","H3K9me2","LMNB1","late_replicating"))
+
+NCOA6.combined.dcast <- NCOA6.combined %>% dcast(gene_gRNA ~ feature, value.var = "epistasis.final") %>% column_to_rownames("gene_gRNA")
+
+NCOA6.heatmap <- pheatmap(t(NCOA6.combined.dcast))
+NCOA6.dist <- dist(NCOA6.combined.dcast)
+row_dend.NCOA6 = hclust(NCOA6.dist)
+row_dend.hits.NCOA6 <- as.dendrogram(row_dend.NCOA6)
+row_dend.hits.NCOA6 <- seriate_dendrogram(row_dend.hits.NCOA6,NCOA6.dist, method="OLO")
+
+NCOA6.gene.order <- rownames(NCOA6.combined.dcast[as.hclust(row_dend.hits.NCOA6)[["order"]],])
+NCOA6.feature.order<- colnames(NCOA6.combined.dcast[,NCOA6.heatmap$tree_row[["order"]]])
+
+ggplot(NCOA6.combined) +
+  geom_tile(aes(fct_relevel(gene_gRNA,KMT.gene.order), fct_relevel(feature,mll3.4.feature.order), fill = epistasis.final)) + scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", limits = c(-0.05,0.1))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# Complex perturbation
+NCOA6.combined.test <- NCOA6.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+```
+
+#Figure 4D: Enzymatic components
+```{r}
+screen.KMT <- slope.protein.features.all %>% 
+  filter(gene %in% c("KMT2C","KDM6A","KMT2D")) %>% select(gene,feature,epistasis.final) %>% mutate(gRNA = "Screen")
+
+KMT.followup <- epistasis.ratio.followup %>% filter(gene %in% c("KMT2C","KMT2D","KDM6A","dKMT2CD")) %>% select(gene,feature, epistasis.final,gRNA)
+
+KMT.combined <- bind_rows(screen.KMT,KMT.followup) %>% mutate(gene_gRNA = paste(gene,gRNA, sep = "_")) %>% filter(feature %in% c("H3K9me3","H3K9me2","LMNB1","late_replicating"))
+
+KMT.combined.dcast <- KMT.combined %>% dcast(gene_gRNA ~ feature, value.var = "epistasis.final") %>% column_to_rownames("gene_gRNA")
+
+KMT.heatmap <- pheatmap(t(KMT.combined.dcast))
+KMT.dist <- dist(KMT.combined.dcast)
+row_dend.KMT = hclust(KMT.dist)
+row_dend.hits.KMT <- as.dendrogram(row_dend.KMT)
+row_dend.hits.KMT <- seriate_dendrogram(row_dend.hits.KMT,KMT.dist, method="OLO")
+
+KMT.gene.order <- rownames(KMT.combined.dcast[as.hclust(row_dend.hits.KMT)[["order"]],])
+.feature.order<- colnames(mll3.4.combined.dcast[,mll3.4.heatmap$tree_row[["order"]]])
+
+ggplot(KMT.combined) +
+  geom_tile(aes(fct_relevel(gene_gRNA,KMT.gene.order), fct_relevel(feature,mll3.4.feature.order), fill = epistasis.final)) + scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", limits = c(-0.05,0.1))  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# Complex perturbation
+KMT.combined.test <- KMT.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+
+```
+
+# Test the complex as a whole
+```{r}
+# Bind al previous data tables
+mll34.combined <- bind_rows(KMT.combined, ASCOM.combined, PA1.combined,NCOA6.combined)
+
+# Complex perturbation
+mll34.combined.test <- mll34.combined %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(FDR = p.adjust(p, method = "fdr"))
+```
+
+
+# Nuclear Envelope
+```{r}
+# Matching set
+
+matchSet <- function(table, class_col, class, order_on, bs=10){
+  # order by value of interest
+  o_vec = order(table[,order_on])
+  o_table = table[o_vec, ]
+  set_A = which(o_table[,class_col]==class)
+
+  # define bins that cover the range of set A
+  n = length(o_vec)
+  bin_n = ceiling((n - set_A[1] - 1) / bs)
+  seq_vec = seq(n-bin_n*bs, n, bs)
+
+
+  # take a matching set B
+  set_B = c()
+  for(i in 1:(length(seq_vec)-1)){
+    sub_table = o_table[(seq_vec[i] + 1):seq_vec[i + 1], ]
+    sub_A = which(sub_table[,class_col]==class)
+    if (length(sub_A) < bs/2){
+      sub_B = sample(which(sub_table[,class_col]!=class), length(sub_A))
+    } else {
+      sub_B = which(sub_table[,class_col]!=class)
+    }
+    set_B = c(set_B, sub_B + seq_vec[i])
+  }
+  ## can also return o_table[c(setA, setB), ]
+  ## but this way order is perserved.
+  i_vec = o_vec[c(set_A, set_B)]
+  return(table[i_vec[order(i_vec)], ])
+}
+
+
+# Nuclear envelop
+
+nuclear_env <- read.table("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220219_nuclear_envelope_proteins_GO:0005635_hs.txt") %>% pull(V2)
+
+# Matching median interaction (epistasis)
+nuclear.env.prots <- gene.f.slope.protein %>% left_join(epistasis.summary) %>% mutate(nuc.env = case_when(gene %in% nuclear_env ~ TRUE, T ~ FALSE), epistasis = abs(epistasis.final.b)) %>% filter(feature == "LMNB1") %>% select(gene,med.interaction,nuc.env,epistasis)
+
+#match set with median interaction level
+set.seed(1)
+match.set.lamina <- matchSet(nuclear.env.prots,"nuc.env",TRUE,"med.interaction")
+
+#density
+ggplot(match.set.lamina) + geom_density(aes(epistasis, group = nuc.env, color = nuc.env)) +
+  geom_density(data = nuclear.env.prots %>% filter(nuc.env == F), aes(epistasis,group = nuc.env))
+
+ggplot(nuclear.env.prots) + geom_quasirandom(aes(nuc.env, epistasis, color = nuc.env))
+
+```
+
+```
+
+
+
+
+POLQ.followup <- epistasis.ratio.followup %>% filter(feature %in% c("LMNB1", "H3K9me2","late_replicating","H3K9me3") & gene %in% c("POLQ","SAP130"))
+
+ggplot(POLQ.followup %>% select(gRNA,gene,feature,epistasis.final), aes(fct_relevel(gRNA,c("Combo")),gene)) +
+  geom_tile(aes(fill = epistasis.final)) +
+  geom_point(data = subset(POLQ.followup %>% select(gRNA,gene,feature,epistasis.final), epistasis.final > 0)) + 
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + facet_wrap(~ feature, nrow = 1)
+
+
+k27.followup <- epistasis.ratio.followup %>% filter(feature == "H3K27me3" & gene %in% c("ASH2L","DPY30","KDM6A","KMT2C","KMT2D","NCOA6","PA1","PAXIP1","POLQ","RBBP5","SAP130","WDR5"))
+
+ggplot(k27.followup) +
+  geom_tile(aes(gRNA,gene, fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1.5) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+
+tt.followup <- epistasis.ratio.followup %>% filter(feature == "H3K4me1" & gene %in% c("ASH2L","dKMT2CD","DPY30","KDM6A","KMT2C","KMT2D","NCOA6","PA1","PAXIP1","POLQ","RBBP5","SAP130","WDR5"))
+
+ggplot(tt.followup) +
+  geom_tile(aes(gRNA,gene, fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1.5) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+
+# Figure 3D: PARP1_3 and PARP inhibitors
+```{r}
+# Plot data with both of them
+proteins.PIKK <- slope.protein.features.all %>% filter(gene %in% c("ATM","ATR","PARP1","PARP3","PRKDC","POLL")) %>% select(drug = gene, feature,intercept,slope,mean.fc,high,sign.presence,epistasis.sign,epistasis.final)
+
+#dcast epistatic interactions (PARP proteins)
+slope.prot.features.scale.dcast.inhibitors <- slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK) %>% filter(drug %in% c("PARP1","PARP3","olaparib","talazoparib","veliparib")) %>% reshape2::dcast(drug ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "drug")
+
+#Heatmap for slope differences
+heatmap.slope.diff.inhibitors <- pheatmap(slope.prot.features.scale.dcast.inhibitors)
+gene.order.PARP <- rownames(slope.prot.features.scale.dcast.inhibitors[heatmap.slope.diff.inhibitors$tree_row[["order"]],])
+feature.order.PARP <- colnames(slope.prot.features.scale.dcast.inhibitors[heatmap.slope.diff.inhibitors$tree_col[["order"]]])
+
+#Plot
+ggplot(slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK) %>% filter(drug %in% c("PARP1","PARP3","olaparib","talazoparib","veliparib"))) + 
+  geom_tile(aes(fct_relevel(feature,feature.order.PARP),fct_relevel(drug,gene.order.PARP), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1.5) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+
+PARP.without.0 <- slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK) %>% filter(epistasis.final != 0) %>% filter(drug %in% c("PARP1","PARP3","olaparib","talazoparib","veliparib")) %>% dplyr::group_by(feature) %>% dplyr::summarise(count.f = n()) %>% filter(count.f > 3) %>% pull(feature)
+  
+PARP.test <- slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK)  %>% dplyr::filter(drug %in% c("PARP1","PARP3","olaparib","talazoparib","veliparib")) %>% filter(feature %in% PARP.without.0) %>% dplyr::group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(fdr = p.adjust(p, method = "fdr"))
+
+PARP.LMNB1 <- slope.protein.features.inhibitors.filt %>% bind_rows(proteins.PIKK) %>% filter(drug %in% c("PARP1","PARP3","olaparib","talazoparib","veliparib")) %>% filter(feature == "HDAC1") %>% pull(epistasis.final)
+```
+
+#3E: Polycomb repressed chromatin
+```{r}
+#Polycomb
+module_II_gene_set <- module_II_genes %>% pull(gene) %>% unique()
+module_II_gost <- gost(module_II_gene_set, organism = "hsapiens",sources = "CORUM")
+# FANC anemia complex
+ggplot(module_II_gost$result %>% dplyr::group_by(term_name, term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)), CORUM_name = paste0(term_name, term_id, sep = "_"))) + geom_col(aes(p_val,reorder(CORUM_name,p_val)), fill = "#EB2030") + coord_cartesian() + theme_bw() + xlab("-log10(p-adj)") + ylab("")
+```
+
+#Figure 3H: FANC proteins
+```{r}
+#dcast epistatic interactions (FANC proteins)
+slope.prot.features.scale.dcast.FA <- slope.protein.features.all %>% filter(gene %in% c("FANCL","FAAP100","FAAP24","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","FANCM","FANCD2","FANCI")) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap for slope differences
+heatmap.epistasis.FANC <- pheatmap(slope.prot.features.scale.dcast.FA )
+gene.order.FA <- rownames(slope.prot.features.scale.dcast.FA[heatmap.epistasis.FANC$tree_row[["order"]],])
+feature.order.FA <- colnames(slope.prot.features.scale.dcast.FA[heatmap.epistasis.FANC$tree_col[["order"]]])
+
+
+ggplot(slope.protein.features.all %>% filter(gene %in% c("FAAP24","FANCM","FANCA","FANCG","FANCF","FANCC","FAAP100","FANCE","FANCL","FANCB","FANCI","FANCD2"))) + 
+  geom_tile(aes(fct_relevel(feature,rev(feature.order.FA)),fct_relevel(gene,c("FAAP24","FANCM","FANCA","FANCG","FANCF","FANCC","FAAP100","FANCE","FANCL","FANCB","FANCI","FANCD2")), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+ggplot(gene.f.slope.protein %>% filter(gene %in% c("FAAP24","FANCM","FANCA","FANCG","FANCF","FANCC","FAAP100","FANCE","FANCL","FANCB","FANCI","FANCD2"))) +
+  geom_tile(aes(fct_relevel(gene,c("FAAP24","FANCM","FANCA","FANCG","FANCF","FANCC","FAAP100","FANCE","FANCL","FANCB","FANCI","FANCD2")),fct_relevel(feature, rev(feature.order.FA)),fill = epistasis.final.b)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+FA.test <- gene.f.slope.protein %>% filter(gene %in% c("FAAP24","FANCM","FANCA","FANCG","FANCF","FANCC","FAAP100","FANCE","FANCL","FANCB","FANCI","FANCD2")) %>% group_by(feature) %>% t_test(epistasis.final ~ 0, alternative = "greater") %>% mutate(fdr = p.adjust(p, method = "fdr"))
+
+```
+
+#Figure 3H: FANC proteins
+```{r}
+#dcast epistatic interactions (FANC proteins)
+slope.prot.features.scale.dcast.K27 <- slope.protein.features.all %>% filter(gene %in% c("EHMT2","EZH2")) %>% reshape2::dcast(gene ~ feature, value.var = "epistasis.final") %>% column_to_rownames(var = "gene")
+
+#Heatmap for slope differences
+heatmap.epistasis.K27 <- pheatmap(slope.prot.features.scale.dcast.K27)
+gene.order.K27 <- rownames(slope.prot.features.scale.dcast.K27[heatmap.epistasis.K27$tree_row[["order"]],])
+feature.order.K27 <- colnames(slope.prot.features.scale.dcast.K27[heatmap.epistasis.K27$tree_col[["order"]]])
+
+
+ggplot(slope.protein.features.all %>% filter(gene %in% c("EHMT2","EZH2"))) + 
+  geom_tile(aes(fct_relevel(feature,rev(feature.order.FA)),fct_relevel(gene,rev(gene.order.K27)), fill = epistasis.final)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+
+ggplot(gene.f.slope.protein %>% filter(gene %in% c("EHMT2","EZH2"))) +
+  geom_tile(aes(gene,fct_relevel(feature, rev(feature.order.FA)),fill = epistasis.final.b)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F, ratio = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+
+```
+
+# Nuclear envelope
+```{r}
+# Matching set
+
+matchSet <- function(table, class_col, class, order_on, bs=10){
+  # order by value of interest
+  o_vec = order(table[,order_on])
+  o_table = table[o_vec, ]
+  set_A = which(o_table[,class_col]==class)
+
+  # define bins that cover the range of set A
+  n = length(o_vec)
+  bin_n = ceiling((n - set_A[1] - 1) / bs)
+  seq_vec = seq(n-bin_n*bs, n, bs)
+
+
+  # take a matching set B
+  set_B = c()
+  for(i in 1:(length(seq_vec)-1)){
+    sub_table = o_table[(seq_vec[i] + 1):seq_vec[i + 1], ]
+    sub_A = which(sub_table[,class_col]==class)
+    if (length(sub_A) < bs/2){
+      sub_B = sample(which(sub_table[,class_col]!=class), length(sub_A))
+    } else {
+      sub_B = which(sub_table[,class_col]!=class)
+    }
+    set_B = c(set_B, sub_B + seq_vec[i])
+  }
+  ## can also return o_table[c(setA, setB), ]
+  ## but this way order is perserved.
+  i_vec = o_vec[c(set_A, set_B)]
+  return(table[i_vec[order(i_vec)], ])
+}
+
+
+# Nuclear envelop
+
+nuclear_env <- read.table("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220219_nuclear_envelope_proteins_GO:0005635_hs.txt") %>% pull(V2)
+
+# Matching median interaction (epistasis)
+nuclear.env.prots <- gene.f.slope.protein %>% left_join(epistasis.summary) %>% mutate(nuc.env = case_when(gene %in% nuclear_env ~ TRUE, T ~ FALSE), epistasis = abs(epistasis.final.b)) %>% filter(feature == "LMNB1") %>% select(gene,med.interaction,nuc.env,epistasis)
+
+#match set with median interaction level
+match.set.lamina <- matchSet(nuclear.env.prots,"nuc.env",TRUE,"med.interaction")
+
+#density
+ggplot(match.set.lamina) + geom_density(aes(epistasis, group = nuc.env, color = nuc.env))
+
+```
+

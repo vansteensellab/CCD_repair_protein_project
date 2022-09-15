@@ -1,0 +1,240 @@
+---
+title: "xv20220712_S2_CCDs_z_score"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S2 in the short version of the paper. This figure describes the z-score normalization and CCDs calculations. 
+A- Plate design
+B- Correlation in log2 pathway balance
+C- Positive control effect size
+
+
+This script generates the plots for figure 1
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+```
+
+
+
+# Import data tables
+```{r}
+setwd(in.dir)
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","ChIP_zscore_selection")
+
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+ddr.screen.all <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data","screen_ddr_all_computations")
+ddr.screen.all.sel <- ddr.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#log2 fold change
+log2_fold_change_IPR_KO <- readRDS_proof( "data/processed_data","fold_change_ratio_KO")
+log2_fold_change_IPR_WT <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_WT")
+log2_fold_change_IPR_POLQ <- readRDS_proof( "data/processed_data/CCD_analysis","fold_change_ratio_POLQ")
+
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+
+# Individual data point (intermediate step)
+step2.epistasis <- readRDS_proof("data/processed_data/CCD_analysis","fold_change_ratio_KO")
+ 
+```
+
+#Supplementary Figures
+
+#Figure S5A: Examples RAD50 vs LMNB1
+```{r}
+chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
+
+##95% CI for each feature
+CI95_chromatin_features <- chromatin_features_plot %>% dplyr::group_by(variable) %>% dplyr::summarise(CI2.5 = quantile(value, 0.025), CI97.5 = quantile(value, 0.975), range = CI97.5 - CI2.5, mean = mean(value))
+
+#Plot S7A:  Chromatin ranges
+ggplot(chromatin_features_plot) + 
+  geom_violin(aes(fct_relevel(variable, heatmap.chromatin.order), value), alpha = 0.5, fill = "grey70", color = "grey70") + theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ 
+  geom_quasirandom(data = chromatin_features_plot %>% filter(ID %in% clone5_bc_cluster), aes(fct_relevel(variable, heatmap.chromatin.order), value), color = "red")  + 
+  geom_errorbar(data = CI95_chromatin_features, aes(x = variable,ymin = CI2.5, ymax = CI97.5), color = "black") 
+```
+
+#Figure S7B and C: Effect sizes discussion
+```{r}
+##DNA repair protein class (CCD, global, both)
+global_effect_proteins <- test.log2.dist %>% filter(p.adj < 0.001) %>% pull(gene) %>% unique()
+CCD_proteins <- slope.protein.features.all %>% filter(model_p.adj < 0.05) %>% pull(gene) %>% unique()
+#All classes
+both_CCD_global_proteins <- intersect(global_effect_proteins, CCD_proteins)
+only_global <- setdiff(global_effect_proteins, both_CCD_global_proteins)
+only_CCD <- setdiff(CCD_proteins, both_CCD_global_proteins)
+# Classes summary
+classes_summary <- tibble(gene = c(both_CCD_global_proteins,only_global,only_CCD), class = c(rep("both", length(both_CCD_global_proteins)),rep("global",length(only_global)), rep("CCD", length(only_CCD))))
+
+##Compute estimated log2FC
+estimated_FC_CCD <- slope.protein.features.all %>% left_join(CI95_chromatin_features, by = c("feature" ="variable")) %>% mutate(estim_fc_CCD = range*CCD_value) %>% right_join(classes_summary)
+
+##Filter max estimated FC
+max_estimated_FC_CCD_gene <- estimated_FC_CCD %>% dplyr::group_by(gene) %>% dplyr::summarise(m_CCD_FC_nhej = max(estim_fc_CCD), m_CCD_FC_mmej = min(estim_fc_CCD)) %>% reshape2::melt(value.name = "m_CCD_FC") %>% filter(m_CCD_FC != 0)
+
+## Filter max(CCDs)
+max_estimated_CCD_FC <- estimated_FC_CCD %>% mutate(m_CCD_FC = estim_fc_CCD) %>% right_join(max_estimated_FC_CCD_gene) %>% dplyr::select(-m_CCD_FC)
+
+#Left_join mean.fc
+estimated_CCD_global <- max_estimated_CCD_FC %>% left_join(mean.log2.fc)
+
+#Plot S7B: Estimated CCD vs. global FC
+ggplot(estimated_CCD_global %>% na.omit()) + 
+  geom_point(aes(abs(estim_fc_CCD), abs(mean.fc), color = as.character(sign(estim_fc_CCD)))) +
+  geom_smooth(aes(abs(estim_fc_CCD), abs(mean.fc)), method = "lm") + theme_bw() + 
+  stat_cor(aes(abs(estim_fc_CCD), abs(mean.fc))) + 
+  scale_color_manual(values = c("#8c510a","#01665e")) + theme(legend.position = "top") + geom_abline() + labs(color = "Favored pathway") + facet_wrap(~ class)
+
+#Plot S7C: Relative effect
+relative_CCD <- estimated_CCD_global %>% mutate(rel_CCD = abs(estim_fc_CCD)/abs(mean.fc))
+
+ggplot(relative_CCD) + geom_quasirandom(aes(class, log2(rel_CCD))) + stat_summary(aes(class, log2(rel_CCD)), geom = "crossbar", fun = "mean", color = "red") + theme_bw()
+
+```
+
+#Figure S5A: Examples RAD50 vs LMNB1
+```{r}
+# Plot RAD50 with H3K4me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("RAD50")),
+       aes(H3K4me3,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.114),method = "lm") +
+  stat_cor(label.x = -0.5, label.y = -0.7) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5A: Examples BRCA2 vs. H3K4me1
+```{r}
+# Plot BRCA2 with H3K4me1
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BRCA2")),
+       aes(H3K4me1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5D: Example BRCA2 vs. LMNB1
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BRCA2")),
+       aes(H3K9me2,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5D: Example BOD1L1 vs. H3K4me1
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BOD1L1")),
+       aes(H3K4me1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = 0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BOD1L1 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#Figure S5E: Example BOD1L1 vs. late_replicating
+```{r}
+# Plot BRCA2 with H3K36me3
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("BOD1L1")),
+       aes(late_replicating,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.14),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = 0.4) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(BOD1L1 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+
+ 

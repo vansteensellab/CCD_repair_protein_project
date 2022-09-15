@@ -1,0 +1,790 @@
+---
+title: "xv20200122_e1057_Analysis"
+output: html_document
+---
+# This Rmarkdown file have been generated to perform the analysis of the e1057 experiment data (Figures, plots explanations...). This analysis will give us a preliminary idea of what it is going on and how to arrange figures afterwards. We should already have an idea of what types of graphs we are going to include (probably is going to be Fig.1 & Fig.2). With two figures should be enough present every phenotype we find in this kind of experiments. This will allow us to present which are the phenotypes that we detect. Probably first figure should give a more general overview and a second one where we focus more on the changes we are able to describe.
+
+I will cluster integration based on CL classification (6 categories) : same as we used for the screening analysis. I will cluster integrations based on this an compare them. 
+
+# This file will use the e1057 dataset which is in the e1057.tib file.
+
+```{r setup, include=FALSE}
+# libraries:
+library(dplyr)
+library(ggplot2)
+#library(rtracklayer)
+#library(tidyr)
+library(plyr)
+library(data.table)
+#library(car)
+library(parallel)
+library(gtools)
+library(tibble)
+library(stringr)
+library(ggpubr)
+library(forcats)
+library(viridisLite)
+library(viridis)
+library(ggbeeswarm)
+library(pheatmap)
+library(RColorBrewer)
+library(tidyr)
+```
+
+#Levels and color palettes
+This chunk contains information that will be useful during the analysis and plots.
+```{r}
+timepoint.levels <- c("Basal","16h","24h","48h","72h","96h","120h","EV","NoShield")
+antibody.levels <- c("Input","H3","H3K4me1","H3K4me2","H3K4me3","H3K27ac","H3K36me3")
+indel.colors <- c("#2E358F","#EB2030","#524F4F")
+antibody.colors <- c("#787878","#FEC601","#EA7317","#3772B1","#3DA5D9","#73BFB8")
+timepoint.colors <- c("#000000","#FF3C38","#A23E48","#FF8C42", "#FFF275","#6699CC")
+timepoint.colors2 <- c("#000000","#ddb310","#b51d14","#00beff","#fb49b0","#00b25d")
+chromatin.levels <- c("euchromatin-transcription","transcription","H3K27me3","late_replicating-LAD-H3K9me2","other-heterochromatin","unmarked")
+  
+timepoint.shapes <- c(4,21,22,23,24,25)
+```
+
+
+#Import data sets and merge them for proper analysis
+```{r}
+#Load data set from E1057
+e.1057 <- readRDS("/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/data/xv20200827_E1057_histmod_chip.rds") %>% filter(spikein == FALSE)
+e1057.sel.plot <- e.1057 %>% dplyr::select(n.exp,antibody,timepoint,barcode,norm.pull.down,clone,MMEJscore,indelreads,freqWT, freqMMEJ, freqNHEJ)
+
+#Load data set from E900
+load("/DATA/projects/DSBrepair/data/R/XV20200122_E900_HistmodTest.RData")
+E900 <- E900.tib %>% filter(spikein == FALSE) %>% mutate(tmp = case_when(n.exp == "E862" ~ "1.1", n.exp == "E893" ~ "1.2"))
+E900.sel.plot <- E900 %>% dplyr::select(n.exp = tmp,antibody,timepoint,barcode,norm.pull.down,clone,MMEJscore,indelreads,freqWT = pct_wt, freqMMEJ = pct_del_7, freqNHEJ = pct_ins_1)
+
+# bind both
+chip.data.kinetics <- bind_rows(e1057.sel.plot,E900.sel.plot)
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+```
+
+# Call categories
+```{r}
+#Import chromatin classification used in the screening
+chromatindomains <- readRDS("/DATA/projects/DSBrepair/data/R/cl20200623_clones_chip_domains.RDS") %>% filter(bc %in% unique(chip.data.kinetics$barcode))
+
+#Other heteterochromatin group
+other.het <- c("LAD-H3K9me2","late_replicating-H3K9me2","late_replicating","late_replicating-LAD-H3K9me2-H3K27me3","H3K9me2-H3K27me3","LAD-H3K9me2-H3K27me3","transcription-LAD-H3K9me2")
+
+chromatincategories <- chromatindomains %>% mutate(chromatin = case_when(group %in% c("euchromatin-H3K27me3","euchromatin-H3K9me2") ~ "other-heterochromatin",
+                              group %in% other.het ~ "other-heterochromatin",
+                              group == "euchromatin-transcription-late_replicating" ~ "euchromatin-transcription", group == "euchromatin" ~ "euchromatin-transcription", group == "transcription" ~ "euchromatin-transcription",
+                              is.na(group) ~ "unmarked", TRUE ~ group)) %>% dplyr::select(barcode = bc, chromatin)
+
+
+```
+
+# Plot for paper would be LMNB1 correlation of fold change
+```{r}
+# cutting efficiencies
+mll3.4.TIF <- chip.data.kinetics %>% filter(timepoint == "72h" & antibody == "Input") %>% dplyr::group_by(barcode) %>% dplyr::summarise(m.TIF = mean(1-freqWT, na.rm = T))
+
+# Marks
+mll3.4.marks <- chip.data.kinetics %>% filter(antibody %in% c("H3K4me1","H3K4me2","H3K4me3","H3K27me3", "H3") & timepoint != "24h") %>% separate(n.exp, into = c("replicate","batch")) %>% dplyr::group_by(replicate,antibody,timepoint,barcode) %>% dplyr::summarise(pull.down = mean(norm.pull.down, na.rm = T)) %>% dplyr::group_by(antibody,timepoint,barcode) %>% dplyr::summarise(log2_signal = log2(mean(pull.down, na.rm = T)))
+
+#Take H3 values and make averages
+H3.values <- chip.data.kinetics %>% filter(antibody == "H3" & timepoint != "24h") %>% separate(n.exp, into = c("replicate","batch")) %>% dplyr::group_by(replicate,antibody,timepoint,barcode) %>% dplyr::summarise(pull.down = mean(norm.pull.down, na.rm = T)) %>% dplyr::group_by(timepoint,barcode) %>% dplyr::summarise(log2_H3 = log2(mean(pull.down, na.rm = T)))
+
+# Join and calculate
+mll34.norm <- mll3.4.marks %>% left_join(H3.values) %>% mutate(H3.norm.signal = log2_signal - log2_H3)
+
+# Calculate basal & max value
+FC.mll34 <- mll34.norm %>% left_join(mll34.norm %>% filter(timepoint %in% c("Basal")) %>% ungroup() %>% select(antibody, barcode,basal.signal = H3.norm.signal)) %>% mutate(FC.signal = H3.norm.signal - basal.signal)
+
+#Select maximum fold change
+max.FC.mll34 <- FC.mll34 %>% dplyr::group_by(antibody,barcode) %>% dplyr::summarise(max.FC = max(FC.signal)) %>% left_join(clone5_z.score_chrom_tib,  by = c("barcode" = "ID")) %>% na.omit()
+
+# Check amount of replicates
+replicates.chip <- mll3.4.marks %>% distinct() %>% dplyr::group_by(antibody,timepoint,barcode,clone) %>% dplyr::summarise(count = n())
+
+
+
+# Calculate basal & max value
+basal.chip <- mll34.chip %>% filter(timepoint %in% c("Basal")) %>% dplyr::group_by(antibody,barcode,clone) %>% dplyr::summarise(basal.signal = mean(log2(norm.pull.down), na.rm =T))
+
+# Calculate max value
+FC.histonemod <- mll34.chip %>% dplyr::group_by(antibody,timepoint,barcode,clone) %>% dplyr::summarise(mean.signal = mean(log2(norm.pull.down), na.rm = T)) %>% dplyr::group_by(antibody, barcode,clone) %>% dplyr::summarise(highest.value = max(mean.signal, na.rm = T), lowest.value = min(mean.signal, na.rm = T)) %>% left_join(basal.chip, by = c("antibody","barcode","clone")) %>% mutate(FC.increase = highest.value - basal.signal, FC.decrease = lowest.value -basal.signal) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+```
+
+# Correct fold changes by break induction
+```{r}
+in.dir.date = 20201213
+in.dir = paste0("/DATA/projects/DSBrepair/data/R/rs", in.dir.date, "/")
+trip_tib_2000 = readRDS(paste0(in.dir, "RSTP2_IndelRatios_Chromatin_2kb.RDS"))
+
+## Prepare models for LBR1, LBR12 & LBR15 to use to "spread" the LBR2 efficiency. This will allow us to maybe bipass the saturation in highly efficient IPRs.
+trip_tib_otherguides <- trip_tib_2000 %>%
+  filter(exp_pool %in% c("mean_RSTP2_2000_LBR1_DMSO_64",
+                         "mean_RSTP2_2000_LBR2_DMSO_64",
+                         "mean_RSTP2_2000_LBR12_DMSO_64",
+                         "mean_RSTP2_2000_LBR15_DMSO_64"))
+otherguides_barcodes <- trip_tib_otherguides %>% 
+  group_by(barcode) %>% 
+  dplyr::summarise(count = n()) %>% 
+  filter(count > 1) %>% 
+  pull(barcode)
+
+length(otherguides_barcodes)
+
+clone5_barcodes <- trip_tib_2000 %>% filter(cell_line == "RSTP2_clone5") %>% distinct(barcode) %>% pull()
+
+trip_tib_otherguides$plasmid <- factor(trip_tib_otherguides$plasmid, levels = c("LBR1", "LBR12", "LBR15" ,"LBR2"))
+
+trip_tib_otherguides_wide <- trip_tib_otherguides %>% filter(barcode %in% otherguides_barcodes) %>% dplyr::select(barcode, plasmid, efficiency) %>% distinct() %>% tidyr::spread(plasmid, efficiency)
+
+
+# trip_tib_otherguides_wide %>% ggplot(., aes(LBR2, LBR15))  +  
+#   geom_point() +
+#   geom_smooth(method= "loess") +
+#   ylim(0, 1) +
+#   xlim(0, 1) +
+#   theme_bw(base_size = 16) +
+#   stat_cor(method = "spearman") + 
+#   coord_fixed()
+
+
+
+# Make the loess model on LBR1, 12 & 15 with LBR2. 
+loess_LBR1 <- loess(LBR1 ~ LBR2, trip_tib_otherguides_wide, 
+                    control = loess.control(surface = "direct")) # This option allows for extrapolation
+loess_LBR12 <- loess(LBR12 ~ LBR2, trip_tib_otherguides_wide, 
+                     control = loess.control(surface = "direct"))
+loess_LBR15 <- loess(LBR15 ~ LBR2, trip_tib_otherguides_wide, 
+                     control = loess.control(surface = "direct"))
+
+
+# Get data for mll model
+
+fc.mean.mll.model = fc.48h %>%
+  left_join(mll3.4.TIF) %>% 
+  mutate(LBR1_pred = predict(loess_LBR1, m.TIF, se = TRUE)$fit, 
+         LBR12_pred = predict(loess_LBR12, m.TIF, se = TRUE)$fit,
+         LBR15_pred = predict(loess_LBR15, m.TIF, se = TRUE)$fit) %>%
+  ungroup() %>%
+  mutate(mean_pred = rowMeans(dplyr::select(.,c(LBR1_pred, LBR12_pred, LBR15_pred))),
+         log2_mean_pred = log2(mean_pred),
+         log2_efficiency = log2(m.TIF),
+         log2_m.pulldown = fc.48)
+
+### Modeling with decompressed efficiency (based on LBR1, LBR12 & LBR15)
+lm_guides_H3K4me1 <- nls(log2_m.pulldown ~ a + b*log2_mean_pred, algorithm = "port", 
+                       start = c(a = 0, b = 1), lower = c(a = -Inf,b = 1), 
+                       upper = c(Inf, b = 1), 
+                       data = filter(fc.mean.mll.model, antibody == "H3K4me1"))
+lm_guides_H3K4me2 <- nls(log2_m.pulldown ~ a + b*log2_mean_pred, algorithm = "port", 
+                      start = c(a = 0, b = 1), lower = c(a = -Inf,b = 1), 
+                      upper = c(Inf, b = 1), 
+                      data = filter(fc.mean.mll.model, antibody == "H3K4me2"))
+lm_guides_H3K4me3 <- nls(log2_m.pulldown ~ a + b*log2_mean_pred, algorithm = "port", 
+                       start = c(a = 0, b = 1), lower = c(a = -Inf,b = 1), 
+                       upper = c(Inf, b = 1), 
+                       data = filter(fc.mean.mll.model, antibody == "H3K4me3"))
+
+antibody = c("H3K27me3","H3K4me1", "H3K4me2", "H3K4me3")
+intercepts = c(coef(lm_guides_H3K27me3)[[1]],
+               coef(lm_guides_H3K4me1)[[1]], 
+               coef(lm_guides_H3K4me2)[[1]], 
+               coef(lm_guides_H3K4me3)[[1]])
+intercept_df = data.frame(antibody, intercepts)
+
+# Calculate the residuals from the datapoints in the previous figure from the predicted relationship
+H3K4me1_res <- lm_guides_H3K4me1 %>% augment  %>% mutate(antibody = "H3K4me1")
+H3K4me2_res <- lm_guides_H3K4me2 %>% augment %>% mutate(antibody = "H3K4me2")
+H3K4me3_res <- lm_guides_H3K4me3 %>% augment %>% mutate(antibody = "H3K4me3")
+resids_model = rbind(H3K4me1_res, H3K4me2_res, H3K4me3_res, H3_res)
+
+# Left_join resid
+
+tmp.fc <- fc.mean.mll.model %>% left_join(resids_model) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% na.omit()
+```
+
+#
+```{r}
+# 
+mll3.4.marks
+
+timepoint.dt <- tibble(timepoint = c("Basal","16h","48h","72h","96h", "120h","EV","NoShield"), time = c(0,16,48,72,96,120,NA,NA))
+
+tmp <- mll3.4.marks  %>% left_join(timepoint.dt)
+
+#H3 normalized signal
+tmp <- mll3.4.marks %>% left_join(timepoint.dt) %>% left_join(chromatincategories) %>% na.omit()
+
+mean.signal.change <- tmp  %>% dplyr::group_by(antibody,chromatin, time) %>% dplyr::summarise(m = mean(log2_signal))
+
+basal.mean <- mean.signal.change %>% filter(time == 0) %>% dplyr::select(antibody,chromatin, basal = m) 
+
+
+FC.mean <- mean.signal.change %>% left_join(basal.mean) %>% mutate(fc = m - basal) %>% filter(antibody != "H3K27me3")
+
+# Compute FC mean of this interaction (0 vs. 48h)
+#H3 corrected signal
+H3 <- mll3.4.marks %>% left_join(timepoint.dt)%>% filter(antibody == "H3" & time == 48) %>% ungroup() %>% dplyr::select(barcode,H3.signal = log2_signal)
+H3.corr.chip <- mll3.4.marks %>% left_join(timepoint.dt) %>% filter(time %in% c(48,0)) %>% left_join(H3) %>% mutate(fc.H3 = log2_signal - H3.signal)
+
+# Calculate to basal FC
+#Basal interaction
+basal.signal <- filter(H3.corr.chip, time == 0) %>%ungroup() %>% dplyr::select(antibody,barcode, basal= log2_signal)
+fc.48h <- H3.corr.chip %>% left_join(basal.signal) %>% mutate(fc.48 = fc.H3 - basal) %>% filter(antibody != "H3" & time == 48)
+
+```
+
+
+# Plot for paper
+```{r}
+# Plot 1
+ggplot(FC.mean %>% filter(chromatin %in% c("euchromatin-transcription","late_replicating-LAD-H3K9me2"))) + geom_line(aes(time, fc, color = antibody)) +facet_wrap(~ chromatin) + theme_bw()
+
+# Plot 2
+ggplot(tmp.fc, aes(LMNB1,.resid)) + geom_point() + stat_cor(method = "pearson") + facet_wrap(~ fct_relevel(antibody, c("H3K4me1","H3K4me2","H3K4me3")), nrow = 1) + geom_smooth(method = "lm") + theme_bw() + coord_equal()
+
+
+```
+
+# Suplementary data (other triple heterochromatin features)
+```{r}
+ggplot(tmp.fc, aes(H3K9me2,.resid)) + geom_point() + stat_cor(method = "pearson") + facet_wrap(~ fct_relevel(antibody, c("H3K4me1","H3K4me2","H3K4me3")), nrow = 1) + geom_smooth(method = "lm") + theme_bw() + coord_equal()
+
+ggplot(tmp.fc, aes(H3K9me3,.resid)) + geom_point() + stat_cor(method = "pearson") + facet_wrap(~ fct_relevel(antibody, c("H3K4me1","H3K4me2","H3K4me3")), nrow = 1) + geom_smooth(method = "lm") + theme_bw() + coord_equal()
+
+ggplot(tmp.fc, aes(late_replicating,.resid)) + geom_point() + stat_cor(method = "pearson") + facet_wrap(~ fct_relevel(antibody, c("H3K4me1","H3K4me2","H3K4me3")), nrow = 1) + geom_smooth(method = "lm") + theme_bw() + coord_equal()
+
+ggplot(tmp.fc, aes(H3K27me3,.resid)) + geom_point() + stat_cor(method = "pearson") + facet_wrap(~ fct_relevel(antibody, c("H3K4me1","H3K4me2","H3K4me3")), nrow = 1) + geom_smooth(method = "lm") + theme_bw() + coord_equal()
+```
+
+
+
+#Before averaging both experiments, I will check their reproducibility
+The reproducibility of H3K27ac is really bad. I need to look a little bit into it and decide what is the best way to proceed with it (I can't trust this data until I check it properly).
+
+```{r}
+replicatesignal <- e1057.sel.plot %>% select(n.exp, barcode, timepoint, antibody, norm.pull.down) %>% bind_rows(E900.sel.plot %>% select(n.exp, barcode,timepoint,antibody,norm.pull.down)) %>% filter(antibody != "Input") %>% separate(n.exp, into = c("replicate", "batch"))
+
+#Filter datasets and join them by barcode
+replicatesignaldatatable <- replicatesignal %>% filter(replicate == 1) %>% select(barcode, timepoint,antibody, rep1signal = norm.pull.down) %>% left_join(replicatesignal %>% filter(replicate == 2) %>% select(barcode, timepoint,antibody, rep2signal = norm.pull.down), by = c("barcode", "timepoint", "antibody"))
+
+#Scatter plots
+ggplot(replicatesignaldatatable) + geom_point(aes(log2(rep1signal),log2(rep2signal)), alpha = 0.1) + facet_wrap(~antibody, scales = "free")
+```
+##CONCLUSION: Some of them correlate better than others, these are biological replicates with different clones to normalize. In general correlation is quite high except for certain marks.
+
+```{r}
+#Pull both experiments together, average replicates and add chromatin features
+hmodkinetics <- e1057.sel.plot %>% bind_rows(E900.sel.plot) %>% dplyr::group_by(antibody,timepoint, barcode,clone) %>% dplyr::summarise(norm.pull.down = mean(norm.pull.down, na.rm = T), MMEJscore = mean(MMEJscore, na.rm = T), indelreads = mean(indelreads, na.rm = T), editingeff = 1 - mean(freqWT, na.rm = T), mmejeff = mean(freqMMEJ, na.rm = T),nhejeff = mean(freqNHEJ, na.rm = T))
+```
+
+# Plot for paper would be LMNB1 correlation of fold change
+```{r}
+# cutting efficiencies
+mll3.4.TIF <- chip.data.kinetics %>% filter(timepoint == "72h" & antibody == "Input") %>% dplyr::group_by(barcode) %>% dplyr::summarise(m.TIF = mean(1-freqWT, na.rm = T))
+
+# Marks
+mll3.4.marks <- chip.data.kinetics %>% filter(antibody %in% c("H3","H3K4me1","H3K4me2","H3K4me3") & timepoint != "24h") %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% na.omit()
+
+# Check amount of replicates
+replicates.chip <- mll3.4.marks %>% distinct() %>% dplyr::group_by(antibody,timepoint,barcode,clone) %>% dplyr::summarise(count = n())
+
+# With reps
+mll34.chip <- mll3.4.marks %>% left_join(replicates.chip)
+
+# Calculate basal & max value
+basal.chip <- mll34.chip %>% filter(timepoint %in% c("Basal")) %>% dplyr::group_by(antibody,barcode,clone) %>% dplyr::summarise(basal.signal = mean(log2(norm.pull.down), na.rm =T))
+
+# Calculate max value
+FC.histonemod <- mll34.chip %>% dplyr::group_by(antibody,timepoint,barcode,clone) %>% dplyr::summarise(mean.signal = mean(log2(norm.pull.down), na.rm = T)) %>% dplyr::group_by(antibody, barcode,clone) %>% dplyr::summarise(highest.value = max(mean.signal, na.rm = T), lowest.value = min(mean.signal, na.rm = T)) %>% left_join(basal.chip, by = c("antibody","barcode","clone")) %>% mutate(FC.increase = highest.value - basal.signal, FC.decrease = lowest.value -basal.signal) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+```
+
+
+
+
+#Does ChIP data correlate with ChIPseq dataset?
+## Import ChIPseq data from CL
+```{r}
+# Filter needed data - Basal and antibodies that we have in the ChIPseq dataset
+iprbcpcrvalues <- hmodkinetics %>% filter(timepoint == "Basal" & antibody %in% c("H3K4me1","H3K4me2","H3K4me3","H3K9me3","H3K27me3","H3K27ac","H3K36me3")) %>% dplyr::group_by(antibody,barcode) %>% dplyr::summarise(mean.value.pull.down = mean(log2(norm.pull.down), na.rm = T)) %>% distinct() %>% reshape2::dcast(barcode ~ antibody) %>% select(barcode,H3K4me1,H3K4me2,H3K4me3,H3K9me3,H3K27me3,H3K27ac,H3K36me3) %>% column_to_rownames(var = "barcode") 
+
+rownames(iprbcpcrvalues) <- paste0(rownames(iprbcpcrvalues),".B")
+
+#Import ChIPseq data for clone 5 and 2kb binsize
+data <- readRDS("/DATA/projects/DSBrepair/data/R/cl20190701_ChIP_mean_selection.RDS")
+ChIPseqvalues <- data[binsize==2000, c("ID","H3K4me1","H3K4me2","H3K4me3","H3K9me3","H3K27me3","H3K27ac","H3K36me3")] 
+colnames(ChIPseqvalues) <- c("barcode","H3K4me1","H3K4me2","H3K4me3","H3K9me3","H3K27me3", "H3K27ac","H3K36me3")
+chipseqvalues <- ChIPseqvalues %>% column_to_rownames(var = "barcode")
+
+
+#Barcode intersect
+iprintersect <- intersect(rownames(iprbcpcrvalues), rownames(chipseqvalues))
+
+
+#Change colnames to get difference from bcPCR to chipseq
+colnames(iprbcpcrvalues) <- paste0(colnames(iprbcpcrvalues),"_Observed")
+colnames(chipseqvalues) <- paste0(colnames(chipseqvalues),"_Expected")
+
+#Remove barcodes that are not mapped
+filtiprbcpcrvalues <- subset(iprbcpcrvalues, rownames(iprbcpcrvalues) %in% iprintersect) 
+iprchipseqvalues <- subset(chipseqvalues, rownames(chipseqvalues) %in% iprintersect)
+
+#Generate correlation matrix
+iprsignalcorrelation <- cor(filtiprbcpcrvalues,iprchipseqvalues, use = "pairwise.complete.obs", method = "pearson")
+
+#Plot and export data
+pdf("/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/export/xv20201207_corr_chip_K29.pdf", useDingbats = F)
+pheatmap(iprsignalcorrelation, cellheight = 15, cellwidth = 15, cluster_rows = F,border_color = F, cluster_cols = F, col = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100))
+dev.off()
+```
+## Plot trajectories
+```{r}
+#Filter final timepoint gene editing eff & MMEJscore
+input <- hmodkinetics %>% filter(antibody == "Input" & timepoint == "72h") %>% ungroup() %>% select(barcode, input.MMEJscore = MMEJscore, input.editingeff = editingeff) 
+
+#Extract basal levels
+basal <- hmodkinetics %>% filter(timepoint == "Basal") %>% ungroup() %>% select(barcode, basal.norm.pull.down = norm.pull.down)
+
+hmodkinetics.inp <- left_join(hmodkinetics,input) %>% left_join(basal) %>% mutate(diff.signal = norm.pull.down - basal.norm.pull.down) %>% dplyr::group_by(antibody, timepoint, input.editingeff) %>% dplyr::summarise(max.signal = case_when(max(diff.signal) > abs(min(diff.signal)) ~ max(diff.signal,na.rm = T), T ~ min(diff.signal, na.rm = T)))
+
+
+#Plot basal values
+ggplot(hmodkinetics.inp %>% filter(timepoint == "Basal")) + geom_point(aes(input.MMEJscore,log2(norm.pull.down))) + facet_wrap(~antibody)
+```
+
+
+## Plot signal changes over time per antibody (heatmap per chromatin type)
+```{r}
+#Average per chromatin type
+chromhmodkinetics <- hmodkinetics %>% dplyr::group_by(antibody,timepoint,chromatin) %>% dplyr::summarise(avgpulldown = mean(norm.pull.down,na.rm = T))
+
+#Generate tiles for every antibody per chromatin
+ggplot(chromhmodkinetics %>% filter(antibody != "Input" & antibody != "LMNB1" & timepoint != "24h")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),fct_relevel(chromatin, chromatin.levels),fill = avgpulldown)) + facet_wrap(~ antibody) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "bottom", axis.title = element_blank()) + scale_fill_viridis(option = "inferno",na.value = "grey50", name = "log2(Signal at IRPs)") + scale_y_discrete(labels = c("unmarked" = "Unmarked (12 IPRs)", "other-heterochromatin" = "Other heterochromatin (8 IPRs)", "euchromatin" = "Euchromatin (13 IPRs)", "euchromatin-transcription" = "Euchromatin & Transcription (4 IPRs)", "other-euchromatin" = "Other euchromatin (2 IPRs)", "transcription" = "Transcription (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")) + coord_cartesian(expand = F) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_fixed(ratio = 6/8)
+```
+
+```{r}
+# Normalization
+#Arrange IPRs by chromatin
+barcodelevels <- hmodkinetics %>% ungroup() %>% filter(antibody == "Input" & timepoint == "96h") %>% select(barcode,editingeff) %>% distinct() %>% arrange(editingeff) %>% pull(barcode)
+#Generate tiles per IPR
+ggplot(hmodkinetics %>% filter(antibody != "Input" & antibody != "LMNB1" & timepoint != "24h")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),fct_relevel(barcode,barcodelevels),fill = norm.pull.down)) + facet_wrap(~ antibody, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "bottom", axis.title = element_blank()) + scale_fill_viridis(option = "inferno",na.value = "grey50", name = "log2(Signal at IRPs)") + coord_cartesian(expand = F) + scale_fill_distiller(palette = "YlOrRd", direction = 1)
+```
+
+In this plot I 
+```{r, signal changes over time in different clusters, echo = FALSE}
+
+ggplot(e1057 %>% filter(antibody != "Input"), aes(x = fct_relevel(timepoint, timepoint.levels), y = log2(norm.pull.down))) + stat_summary(geom = "point", fun.y = "mean")+ facet_grid(cluster ~ antibody) + theme(axis.text.x = element_text(angle = 90)) + theme_bw()
+
+```
+
+#Plot same graph but with indel frequencies
+```{r}
+# Re-arrange data to do a LineGraph plot
+e1057.indel <- e1057 %>% filter(del_7 + ins_1 + wt > 50 & spikein == FALSE)
+
+#Take broken and select barcode also
+
+e1057.pct.indel <- e1057.indel %>% select(c(contains("pct"),"barcode", "antibody","timepoint", "cluster")) %>% dplyr::group_by(barcode, antibody,timepoint, cluster) %>% reshape2::melt() %>% dplyr::group_by(barcode,antibody,timepoint, cluster, variable) %>% dplyr::summarise(mean = mean(value)) %>% filter(!is.na(mean))
+
+# Repair pathway
+
+e1057.rep.pct.indel <- e1057.pct.indel %>% mutate(Rep.pathway = case_when(variable == c("pct_wt") ~ "wt",
+                                                                variable == c("pct_ins_1") ~ "NHEJ",
+                                                                variable == c("pct_del_7") ~ "MMEJ",
+                                                                variable %in% c("pct_del_14","pct_del_22") ~ "long_DEL",
+                                                                variable %in% c("pct_del_1", "pct_del_2", "pct_del_3") ~ "sh_DEL",
+                                                                variable != c("pct_wt","pct_ins_1","pct_del_7","pct_del_14","pct_del_22","pct_del_1", "pct_del_2", "pct_del_3") ~ "other")) 
+
+#Plot linegraph
+ggplot(e1057.rep.pct.indel %>% filter(Rep.pathway %in% c("wt", "NHEJ", "MMEJ")), aes(x = fct_relevel(timepoint,timepoint.levels), y = mean, fill = Rep.pathway)) + geom_col(position = "fill") + theme_classic() + facet_grid(fct_relevel(antibody,antibody.levels) ~ cluster) + scale_fill_manual(values = indel.colors) + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+```
+#Plot highest and lowest signal per barcode
+
+##Aim
+Plot per barcode and pull down which is the signal range and which are the highest and lowest values
+
+##Conclusion - First phenotypes appear
+
+###H3 pull-down
+There is a correlation between the amount of H3 pull down and gene editing efficiency **(inverse correlation)**, the lower the amount of histones the easier Cas9 can cut (this is not new but good to see it)
+There is not a major loss of Histone 3 in at these breaks. Still we do see differences, it usually shows it minimum value at early timepoint 16h, 48h or 72h **(Does this correlate with repair kinetics??)** - We are missing t = 24h in this analysis, so it could be that shows lowest value there. H3 signal peaks as well at 96h or 120h (these are usually closer to Basal levels) - **Do these differences correlate with repair kinetics?** 
+
+###H3K36me3 pull-down
+There are clearly **two populations** in the break sites, this is clear when it comes to overal H3K36me3 signal (There is a high and low population), but also could be a trend in the kinetics they follow: **H3K36me3 high sites lose signal** - usually Basal being highest and 16h lowest, and **H3K36me3 low sites gain signal** - usually being Basal lowest and 16h highest. **This is just an observation that might be interesting to properly proof**
+
+###H3K4me1 pull-down
+The amount of signal correlates with cutting efficiency **(positive correlation)**, as previously described poorly cut heterochromatic sites show low H3K4me1
+The overall kinetic profile is quite similar: **hits bottom at 16h and peaks at 72h**, this is quite similar everywhere except for some integrations where **peaks at 96h**
+This homogeneous profile seems unexpected if we would compare it with the repair scar pattern, which shows a clear difference between heterochromatic sites and euchromatic - **There might be a secondary feature regulating this phenotype**
+
+
+###H3K4me2 pull-down
+This histone modification shows **the highest dynamic range in log2 scale**
+It is quite consistent with what we have detected with H3K4me1: It shows an overall similar pattern, it seems in this case that **kinetics faster that H3K4me1** it peaks at 48h (24h is missing) and the lowest value is at Basal levels. This might pattern becomes less clear when you go to H3K4me2 high levels, in these sites seems that **hits bottom at 16h and peaks at various timepoints**. It might be that in the H3K4me2 low values we are measuring background signal.
+
+###H3K4me3 pull-down
+It seems to have a **intermediate phenotype** : Some integrations peak at 72h and others at 48h. Interestingly, **H3K4me3 high integrations hit the bottom at 16h timepoint**. This fits with the KDM5A story, where they describe H3K4me3 loss at Asisi breaksites upon break induction. As we know Asisi sites are mainly in promoters, so these should be H3K4me3 rich integrations **This has to be further analysed, clusters...**. However, this doesn't seem to be the end of the story and these same mutations show a peak of signal at 72h. **Disclaimer: These are  very preliminary observations**
+
+###General conclusion
+The main conclustion of these graph is that **H3K4 methylation behaves in a similar way overall**, the general trend seems that chromatin around breaks needs to open to carry out repair and this goes back to normal once mutations have been fixed (repair has been completed). **Is there gH2AX signal all over the process?** Are all these processes marked by gH2AX or this mark has an early peak that only marks initial stages of repair, where signalling is the most important. **This experiment needs to be done (Will include it in the next ChIP round)**
+
+```{r}
+# e1057 reorder barcodes based on 72h cut eff
+barcode.levels.df <- e1057 %>% filter(timepoint == "72h" & antibody == "Input") %>% dplyr::group_by(barcode,timepoint,antibody) %>% dplyr::summarise(mean = mean(pct_wt))
+barcode.levels.df <- dplyr::arrange(barcode.levels.df, barcode.levels.df$mean)
+barcode.cut.eff <- barcode.levels.df[c("barcode","mean")]
+
+# Calculate average of norm.pull.downs
+e1057.signal.range1 <- e1057 %>% dplyr::group_by(antibody,barcode,timepoint) %>% dplyr::summarise(avg.signal = mean(norm.pull.down)) %>% filter(antibody != "Input" & !timepoint %in% c("EV","NoShield"))
+
+
+#2
+# Group data into min and max
+e1057.min.max.cmp <- e1057.signal.range1 %>% dplyr::group_by(barcode,antibody) %>% dplyr::summarise(max = max(avg.signal), min = min(avg.signal))
+e1057.range.mm.cmp <- e1057.signal.range1 %>% left_join(e1057.min.max.cmp) %>% mutate(highest.t = max == avg.signal, lowest.t = min == avg.signal)
+e1057.range.mmm.cmp <- e1057.range.mm.cmp %>% left_join(barcode.cut.eff)
+
+# Group data into min and max
+e1057.min.max <- e1057.signal.range1 %>% dplyr::group_by(barcode,antibody) %>% dplyr::summarise(max = max(avg.signal), min = min(avg.signal))
+e1057.range.mm <- e1057.signal.range1 %>% left_join(e1057.min.max) %>% mutate(highest.t = max == avg.signal, lowest.t = min == avg.signal)
+e1057.range.mmm <- e1057.range.mm %>% left_join(barcode.cut.eff)
+
+
+#Plot data point range
+p5 <- ggplot(data = e1057.range.mmm, aes(x = fct_reorder(barcode,mean), y = log2(avg.signal))) + geom_line() +  geom_point(data = e1057.range.mmm %>% filter(timepoint == "Basal"| highest.t == TRUE | lowest.t == TRUE), aes(color = fct_relevel(timepoint,timepoin.levels),shape = timepoint == "Basal")) + facet_wrap(~ antibody) + theme_bw()+ theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + scale_colour_manual(values = timepoint.colors2) + labs(color = "Timepoint") + ylab("log2(Signal pull down)") + xlab("IPR") + scale_shape_manual(values = c(16,3))
+
+pdf("xv20200127_Signal_changes.pdf")
+
+ggplot(data = e1057.range.mmm, aes(x = fct_reorder(barcode,mean), y = log2(avg.signal))) + geom_line() +  geom_point(data = e1057.range.mmm %>% filter(timepoint == "Basal"| highest.t == TRUE | lowest.t == TRUE), aes(color = fct_relevel(timepoint,timepoin.levels),shape = timepoint == "Basal")) + facet_wrap(~ antibody) + theme_bw()+ theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + scale_colour_manual(values = timepoint.colors2) + labs(color = "Timepoint") + ylab("log2(Signal pull down)") + xlab("IPR") + scale_shape_manual(values = c(16,3))
+
+dev.off
+```
+#Presentation porpouses: How did I get to this type of plot
+
+##Aim
+I will plot for a few random integrations how values change over different timepoints. Side by side I will plot the line graph for these two integrations.
+
+```{r}
+#Select two random integrations
+random.integrations <- c("TGTACTACCAATTGAC","ATATTATCCCGCACCG")
+
+#Filter data set for these two integrations
+e1057.ri <- e1057.range.mmm %>% filter(barcode %in% random.integrations)
+
+#Plot timeseries
+p1 <- ggplot(e1057.ri, aes(fct_relevel(timepoint,timepoint.levels), y= log2(avg.signal), color = antibody, shape = timepoint)) + geom_point() + geom_line(aes(group = antibody)) + facet_wrap(~ barcode, nrow = 3) + theme_bw() + ylab("log2(Pull down signal)") + xlab("Timepoint") + theme(legend.position = "none") + scale_color_manual(values = antibody.colors) + scale_shape_manual(values = timepoint.shapes)
+
+#Plot line graph
+p2 <- ggplot(data = e1057.ri, aes(x = antibody, y = log2(avg.signal))) + geom_line(aes(color = antibody)) +  geom_point(data = e1057.ri %>% filter(timepoint == "Basal"| highest.t == TRUE | lowest.t == TRUE), aes(shape = timepoint, color = antibody)) +facet_wrap(~ barcode, nrow = 3 ) + theme_bw() + ylab("log2(Pull down signal)") + xlab("Antibody") + theme(axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank()) + scale_color_manual(values = antibody.colors) + scale_shape_manual(values = timepoint.shapes)
+
+#plot_grid
+plot_grid(p1,p2, rel_widths = c(3,2))
+
+
+```
+
+#Does signal change?
+##Aim
+As an initial analysis, check if there is any signal intensity difference between Basal levels, highest and lowest levels. This will allow us to say, that the signal of x antibody changes genomewide
+```{r}
+e1057.basal <- e1057.range.mmm %>% filter(timepoint == "Basal") %>% mutate(samp = "Basal")
+e1057.peak <- e1057.range.mmm %>% filter(highest.t == TRUE) %>% mutate(samp = "Peak")
+e1057.bottom <- e1057.range.mmm %>% filter(lowest.t == TRUE) %>% mutate(samp = "Bottom")
+e1057.total <- rbind(e1057.basal,e1057.peak,e1057.bottom)
+
+#Plot median and difference
+pd <- ggplot(data = e1057.total %>% filter(samp != "Basal"),aes(x = samp, y = log2(avg.signal))) + geom_quasirandom(aes(color = samp), dodge.width = 1) + facet_wrap(~ antibody)+theme_bw() + stat_summary(geom = "crossbar",aes(group = samp),fun.y = median,fun.ymax = median, fun.ymin = median, width = 0.5, color = "red") + scale_color_manual(values = c("#000000","#787878")) + labs(color = "Position") + ylab("log2(Pull down Signal)") + theme(axis.title.x = element_blank()) + ylim(c(-5,5))
+
+## When do these signals peak?
+pt <- ggplot(data = e1057.total %>% filter(samp != "Basal"),aes(x = samp, y = log2(avg.signal))) + geom_quasirandom(aes(color = fct_relevel(timepoint,timepoint.levels))) + facet_wrap(~ antibody)+theme_bw() + stat_summary(geom = "crossbar",aes(group = samp),fun.y = median,fun.ymax = median, fun.ymin = median, width = 0.5, color = "red") + scale_color_manual(values = timepoint.colors2) + labs(color = "Timepoint") + ylab("log2(Pull down Signal)") + theme(axis.title.x = element_blank()) + ylim(c(-5,5))
+
+## data frame where you show number of barcodes in each square
+
+e1057.signal.patterns <- e1057.total %>% filter(samp != "Basal") %>% mutate(Peak = case_when(highest.t == TRUE ~ timepoint), Bottom = case_when(lowest.t == TRUE ~ timepoint)) %>% split(.$antibody)
+
+e1057.Peak <- lapply(e1057.signal.patterns, function(x) x %>% select(c("barcode","Peak")) %>% filter(complete.cases(.)))
+e1057.Bottom <- lapply(e1057.signal.patterns, function(x) x  %>% select(c("barcode","Bottom")) %>% filter(complete.cases(.)))
+
+e1057.signal.matrix <- mapply(function(x,y) x %>% left_join(y) %>% distinct() %>% reshape2::dcast(Peak ~ Bottom, fun = length),e1057.Peak,e1057.Bottom) 
+
+e1057.signal.melt <- lapply(e1057.signal.matrix, reshape2::melt, id.vars = "Peak")
+e1057.melt.patterns <-  ldply(e1057.signal.melt, .id = "antibody")
+
+
+#Plot histogram with the the amount of differential patterns
+ggplot(e1057.melt.patterns) + geom_tile(aes(x = Peak, y = variable, fill = value)) + facet_wrap(~ antibody, scales = "free") + theme_bw()
+
+#Filter for patterns that happen in more than 10 integrations
+e1057.melt.patterns.filter <- e1057.melt.patterns %>% filter(value > 7) %>% mutate(pattern = paste0("Top_", Peak, "_&_Bottom_", variable))
+colnames(e1057.melt.patterns.filter) <- c("antibody","Peak","Bottom","counts","pattern")
+
+#Merge up & down
+e1057.signal.aa <- mapply(function(x,y) left_join(x,y, by = "barcode"),e1057.Peak,e1057.Bottom, SIMPLIFY = FALSE) 
+e1057.signal.ab <-ldply(e1057.signal.aa, .id = "antibody")
+
+
+e1057.melt.pats <- e1057.melt.patterns.filter %>% right_join(e1057.signal.ab, by = c("antibody","Peak","Bottom")) %>% filter(complete.cases(.)) %>% right_join(e1057.range.mmm, by = c("antibody","barcode"))
+
+#Plot kinetics plot for each pattern
+
+pk.plot <- function(x){ggplot(x %>% filter(complete.cases(.)) %>% distinct(), aes(fct_relevel(timepoint,timepoint.levels), y= log2(avg.signal))) + geom_point() + geom_line(aes(group = barcode, alpha = 0.5)) +  facet_wrap(antibody ~ pattern) + theme_bw() + stat_summary(geom = "crossbar", fun.data = mean_sd, width = 0.3, color = "black", aes(fill = antibody)) + scale_fill_manual(values = antibody.colors)}
+
+pk.plot.bis <- function(x){ggplot(x %>% distinct(), aes(fct_relevel(timepoint,timepoint.levels), y= log2(avg.signal))) + geom_point(position = "dodge") + geom_line(aes(group = 1, alpha = 0.5, color = antibody)) + theme_bw() + stat_summary(geom = "crossbar", fun.data = mean_sd, width = 0.3, color = "black", aes(fill = antibody), position = "dodge") + scale_fill_manual(values = antibody.colors)}
+
+# Add cluster data
+e1057.melt.c.pats <- e1057.melt.pats %>% left_join(e1057 %>% select(c("barcode","cluster"))%>% distinct())
+
+## Plot heatmap and boxplot
+e1057.K4me3.plot <- (e1057.melt.c.pats %>% filter(antibody == "H3K4me3" & complete.cases(.)))[c("pattern","barcode","cluster")]
+
+#Print data
+pdf("XV20200128_RMWD_plots.pdf")
+pd
+dev.off()
+
+```
+Plot as a tile, not as a heatmap
+```{r}
+
+# TILE log2 values
+heatmap.inferno <- function(x) {ggplot(e1057.signal.range2 %>% filter(antibody == x)) + stat_summary(geom = "tile", aes(fct_relevel(timepoint, timepoint.levels), fct_rev(fct_relevel(barcode, barcode.levels)), fill = log2(avg.signal)), drop = FALSE) + facet_wrap(~ antibody) + scale_fill_viridis(option = "inferno",na.value = "grey50")+ scale_y_discrete(drop = FALSE) +  theme_bw() + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.text.x =  element_text(angle = 90, hjust = 1, vjust = 0.5), panel.background = element_rect(fill = "grey50"), panel.grid = element_blank(), legend.position = "top", legend.key.size = unit(0.2, "inches"), legend.title = element_blank(), axis.title = element_blank() )  + ylab("Genomic location (Arranged by cutting efficiency)") + xlab("Timepoints")}
+
+antibody.list <- list()
+for (x in unique(e1057.signal.range2$antibody)){
+  antibody.list[[x]] <- heatmap.inferno(x)
+}
+
+do.call(grid.arrange,c(antibody.list,ncol = 6))
+
+antibody.list.ratio <- list()
+for (x in unique(e1057.signal.range.norm$antibody)){
+  antibody.list.ratio[[x]] <- heatmap.inferno.ratio(x)
+}
+
+
+#Tile ratios
+e1057.signal.range.norm %>% filter(antibody == x & timepoint != "Basal")
+myBreaks <- c(seq(min(e1057.signal.range.ratio[[x]]), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(e1057.signal.range.ratio[[x]])/paletteLength, max(e1057.signal.range.ratio[[x]]), length.out=floor(paletteLength/2)))
+
+data.filter <- e1057.signal.range.norm %>% filter(antibody == x & timepoint != "Basal")
+
+myBreaks <- c(seq(min(data.filter$ratio), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(data.filter$ratio)/paletteLength, max(data.filter$ratio), length.out=floor(paletteLength/2)))
+paletteLength <- 5
+heatmap.inferno.ratio <- function(z,x,y) {ggplot(z %>% filter(antibody == x & !timepoint %in% c("Basal","EV","NoShield"))) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels), fct_rev(fct_relevel(barcode, barcode.levels.filt)), fill = ratio)) + facet_wrap(~ antibody) + scale_fill_distiller(palette = "RdYlBu" ,na.value = "grey90", limits = y, breaks = seq(-5,5,1)) + scale_y_discrete(drop = FALSE)+  theme_bw() + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.text.x =  element_text(hjust = 0.5, vjust = 0.5), panel.background = element_rect(fill = "grey90"), panel.grid = element_blank(), legend.position = "top", legend.key.size = unit(0.2, "inches"), legend.title = element_blank(), axis.title = element_blank())}
+
+antibody.list.ratio <- list()
+antibody.list.ratio[["H3"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3",c(-1.5,1.5))
+antibody.list.ratio[["H3K27ac"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3K27ac",c(-3,3))
+antibody.list.ratio[["H3K36me3"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3K36me3",c(-2,2))
+antibody.list.ratio[["H3K4me1"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3K4me1",c(-2,2))
+antibody.list.ratio[["H3K4me2"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3K4me2",c(-4.5,4.5))
+antibody.list.ratio[["H3K4me3"]] <- heatmap.inferno.ratio(e1057.signal.range.norm,"H3K4me3",c(-1.5,1.5))
+
+
+heatmap.pic.filt <- do.call(grid.arrange,c(antibody.list.ratio,ncol = 6))
+ggsave("xv20200220_TimepointsHeatmap.pdf",heatmap.pic.filt, width = 9)
+```
+
+
+Plot it as a heatmap
+
+```{r pressure, echo=FALSE}
+
+e1057.signal.range.norm <- e1057.signal.range2 %>% left_join(e1057.range.mmm %>% filter(timepoint == "Basal") %>% select(.,basal.signal = avg.signal), by = c("barcode","antibody")) %>% mutate(diff = avg.signal - basal.signal, ratio = log2(avg.signal/basal.signal))
+
+e1057.signal.range.list <- split(e1057.signal.range.norm, e1057.signal.range.norm$antibody)
+
+#Create absolute list
+e1057.signal.range.log2 <- lapply(e1057.signal.range.list, function(x) x %>% select(c("barcode","timepoint","avg.signal")) %>% mutate(log2.signal = log2(avg.signal)) %>% distinct() %>% reshape2::dcast(barcode ~ fct_relevel(timepoint,timepoint.levels), value.var = "log2.signal",fill = 0.00001) %>% column_to_rownames(var = "barcode") )
+
+#Create difference list
+e1057.signal.range.dcast <- lapply(e1057.signal.range.list, function(x) x %>% select(c("barcode","timepoint","diff")) %>% distinct() %>% reshape2::dcast(barcode ~ fct_relevel(timepoint,timepoint.levels), value.var = "diff", fill = 0.00001) %>% column_to_rownames(var = "barcode") )
+
+#Create a ratio list
+e1057.signal.range.ratio <- lapply(e1057.signal.range.list, function(x) x %>% select(c("barcode","timepoint","ratio")) %>% distinct() %>% reshape2::dcast(barcode ~ fct_relevel(timepoint,timepoint.levels), value.var = "ratio", fill = 0.00001) %>% column_to_rownames(var = "barcode") )
+
+
+#Heatmap function
+paletteLength <- 600
+myBreaks <- c(seq(min(e1057.signal.range.ratio[["H3K36me3"]]), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(e1057.signal.range.ratio[["H3K36me3"]])/paletteLength, max(e1057.signal.range.ratio[["H3K36me3"]]), length.out=floor(paletteLength/2)))
+
+timeseries.heatmap <- function(x,y) {pheatmap(e1057.signal.range.dcast[[x]][-1], main = x,cluster_cols = FALSE, show_rownames = FALSE, cellwidth = 8, cellheight = 3, border_color = NA,treeheight_row = 20, color = colorRampPalette(c("white","cornflowerblue"))(paletteLength), breaks = c(seq(min(e1057.signal.range.dcast[[x]]), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(e1057.signal.range.dcast[[x]])/paletteLength, max(e1057.signal.range.dcast[[x]]), length.out=floor(paletteLength/2))))}
+
+timeseries.heatmap.bis <- function(x,y) {pheatmap(e1057.signal.range.log2[[x]], main = x,cluster_cols = FALSE, show_rownames = FALSE, cellwidth = 10, cellheight = 3, border_color = NA,treeheight_row = 20, color = colorRampPalette(c("white","blue"))(paletteLength), breaks = c(seq(min(e1057.signal.range.log2[["H3K36me3"]]), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(e1057.signal.range.log2[["H3K36me3"]])/paletteLength, max(e1057.signal.range.log2[["H3K36me3"]]), length.out=floor(paletteLength/2))))}
+
+timeseries.heatmap.ratio <- function(x,y) {pheatmap(e1057.signal.range.ratio[[x]][-1], main = x,cluster_cols = FALSE, show_rownames = FALSE, cellwidth = 9, cellheight = 3, border_color = NA,treeheight_row = 20, color = colorRampPalette(c("white","blue"))(paletteLength), breaks = c(seq(min(e1057.signal.range.ratio[[x]]), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(e1057.signal.range.ratio[[x]])/paletteLength, max(e1057.signal.range.ratio[[x]]), length.out=floor(paletteLength/2))))}
+
+plot_list.d <- list()
+plot_list.r <- list()
+
+# Plot heatmaps
+plot_list.r[["H3"]] <- timeseries.heatmap.ratio("H3")[[4]]
+
+plot_list.r[["H3K4me1"]] <- timeseries.heatmap.ratio("H3K4me1")[[4]]
+
+plot_list.r[["H3K4me2"]] <- timeseries.heatmap.ratio("H3K4me2")[[4]]
+
+plot_list.r[["H3K4me3"]] <- timeseries.heatmap.ratio("H3K4me3")[[4]]
+
+plot_list.r[["H3K36me3"]] <- timeseries.heatmap.ratio("H3K36me3")[[4]]
+
+#plot_list[["H3K27ac"]] <- timeseries.heatmap("H3K27ac")[[4]]
+plot.r <- do.call(grid.arrange, c(plot_list.r,ncol = 5))
+ggsave("XV20200129_SignalHeatmap_ratio.pdf",plot.r, width = 10)
+
+#Try to arrange a dataframe with similar positions
+plot_order <- data.frame(barcode = rownames(e1057.signal.range.ratio$H3), 
+                         H3 = timeseries.heatmap.ratio("H3")$tree_row$height,
+                         H3K4me2 = timeseries.heatmap.ratio("H3K4me2")$tree_row$height,
+                         H3K4me3 = timeseries.heatmap.ratio("H3K4me3")$tree_row$height,
+                         H3K36me3 = timeseries.heatmap.ratio("H3K36me3")$tree_row$height)
+
+# Plot heatmaps
+
+plot_list.d[["H3"]] <- timeseries.heatmap("H3")[[4]]
+
+plot_list.d[["H3K4me1"]] <- timeseries.heatmap("H3K4me1")[[4]]
+
+plot_list.d[["H3K4me2"]] <- timeseries.heatmap("H3K4me2")[[4]]
+
+plot_list.d[["H3K4me3"]] <- timeseries.heatmap("H3K4me3")[[4]]
+
+plot_list.d[["H3K36me3"]] <- timeseries.heatmap("H3K36me3")[[4]]
+
+#plot_list[["H3K27ac"]] <- timeseries.heatmap("H3K27ac")[[4]]
+plot.d <- do.call(grid.arrange, c(plot_list.d,ncol = 5))
+ggsave("XV20200129_SignalHeatmap_diff.pdf",plot.d, width = 10)
+
+
+##
+# Plot heatmaps
+plot_list[["H3"]] <- timeseries.heatmap.bis("H3")[[4]]
+
+plot_list[["H3K4me1"]] <- timeseries.heatmap.bis("H3K4me1")[[4]]
+
+plot_list[["H3K4me2"]] <- timeseries.heatmap.bis("H3K4me2")[[4]]
+
+plot_list[["H3K4me3"]] <- timeseries.heatmap.bis("H3K4me3")[[4]]
+
+plot_list[["H3K36me3"]] <- timeseries.heatmap.bis("H3K36me3")[[4]]
+plot <- do.call(grid.arrange, c(plot_list,ncol = 5))
+ggsave("XV20200129_SignalHeatmap_log2.pdf",plot, width = 10)
+```
+# Plot for research club
+```{r}
+# Take selected domains and plot heatmap (geom_tile)
+h.dom.kinetics.avg <- h.dom.kinetics.chr %>% dplyr::group_by(antibody,timepoint,chromatin) %>% dplyr::summarise(avg.pull.down = mean(norm.pull.down, na.rm = T), sd.pull.down = sd(norm.pull.down, na.rm = T)) %>% ungroup()
+
+#y labels
+chromatin.labels <- c("unmarked" = "Unmarked (11 IPRs)", "other-heterochromatin" = "Others (10 IPRs)", "euchromatin-transcription" = "Regulatory Elements (16 IPRs)", "transcription" = "Gene Bodies (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")
+
+#Variable names
+variable_names <- c("H3 (n = 2)" ,"H3K27me3 (n = 1)","H3K4me1 (n = 2)","H3K4me2 (n = 2)","H3K4me3 (n = 2)")
+names(variable_names) <- c("H3","H3K27me3","H3K4me1","H3K4me2","H3K4me3")
+
+variable_labeller <- function(variable,value){
+  return(variable_names[value])
+}
+
+
+chip.kinetics <- function(x,y) {ggplot(h.dom.kinetics.avg %>% filter(antibody == x & timepoint != "24h")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels), fct_relevel(chromatin, chromatin.levels),fill = avg.pull.down)) + facet_wrap(~ antibody, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_distiller(palette = y , direction = 1, limits = c(0,if (max((h.dom.kinetics.avg %>% filter(antibody == x))$avg.pull.down) > 2){
+                max((h.dom.kinetics.avg %>% filter(antibody == x))$avg.pull.down)
+                } else {2})) + coord_equal(expand = F) + theme(axis.title = element_blank(), legend.position = "top", legend.title = element_blank(), legend.key.size =  unit(0.5,"cm")) + scale_y_discrete(labels = chromatin.labels)}
+
+MLL.mod.list <- list()
+MLL.mod.list[["H3"]] <-  chip.kinetics("H3","Greys")
+MLL.mod.list[["H3K4me1"]] <-  chip.kinetics("H3K4me1","YlGnBu") + theme(axis.text.y = element_blank(),axis.ticks.y = element_blank())
+MLL.mod.list[["H3K4me2"]] <-  chip.kinetics("H3K4me2","YlOrBr") + theme(axis.text.y = element_blank(),axis.ticks.y = element_blank())
+MLL.mod.list[["H3K4me3"]] <-  chip.kinetics("H3K4me3","YlGn") + theme(axis.text.y = element_blank(),axis.ticks.y = element_blank())
+MLL.mod.list[["H3K27me3"]] <-  chip.kinetics("H3K27me3","PuRd") + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+MLL.mod.list[["LMNB1"]] <-  chip.kinetics("LMNB1","Oranges") + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+MLL.mod.list[["H3K9me3"]] <-  chip.kinetics("H3K9me3","OrRd") + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+pdf("/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/export/xv20201213_MLL_heatmaps.pdf",height = 2.5)
+MLL.mod.list
+dev.off()
+
+
+```
+```{r}
+#Plot B for research club
+# Take selected domains and plot heatmap (geom_tile)
+basal.values <- h.dom.kinetics.chr %>% ungroup() %>% filter(timepoint == "Basal") %>% select(barcode,antibody,basal.v =norm.pull.down,n.exp)
+b.dom.kinetics.basal <- h.dom.kinetics.chr %>% left_join(basal.values, by = c("barcode","antibody","n.exp")) %>% mutate(basal.pull.down = log2(norm.pull.down/basal.v)) %>% dplyr::group_by(antibody,timepoint,chromatin) %>% dplyr::summarise(b.avg.pull.down = mean(basal.pull.down, na.rm = T), b.sd.pull.down = sd(basal.pull.down, na.rm = T)) %>% ungroup()
+```
+#I'll try to generate heatmaps per chromatin type instead of individual values
+```{r}
+# Take selected domains and plot heatmap (geom_tile)
+h.dom.kinetics.avg <- h.dom.kinetics.chr %>% dplyr::group_by(antibody,timepoint,chromatin) %>% dplyr::summarise(avg.pull.down = mean(norm.pull.down, na.rm = T), sd.pull.down = sd(norm.pull.down, na.rm = T)) %>% ungroup()
+
+
+ggplot(h.dom.kinetics.avg %>% filter(antibody %in% c("H3","H3K4me1","H3K4me2","H3K4me3","H3K27me3"))) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels), fct_relevel(chromatin, chromatin.levels),fill = avg.pull.down)) + facet_wrap(~ antibody, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_equal() + theme(axis.title = element_blank()) + scale_y_discrete(labels = c("unmarked" = "Unmarked (11 IPRs)", "other-heterochromatin" = "Others (10 IPRs)", "euchromatin-transcription" = "Regulatory Elements (16 IPRs)", "transcription" = "Gene Bodies (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")) 
+
+ggplot(h.dom.kinetics.chr %>% filter(antibody %in% c("H3","H3K4me1","H3K4me2","H3K4me3","H3K27me3"))) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels), barcode,fill = norm.pull.down)) + facet_grid(chromatin ~ antibody, drop = T) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_equal() + theme(axis.text.y = element_blank())
+
+#Normalized plot
+h.dom.kinetics.norm <- h.dom.kinetics.avg %>% left_join(h.dom.kinetics.avg %>% filter(timepoint == "Basal") %>% select(antibody,chromatin,basal.signal = avg.pull.down), by = c("antibody","chromatin")) %>% mutate(diff = avg.pull.down - basal.signal, ratio = log2(avg.pull.down/basal.signal))
+
+ggplot(h.dom.kinetics.norm %>% filter(antibody %in% c("H3","H3K4me1","H3K4me2","H3K4me3","H3K27me3"))) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels), chromatin,fill = ratio)) + facet_grid(~ antibody, drop = T) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_equal() + theme(axis.text.y = element_blank())
+
+# Normalized plot over Basal
+antibody.labels = c("H3 (n = 2)","H3K27ac (n = 1)", "H3K36me3 (n = 2)", "H3K4me1 (n = 1)", "H3K4me2 (n = 2)", "H3K4me3 (n = 2)")
+names(antibody.labels) <- c("H3","H3K27ac","H3K36me3","H3K4me1","H3K4me2","H3K4me3")
+
+#Plot basal levels
+pdf(file = "/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/export/xv20200929_heatmap_basal.pdf", width = 8, height = 6)
+ggplot(h.dom.kinetics.avg %>% filter(antibody != "Input" & antibody != "LMNB1" & timepoint != "24h")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),fct_relevel(chromatin, chromatin.levels),fill = avg.pull.down)) + facet_wrap(~ antibody) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "bottom", axis.title = element_blank()) + scale_fill_viridis(option = "inferno",na.value = "grey50", name = "log2(Signal at IRPs)") + scale_y_discrete(labels = c("unmarked" = "Unmarked (12 IPRs)", "other-heterochromatin" = "Other heterochromatin (8 IPRs)", "euchromatin" = "Euchromatin (13 IPRs)", "euchromatin-transcription" = "Euchromatin & Transcription (4 IPRs)", "other-euchromatin" = "Other euchromatin (2 IPRs)", "transcription" = "Transcription (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")) + coord_cartesian(expand = F) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_fixed(ratio = 6/8)
+dev.off()
+
+#MLL3/4 only
+pdf(file = "/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/export/xv20201014_heatmap_K4methylation_only.pdf", width = 8, height = 6)
+ggplot(h.dom.kinetics.avg %>% filter(antibody != "Input" & antibody %in% c("H3","H3K27me3","H3K4me1","H3K4me2","H3K4me3"))) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),fct_relevel(chromatin, chromatin.levels),fill = avg.pull.down)) + facet_wrap(~ antibody, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "bottom", axis.title = element_blank()) + scale_fill_viridis(option = "inferno",na.value = "grey50", name = "log2(Signal at IRPs)") + scale_y_discrete(labels = c("unmarked" = "Unmarked (11 IPRs)", "other-heterochromatin" = "Others (10 IPRs)", "euchromatin-transcription" = "Regulatory Elements (16 IPRs)", "transcription" = "Gene Bodies (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")) + coord_cartesian(expand = F) + scale_fill_distiller(palette = "YlOrRd", direction = 1)
+dev.off()
+
+#Normalized to Basal
+
+pdf(file = "/DATA/usr/x.vergara/XV_ChIPIndels/xv20200702_HistMod_R2/export/xv20200914_heatmap_norm.pdf", width = 8, height = 6)
+ggplot(h.dom.kinetics.norm %>% filter(antibody != "Input")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),fct_relevel(chromatin, chromatin.levels),fill = ratio)) + facet_wrap(~ antibody) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "bottom", axis.title = element_blank()) + scale_fill_distiller(type = "div", palette = "RdYlBu", direction = -1 ,limits = c(-2.5,2.5), name = "log2(Timepoint / Basal)") + scale_y_discrete(labels = c("unmarked" = "Unmarked (11 IPRs)", "other-heterochromatin" = "Others (10 IPRs)", "euchromatin-transcription" = "Regulatory Elements (16 IPRs)", "transcription" = "Gene Bodies (7 IPRs)","H3K27me3" = "H3K27me3 (11 IPRs)", "late_replicating-LAD-H3K9me2" = "Triple heterochromatin (7 IPRs)")) + coord_cartesian(expan = F) + scale_fill_distiller(palette = "YlOrRd", direction = 1) 
+dev.off()
+
+```
+```{r}
+ggplot(h.dom.kinetics.chr %>% left_join(h.dom.kinetics.chr %>% filter(antibody == "Input" & timepoint == "72h") %>% dplyr::group_by(barcode) %>% dplyr::summarise(m = mean(editingeff)), by = "barcode") %>% filter(antibody != "Input")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),reorder(barcode,m), fill = norm.pull.down)) + facet_wrap(~ antibody, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.text.y = element_blank(), axis.ticks.y = element_blank()) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_equal() + theme(axis.title = element_blank())
+
+ggplot(h.dom.kinetics.chr %>% filter(antibody != "Input")) + geom_tile(aes(fct_relevel(timepoint, timepoint.levels),chromatin, fill = norm.pull.down)) + facet_wrap(~ antibody, nrow = 2) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_distiller(palette = "YlOrRd", direction = 1) + coord_equal() + theme(axis.title = element_blank())
+```
+
+
+```{r}
+#Normalize to input
+input.mmej.score <- e1057.sel.domains %>% filter(timepoint == "72h" & antibody == "Input")
+MMEJscore.norm.e1057 <- e1057.sel.domains %>% left_join(e1057.sel.domains %>% filter(antibody == "Input") %>% select(barcode, timepoint, n.exp,clone, input.MMEJscore = MMEJscore)) %>% mutate(MMEJenrichment = MMEJscore/input.MMEJscore)
+#Plot pathway enrichment
+ggplot(MMEJscore.norm.e1057 %>% filter(timepoint == "72h")) + geom_quasirandom(aes(antibody, MMEJenrichment)) + facet_wrap(~ chromatin) + theme(axis.text = element_text(angle = 90))
+```
+
+```{r}
+# plot balance plot in input vs H3K4me3 at 72 hours.
+H3K4methylations <- e1057.sel.domains %>% filter(timepoint == "72h" & indelreads >200) %>% select(chromatin, MMEJscore,antibody, n.exp) %>% dplyr::group_by(chromatin,antibody,n.exp) %>% dplyr::summarise(MMEJ.p = mean(MMEJscore, na.rm = T)) %>% ungroup() %>% dplyr::group_by(chromatin,antibody) %>% dplyr::mutate(MMEJ = mean(MMEJ.p, na.rm = T))%>% mutate(NHEJ = 1 - MMEJ) %>% reshape2::melt(id.vars = c("chromatin","n.exp","antibody", "MMEJ.p"), variable.name = "pathway")
+
+#plot
+chromatin.labels = c("Unmarked (12 IPRs)","Other heterochromatin (8 IPRs)", "Euchromatin (13 IPRs)", "Euchromatin & Transcription (4 IPRs)", "Other euchromatin (2 IPRs)", "Transcription (7 IPRs)","H3K27me3 (11 IPRs)","Triple heterochromatin (7 IPRs)")
+names(chromatin.labels) <- c("unmarked", "other-heterochromatin", "euchromatin", "euchromatin-transcription", "other-euchromatin", "transcription","H3K27me3", "late_replicating-LAD-H3K9me2")
+
+
+#pdf(file = "/DATA/usr/x.vergara/XV_ChIPIndels/xv20200112_e1057_M9_P2_HistModR1/export/xv20200718_pathway_enrichment.pdf", width = 10, height = 6)
+
+ggplot() + geom_col(data = H3K4methylations %>% select(-n.exp,-MMEJ.p) %>% distinct(),aes(fct_relevel(antibody,antibody.levels), value, fill = pathway)) + geom_quasirandom(data = H3K4methylations %>% select(antibody, MMEJ.p,chromatin,n.exp) %>% distinct, aes(antibody, 1 - MMEJ.p,color = n.exp), size = 1) + facet_wrap(~ fct_relevel(chromatin,chromatin.levels), nrow = 2) + scale_fill_manual(values = c("#2E358F","#EB2030")) + theme_bw() + coord_cartesian(expand = F) + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title.x = element_blank()) + scale_x_discrete(labels = c("Input" = "Input (n = 2)", "H3K4me1" = "H3K4me1 (n = 2)", "H3K4me2" = "H3K4me2 (n = 2)", "H3K4me3" = "H3K4me3 (n = 2)", "H3K27me3" = "H3K27me3 (n = 1)")) + ylab("Pathway Balance")
+dev.off()
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,244 @@
+---
+title: "xv20220117_1_General_effects"
+output: html_document
+---
+# Script to generate figure #1 in the short version of the paper. This figure describes the layout of the screen and general effects. The main point of this figure is to build up confidence in our reporter cell line and describe how these pathways are build up. For the short version, I'll keep the script for supplementary figures separate. Figure outline:
+A- Cartoon explaining screen
+B- Chromatin landscape where 19IPRs are integrated
+C- Volcano plot with all perturbations (Only for DNA repair proteins)
+
+
+This script generates the plots for figure 1
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(gprofiler2)
+library(ggdendro)
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+#All variable table
+ddr.screen.all <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20220110_screen_ddr_all_computations.rds")
+ddr.screen.all.sel <- ddr.screen.all %>% select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#Chromatin all 
+chromatin.screen.all <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20220110_chromatin_library_all.rds")
+chromatin.screen.all.sel <- chromatin.screen.all %>% select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep,t.rep) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "Chromatin")
+
+# bind both dataset
+both.screen.all.sel <- bind_rows(ddr.screen.all.sel,chromatin.screen.all.sel) %>% filter(!gene %in% c("DMSO","LBR_ctrl"))
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_epistasis.rds")
+```
+
+#Main figures
+
+#Figure 1A: Cartoon
+
+# Figure 1B: Epigenetic features (CHECK!)
+```{r}
+clone5_bc <- both.screen.detail %>% pull(barcode) %>% unique()
+# Prepare data frame
+clone_5_IPR <- filter(clone5_z.score_chrom_tib, ID %in% clone5_bc) %>% select(-pool,-binsize) %>% column_to_rownames(var = "ID")
+
+#pheatmap
+clone_5_heatmap <- pheatmap(clone_5_IPR, silent = T)
+
+#Arrange col & row
+clone5_bc_cluster <- rownames(clone_5_IPR[clone_5_heatmap$tree_row[["order"]],])
+clone5_chromatin_cluster <- colnames(clone_5_IPR[,clone_5_heatmap$tree_col[["order"]]])
+
+#dt for plotting
+clone_5_IPR_melt <- clone_5_IPR %>% rownames_to_column(var = "barcode") %>% melt(value.name = "chrom.z.score", var.name = "feature")
+
+#Plot
+ggplot(clone_5_IPR_melt) + 
+  geom_tile(aes(fct_relevel(barcode, clone5_bc_cluster),fct_relevel(variable,heatmap.chromatin.order), fill = chrom.z.score)) +
+  scale_fill_gradient2( low = "#009B9E",mid = "#F1F1F1", high = "#C75DAB")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + coord_fixed(expand = F,ratio = 0.75)
+
+#dendrogram barcodes
+ggdendrogram(clone_5_heatmap$tree_row, rotate = T)
+#denrogram chromatin
+ggdendrogram(clone_5_heatmap$tree_col)
+
+```
+
+
+#Figure 1D: Volcano plot only for DNA_repair proteins
+NOTE:
+If you use ggbreak in published research, please cite the following paper:
+
+S Xu, M Chen, T Feng, L Zhan, L Zhou, G Yu. Use ggbreak to effectively utilize plotting space
+to deal with large datasets and outliers. Frontiers in Genetics. 2021, 12:774846. doi:
+10.3389/fgene.2021.774846 
+
+```{r}
+# Each replicate has a different value (compute differences by replicate)
+log2.distance.ratio.all <- log2.ratio.screen.detail.all %>% filter(sample == "KO" & library == "DNA_repair") %>% left_join(wt.set.ratio) %>% mutate(log2.ratio = log2ratio - wt.log2ratio)
+mean.log2.distance.ratio.all <- log2.distance.ratio.all %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(m.log2.ratio.dist = mean(log2.ratio, na.rm = T)) %>% na.omit() %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+#Compute mean log2 fold change
+mean.log2.fc <- mean.log2.distance.ratio.all %>% group_by(gene) %>% dplyr::summarise(mean.fc = mean(m.log2.ratio.dist, na.rm = T))
+
+test.log2.dist <- mean.log2.distance.ratio.all %>% dplyr::group_by(gene) %>% t_test(m.log2.ratio.dist ~ 0) %>% mutate(p.adj = p.adjust(p, method = "fdr")) %>% left_join(mean.log2.fc, by = "gene")
+
+# hits mmej
+hits.nhej.fdr <- test.log2.dist %>% filter(p.adj < 0.001 & mean.fc > 0) %>% pull(gene)
+
+#Run GO profiler (this gives the whole list that will go to supplementary)
+gotest.nhej.fdr <- gost(hits.mmej.fdr, organism = "hsapiens",sources = "CORUM")
+
+# hits nhej
+hits.mmej.fdr <- test.log2.dist %>% filter(p.adj < 0.001 & mean.fc < 0) %>% pull(gene)
+
+#Run GO profiler (this gives the whole list that will go to supplementary) => NO significant hits
+gotest.mmej.fdr <- gost(hits.nhej.fdr, organism = "hsapiens",sources = "CORUM")
+
+# Highlight three complexes
+FA_complex_ID_2378 <- tibble(gene = c("BLM","TOP3A","FANCL","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","RMI","RPA1","FANCM"), complex = "FA_comlplex_ID:2378")
+MRN_complex <- tibble(gene = c("MRE11","RAD50","NBN"), complex = "MRN_complex")
+DNA_ligase_complex_ID_365 <- tibble(gene = c("LIG4","XRCC4","NHEJ1"), complex = "DNA_ligase_complex")
+
+highlight.complex <- bind_rows(FA_complex_ID_2378,DNA_ligase_complex_ID_365,MRN_complex)
+
+# Plot and highlight main findings (Plot A: highlight MMEJ foctors)
+
+ggplot(test.log2.dist %>% 
+         left_join(highlight.complex)) +
+  geom_point(aes(mean.fc,-log10(p.adj)), color = "grey40") + 
+  geom_point(data = test.log2.dist %>% 
+               left_join(highlight.complex) %>% 
+               na.omit(),
+             aes(mean.fc,-log10(p.adj), color = complex), size = 2) + theme_bw() + 
+  geom_text_repel(data = subset(test.log2.dist,(-log10(p.adj) > 5 & mean.fc < -0.3) | (-log10(p.adj) > 5 & mean.fc > -0)),
+                  aes(mean.fc,-log10(p.adj), label = gene),max.overlaps = Inf, box.padding = 0.5) + geom_vline(xintercept = 0, linetype = 2) + geom_hline(yintercept = -log10(0.001), linetype = 2) + ylab("-log10(FDR)") + xlab("log2(Average fold change MMEJ:NHEJ balance)") + theme(legend.position = "top") + scale_x_continuous(breaks = c(-2,-1,0,1)) + scale_color_manual( values = c("#ffa700","#ff4000","#f8f9ac"))
+
+#Export instructions
+
+```
+# All figures can be found on: "
+# This is the end of this script for main figure 1 => Supplementaries will be performed in a separate rmarkdown file

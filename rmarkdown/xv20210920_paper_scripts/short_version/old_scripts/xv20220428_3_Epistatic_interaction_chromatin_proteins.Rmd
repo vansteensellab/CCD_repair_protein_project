@@ -1,0 +1,547 @@
+---
+title: "xv20211230_4_epistasis_model"
+output: html_document
+---
+
+# Script to generate figure #4 in the paper. This figure describes how epistatic interactions are present between chromatin features and protein KOs. Figure outline:
+A- Step by Step for KAT5 and H3K9me2
+B- Matrix for all hits
+C- Hits per library
+D- Hits per pathway
+E- Strong hits examples
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 5:
+A- All proteins matrix
+B- Balance perturbation strong hits
+
+This script generates the plots for figure 4 and S5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+library(STRINGdb)
+
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+chromatin.followup_CCDs <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220503_follow_up_experiment_mll.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% dplyr::select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+  <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220317_DDR_CCD_mean_significance.rds")
+
+non.targetting.CCD_data <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220317_non_targetting_DDR_CCD_mean_significance.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+step2.epistasis <- readRDS( "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220318_CCD_analysis_preprocessing.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+CCD_inhibitors_data <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220318_DDR_CCD_mean_significant.rds")
+
+#Import chromatin data significant
+chromatin_significant_CCD <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220328_chromatin_CCD_mean_significance.rds")
+
+#Import chromatin data significant
+chromatin_all_CCD <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220412_chromatin_CCD_mean_significance_all.rds")
+```
+
+
+# Figure 3A: Matrix for all hits
+```{r}
+#Filter significant hits
+significant_chromatin_proteins <- chromatin_all_CCD %>% filter(model_p.adj < 0.05) %>% na.omit()
+
+# dcaast with selected
+slope.prot.features.dcast.hits_chr <- significant_chromatin_proteins %>% reshape2::dcast(gene ~ feature, value.var = "CCD_value") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+signif_prots_heatmap_chr <- pheatmap(t(slope.prot.features.dcast.hits_chr), silent = T, clustering_method = "ward.D", cluster_rows = F, cutree_cols = 4)
+signif_prots.gene.order_chr <- rownames(slope.prot.features.dcast.hits_chr[signif_prots_heatmap_chr$tree_col[["order"]],])
+
+# This are the effects
+
+# heatmap: All heatmaps together
+ggplot(significant_chromatin_proteins) + 
+  geom_tile(aes(fct_relevel(gene,signif_prots.gene.order_chr),fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+# Dendrogram
+ggdendrogram(signif_prots_heatmap_chr$tree_col)
+
+```
+
+#Test if proteins in screening have higher interaction with proteins that interact
+#Import string database (not all genes are picked by this analysis)
+```{r}
+#Load string database
+#Download string_db and save it as string_db
+string_import <- read.table(file = "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/9606.protein.links.v11.5.txt.gz", header = T)
+string_import_high_conf <- filter(string_import, combined_score > 750)
+string_import_norm_conf <- filter(string_import, combined_score > 400)
+
+#Import gene name
+string_alias <- read.delim(file = "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/9606.protein.aliases.v11.5.txt.gz")
+string_alias_name <- string_alias %>% select(string_ID = X.string_protein_id, gene = alias) %>% distinct()
+#Load all gene names (I can olny find 362 genes out of 591)
+chromatin_genes <- unique(chromatin_all_CCD$gene)
+
+#Check which proteins are missing
+string_corr <- significant_chromatin_proteins %>% left_join(string_alias_name)
+
+string_in_chr <- filter(string_alias_name, gene %in% chromatin_genes) %>% mutate(CCD_s = case_when(gene %in% unique(significant_chromatin_proteins$gene) ~ "s", T ~ "non_s"))
+string_names_1 <- string_in_chr %>% select(protein1 = string_ID, gene1 =  gene, CCD_s1 = CCD_s)
+string_names_2 <- string_in_chr %>% select(protein2 = string_ID, gene2 =  gene, CCD_s2 = CCD_s)
+
+#filter interactions data (with 750 combined_score filtering) => 1744/65341 ~ 2.7% of all interaction comb. spece
+interactions_chr_chr<- string_import_high_conf %>% left_join(string_names_1) %>% left_join(string_names_2) %>% na.omit() %>% mutate(s_CCD = paste(CCD_s1, CCD_s2, sep = "."))
+
+```
+
+#
+```{r}
+# function to get correlation
+correlation.features <- function(x,y) {
+  A_gene_features <- filter(chromatin_all_CCD, gene == x) %>% select(feature,CCD_value,gene) %>% pull(CCD_value)
+  B_gene_features <- filter(chromatin_all_CCD, gene == y) %>% select(feature,CCD_value, gene) %>% pull(CCD_value)
+  lm(B_gene_features ~ A_gene_features) %>% glance() %>% mutate(gene1 = x, gene2 = y)
+}
+
+# Run function
+corr_list <- map2_dfr(interactions_chr_chr$gene1, interactions_chr_chr$gene2, correlation.features)
+
+#Join with interaction dt
+int_corr_dt <- interactions_chr_chr %>% left_join(corr_list)
+int_corr_signif <- int_corr_dt %>% filter(s_CCD == "s.s")
+
+
+```
+
+# Correlate both matrices at the same time
+```{r}
+#Bind both libraries together
+sign.both.libraries <- significant_proteins %>% bind_rows(significant_chromatin_proteins)
+sign.b.libraries.dt <- sign.both.libraries %>% left_join(string_alias_name)
+
+#All possible combinations
+signif.protein.vector.both <- sign.both.libraries %>% pull(gene) %>% unique()
+comb_signif.both <- combn(signif.protein.vector.both, 2, simplify = F) 
+comb_signif_dt.both <- do.call("rbind", comb_signif.both) %>% as.data.frame()
+colnames(comb_signif_dt.both) <- c("gene1","gene2")
+
+
+correlation.features.both <- function(x,y) {
+  A_gene_features <- filter(sign.both.libraries, gene == x) %>% dplyr::group_by(gene,feature) %>% dplyr::summarise(CCD_value = mean(CCD_value, na.rm = T), .groups = 'drop') %>% pull(CCD_value)
+  B_gene_features <- filter(sign.both.libraries, gene == y)%>% dplyr::group_by(gene,feature) %>% dplyr::summarise(CCD_value = mean(CCD_value, na.rm = T), .groups = 'drop') %>% pull(CCD_value)
+  model.dt <- lm(B_gene_features ~ A_gene_features)
+  model.dt %>% glance() %>% mutate(pearson.r = cor(A_gene_features,B_gene_features), gene1 = x, gene2 = y)
+}
+
+# All possible significant combinations
+corr_significant.both <-  map2_dfr(comb_signif_dt.both$gene1, comb_signif_dt.both$gene2, correlation.features.both)
+
+#Interactions between these genes
+cor_signif_alias <- corr_significant.both %>% left_join(string_alias_name %>% select(protein1 = string_ID, gene1 = gene), ) %>% left_join(string_alias_name %>% select(protein2 = string_ID, gene2 = gene)) %>% mutate(p.adj = p.adjust(p.value)) 
+
+#What library each gene belongs
+library.genes <- sign.b.libraries.dt  %>% select(library, gene) %>% distinct()
+
+#Interactions between these genes
+cor_signif_alias_lig <- cor_signif_alias %>% left_join(sign.b.libraries.dt %>% select(library1 = library, gene1 = gene) %>% distinct()) %>% left_join(sign.b.libraries.dt %>% select(library2 = library, gene2 = gene) %>% distinct())
+
+cor_s_alias_f <- cor_signif_alias_lig %>% left_join(string_import_high_conf) %>% mutate(interaction = case_when(is.na(combined_score) ~ FALSE, T ~ TRUE), class = paste0(library1, "_", library2)) %>% mutate(class = case_when(class %in% c("Chromatin_DNA_repair", "DNA_repair_Chromatin") ~ "DNA_repair_Chromatin", T ~ class))
+
+cor_s_alias_final <- cor_s_alias_f %>% select(pearson.r,r.squared, p.value,gene1, gene2, p.adj, interaction, class) %>% dplyr::group_by(pearson.r, r.squared, p.value,gene1, gene2, p.adj, class) %>% dplyr::summarise(interaction = case_when(sum(interaction) == 0 ~ F, T ~ T))
+
+#Density plot comparing all of them
+ggplot(cor_s_alias_final) + 
+  geom_density(aes(r.squared, color = interaction)) + facet_wrap(~ class) + 
+  theme_bw()
+
+#Get sampling approach
+
+sample_correlations.both <- tibble()
+
+for (j in unique(cor_s_alias_final$class)) {
+  n <- cor_s_alias_final %>% dplyr::group_by(class, interaction) %>% dplyr::summarise(c = n()) %>% filter(interaction == T & class == j) %>% pull(c)
+   for (i in c(1:1000)){
+  set.seed(i)
+  t <- cor_s_alias_final %>% ungroup() %>% filter(class == j) %>% sample_n(n) %>% mutate(seed =i)
+  sample_correlations.both <- sample_correlations.both %>% bind_rows(t)
+  }
+}
+
+
+sample_correlation_mean <- sample_correlations.both %>% dplyr::group_by(class, seed) %>% dplyr::summarise(m = median(pearson.r))
+real_correlation_mean <- cor_s_alias_final %>% dplyr::group_by(interaction,class) %>% dplyr::summarise(m = median(pearson.r))
+#
+ggplot(sample_correlation_mean) + 
+  geom_histogram(aes(m)) + 
+  geom_linerange(data = real_correlation_mean,aes(m,ymin = 0, ymax = 200, color = interaction)) + 
+  facet_wrap(~ class) +
+  coord_cartesian(expand = F) +
+  theme_bw()
+
+
+# Proteins that interact tend to get higher interactions (Small difference but higher)
+ggplot(sample_correlations.both) + 
+    geom_density(aes(r.squared, group = seed), color = "grey80") + facet_wrap(~ class) + 
+    geom_density(data = cor_s_alias_final %>% filter(interaction == T), aes(r.squared, color = interaction)) +
+    theme_bw()
+
+```
+
+#Call concordant pairs more carefully
+```{r}
+#conc table
+
+concordant.features.both <- function(x,y) {
+  A_gene_features <- filter(sign.both.libraries, gene == x) %>% dplyr::group_by(gene,feature) %>% dplyr::summarise(CCD_sign = sign(mean(CCD_value, na.rm = T)), .groups = 'drop') %>% dcast(feature ~ gene, value.var = "CCD_sign")
+  B_gene_features <- filter(sign.both.libraries, gene == y)%>% dplyr::group_by(gene,feature) %>% dplyr::summarise(CCD_sign = sign(mean(CCD_value, na.rm = T)), .groups = 'drop') %>% dcast(feature ~ gene, value.var = "CCD_sign")
+  cont_table <- A_gene_features %>% left_join(B_gene_features, by = "feature") %>% select(-feature) %>% table() %>% as_tibble()
+  conc_pairs <- cont_table[which(cont_table[1] == cont_table[2] & cont_table[1] != 0),] %>% pull(n) %>% sum()
+  conc_pairs_0 <- cont_table[which(cont_table[1] == cont_table[2] & cont_table[1] == 0),] %>% pull(n) %>% sum()
+  n_conc_pairs <- cont_table[which(cont_table[1] != cont_table[2] & cont_table[1] != 0 & cont_table[2] != 0),] %>% pull(n) %>% sum()
+  n_conc_pairs_0 <- cont_table[which(cont_table[1] != cont_table[2] & (cont_table[1] == 0 | cont_table[2] == 0)),] %>% pull(n) %>% sum()
+  tibble(gene1 = x, gene2 = y,library1 =  conc = conc_pairs, conc_0 = conc_pairs_0 , non_conc = n_conc_pairs, non_conc_0 = n_conc_pairs_0)
+}
+
+#Map all the concordant and discordant features
+conc_significant.both <- map2_dfr(comb_signif_dt.both$gene1, comb_signif_dt.both$gene2, concordant.features.both)
+
+#Conc hits
+conc_significant.hits <- conc_significant.both %>%  mutate(conc_pair = case_when(non_conc != 0 ~ FALSE, conc <= (non_conc + non_conc_0) ~ FALSE, T ~ TRUE)) %>% left_join(string_alias_name %>% select(protein1 = string_ID, gene1 = gene), ) %>% left_join(string_alias_name %>% select(protein2 = string_ID, gene2 = gene))
+
+conc_significant.hits.f <- conc_significant.hits %>% left_join(sign.b.libraries.dt %>% select(library1 = library, gene1 = gene) %>% distinct()) %>% left_join(sign.b.libraries.dt %>% select(library2 = library, gene2 = gene) %>% distinct()) %>% left_join(string_import_high_conf) %>% mutate(interaction = case_when(is.na(combined_score) ~ FALSE, T ~ TRUE), class = paste0(library1, "_", library2)) %>% mutate(class = case_when(class %in% c("Chromatin_DNA_repair", "DNA_repair_Chromatin") ~ "DNA_repair_Chromatin", T ~ class))
+
+conc_significant.hits.finale <- conc_significant.hits.f %>% select(conc_pair,gene1, gene2, interaction, class) %>% dplyr::group_by(conc_pair,gene1, gene2, class) %>% dplyr::summarise(interaction = case_when(sum(interaction) == 0 ~ F, T ~ T))
+
+# Draw n = interaction TRUE
+sample_conc_interaction.both <- tibble()
+for (j in unique(conc_significant.hits.finale$class)) {
+  n <- conc_significant.hits.finale %>% dplyr::group_by(class, interaction) %>% dplyr::summarise(c = n()) %>% filter(interaction == T & class == j) %>% pull(c)
+   for (i in c(1:1000)){
+  set.seed(i)
+  t <- conc_significant.hits.finale %>% ungroup() %>% filter(class == j) %>% sample_n(n) %>% mutate(seed =i)
+  sample_conc_interaction.both <- sample_conc_interaction.both %>% bind_rows(t)
+  }
+}
+
+# Draw n = conc_pairs TRUE
+sample_conc_pairs.both <- tibble()
+for (j in unique(conc_significant.hits.finale$class)) {
+  n <- conc_significant.hits.finale %>% dplyr::group_by(class, conc_pair) %>% dplyr::summarise(c = n()) %>% filter(conc_pair == T & class == j) %>% pull(c)
+   for (i in c(1:1000)){
+  set.seed(i)
+  t <- conc_significant.hits.finale %>% ungroup() %>% filter(class == j) %>% sample_n(n) %>% mutate(seed =i)
+  sample_conc_pairs.both <- sample_conc_pairs.both %>% bind_rows(t)
+  }
+}
+
+#Plot histogram
+sample_c_p_both <- sample_conc_interaction.both %>% dplyr::group_by(seed, class,conc_pair) %>% dplyr::summarise(c = n())
+real_c_p_both <- conc_significant.hits.finale %>% filter(interaction == T) %>% dplyr::group_by(conc_pair, class) %>% dplyr::summarise(c = n())
+
+# Plot histogram for sampled data
+ggplot() +  
+  geom_histogram(data = sample_c_p_both %>% filter(conc_pair == T), aes(c)) +
+  geom_linerange(data = real_c_p_both %>% filter(conc_pair == T), aes(c, ymin = 0, ymax = 200), color = "blue") + facet_wrap(~ class, scales = "free_x") + theme_bw()
+
+#Plot histogram
+sample_c_i_both <- sample_conc_pairs.both %>% dplyr::group_by(seed, interaction, class) %>% dplyr::summarise(c = n())
+real_c_i_both <- conc_significant.hits.finale %>% filter(conc_pair == T) %>% dplyr::group_by(interaction, class) %>% dplyr::summarise(c = n())
+
+# Plot histogram for sampled data
+ggplot() +  
+  geom_histogram(data = sample_c_i_both %>% filter(interaction == T), aes(c)) +
+  geom_linerange(data = real_c_i_both %>% filter(interaction == T), aes(c, ymin = 0, ymax = 200), color = "blue") + facet_wrap(~ class, scales = "free_x") + theme_bw()
+
+```
+
+#Pairs of proteins
+```{r}
+chromatin.order.pairs <- c("RPS11","RPS4X","RPS7","RPS15A","RPS9","USP22","DOT1L","ASH2L","RBBP5","EP300","MEN1","PAXIP1","UBE2N","KAT5","TOPBP1","DNMT1","RAN","CCNT1","DMAP1")
+
+ddr.order.pairs <- c("UBC","MEN1","COPS5","FEN1","UBE2W","XPA","RAD51","RAD50","ATM","MDC1","RBBP8","ATR","FANCD2","MCM2","FANCL","HUS1","TREX1","GINS2","MAD2L2","CDK9","TRRAP")
+
+# 
+chromatin_ddr_pairs <- cor_s_alias_final %>%  filter(pearson.r > 0.75 & class == "DNA_repair_Chromatin" & interaction == T) %>% ungroup() %>% select(gene1, gene2) %>% arrange(desc(gene1))
+
+# binary matrix (dcast for clustering and melt for ploting)
+binary_interaction <- chromatin_ddr_pairs %>% mutate(interaction = 1) %>% dcast(gene1 ~ gene2, value.var = "interaction", drop = FALSE) %>% column_to_rownames(var = "gene1")
+binary_interaction[is.na(binary_interaction)] <- 0
+binary_interaction[outer(rownames(binary_interaction), colnames(binary_interaction), "==")] <- 2
+melt_binary_interaction <- melt(binary_interaction %>% rownames_to_column(var = "gene1"), variable.name = "gene2", value.name = "interaction")
+
+
+#Chromatin proteins
+ggplot(sign.both.libraries %>% filter(gene %in% chromatin.order.pairs & library == "Chromatin")) + 
+  geom_tile(aes(fct_relevel(gene,chromatin.order.pairs), fct_relevel(feature, heatmap.chromatin.order),fill = CCD_value)) +
+  scale_fill_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+#grid with interactions
+ddr.order.pairs <- c("UBC","COPS5","MEN1","FANCD2","RAD51","TOPBP1")
+ggplot()+ geom_point(data = melt_binary_interaction %>% filter(gene1 %in% ddr.order.pairs), aes(fct_relevel(gene2, chromatin.order.pairs), fct_relevel(gene1, rev(ddr.order.pairs))), color = "grey90") + geom_point(data = melt_binary_interaction %>% filter(gene1 %in% ddr.order.pairs & interaction != 0), aes(fct_relevel(gene2, chromatin.order.pairs),gene1, color = gene1, shape = as.character(interaction)), size = 3) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "none") + coord_fixed(expand = T,ratio = 1) 
+
+#Small function for segments
+adjacent.values <- function(x) {
+  for(i in c(1:ncol(tmp)-1)) {
+    if (i == 1) {
+      print(tmp[i] != tmp[i+1])
+    }
+    if (i == length(ncol(tmp))) {
+      print(tmp[i] != tmp[i-1])
+    }
+    else {print(tmp[i] != tmp[i+1] & tmp[i] != tmp[i-1])
+      }
+  }
+}
+
+for(i in c(1:4)) {
+  tmp[i] != tmp[i+1] & tmp[i] != tmp[i-1]
+}
+
+tmp.b <- tibble(a = "UBC")
+
+adjacent.values <- function(y,x) {
+one_prot.dt <- x[rownames(x) == y,]
+adj_dt <- tibble(a = y)
+for(i in c(1:ncol(one_prot.dt))) {
+    if (i == 1) {
+      tmp.b <- tmp.b %>% add_column(a = as.logical(one_prot.dt[i] != one_prot.dt[i+1]), .name_repair = "minimal")
+    }
+    else if (i == ncol(tmp)) {
+      tmp.b <- tmp.b %>% add_column(a = as.logical(one_prot.dt[i] != one_prot.dt[i-1]), .name_repair = "minimal")
+    }
+    else {
+      tmp.b <- tmp.b %>% add_column(a = as.logical(one_prot.dt[i] != one_prot.dt[i+1] & one_prot.dt[i] != one_prot.dt[i-1]), .name_repair = "minimal")
+    }
+}
+colnames(tmp.b) <- c("gene1", colnames(x))
+return(tmp.b)
+}
+  
+
+
+```
+
+#Do DNA_repair Chromatin pairs create a nice network
+```{r}
+
+
+#Chromatin proteins with conc. role with a DDR protein
+chromatin.proteins.ddr <- cor_s_alias_final %>%  filter(pearson.r > 0.75 & class == "DNA_repair_Chromatin" & interaction == T)
+                                                        
+chr_chr_genes_filter_a <- chromatin.proteins.ddr %>% pull(gene2) %>% unique()
+#This does not add any new name
+chr_chr_genes_filter_b <- chromatin.proteins.ddr %>% pull(gene1) %>% unique()
+
+chr_ddr_genes <- c(chr_chr_genes_filter_a,chr_chr_genes_filter_b) %>% unique()
+
+# Make a heatmap with all these proteins
+significant_ddr_chr_proteins <- bind_rows(significant_chromatin_proteins, significant_proteins) %>% filter(gene %in% chr_ddr_genes) %>% select(gene, library) %>% distinct() %>% dplyr::group_by(gene) %>% dplyr::summarise(library = case_when(n() == 1 ~ library, n() == 2 ~ "both"))
+
+write_csv(chromatin.proteins.ddr, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220503_chromatin_protein_interaction.csv", quote = NULL)
+write_csv(significant_ddr_chr_proteins, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220503_chromatin_class.csv", quote = NULL)
+
+# dcaast with selected
+sign_ddr_chr_dcast <- significant_ddr_chr_proteins %>% reshape2::dcast(gene + library ~ feature, value.var = "CCD_value")
+rownames(sign_ddr_chr_dcast) <- make.names(sign_ddr_chr_dcast[,1], unique = TRUE)
+sign_ddr_chr_dcast_clean <- sign_ddr_chr_dcast %>% select(-gene, -library)
+
+
+#Heatmap
+signif_heatmap_ddr_chr <- pheatmap(t(sign_ddr_chr_dcast_clean), silent = T, clustering_method = "ward.D2", cluster_rows = F, cutree_cols = T)
+signif_prots_ddr_chr.gene.order <- rownames(sign_ddr_chr_dcast[signif_heatmap_ddr_chr$tree_col[["order"]],])
+
+# heatmap: All heatmaps together (DDR only)
+ggplot(significant_ddr_chr_proteins %>% filter(gene %in% chr_ddr_genes & library == "Chromatin")) + 
+  geom_tile(aes(fct_relevel(gene,signif_prots_ddr_chr.gene.order),fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+#Chromatin network
+network.chromatin.prots <- conc_significant.hits.finale %>% filter(interaction == T & conc_pair == T & (class == "DNA_repair_Chromatin" | class == "Chromatin_Chromatin" & (gene2 %in% chr_chr_genes_filter_a | gene1 %in% chr_chr_genes_filter_a)))
+
+#Export network
+write.csv(network.chromatin.prots, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220426_chromatin_protein_interaction.csv")
+
+write.csv(conc_significant.hits.finale %>% filter(interaction == T & conc_pair == T & class == "DNA_repair_Chromatin"), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220426_chr_DDR_interaction.csv")
+
+
+```
+
+# Follow up experiment
+
+#Do genes that interact have networks
+```{r}
+significant.genes.fup <- chromatin.followup_CCDs %>% filter(model_p.adj < 0.05 & !gene %in% c("POLQ","LigIV")) %>% mutate(pert = paste(gene, gRNA, sep = "_"))
+
+# Put this up
+ggplot(chromatin.followup_CCDs %>% filter(gene %in% c("ASH2L","RBBP5","PAXIP1","PA1")) %>% mutate(pert = paste(gene, gRNA, sep = "_"))) + 
+  geom_tile(aes(gRNA,fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1), na.value ="grey90") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features") + facet_wrap(~ gene)
+
+#Only significant ones
+ggplot(significant.genes.fup) + 
+  geom_tile(aes(pert,fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features") 
+
+#All combos
+ggplot(chromatin.followup_CCDs %>% filter(gRNA == "Combo" & !gene %in% c("POLQ","LigIV"))) + 
+  geom_tile(aes(gene,fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+#All data
+#All combos
+ggplot(chromatin.followup_CCDs %>% mutate(pert = paste(gene, gRNA, sep = "_"))) + 
+  geom_tile(aes(pert,fct_relevel(feature, heatmap.chromatin.order), fill = CCD_value)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+```
+
+
+# What features are driving in each cluster
+```{r}
+#Test wilcox test if
+significant_proteins_clust <- significant_proteins %>% left_join(cluster_tibble)
+
+#Data frame for p_value
+cluster.feature.test <- tibble(cluster_name = NA, feature = NA, p.value = NA, mean = NA, sd = NA)
+
+for(i in unique(significant_proteins_clust$cluster_name)) {
+  for(j in unique(significant_proteins_clust$feature)) {
+  cluster_data <- significant_proteins_clust %>% filter(cluster_name == i, feature == j) %>% pull(CCD_value)
+  control_data <- non.targetting.CCD_data %>% filter(feature == j) %>% pull(CCD_value)
+  wil_t <- wilcox.test(cluster_data,control_data) %>% tidy()
+  cluster.feature.test <- cluster.feature.test %>% add_row(cluster_name = i, feature = j, p.value = wil_t %>% pull(p.value), mean = mean(cluster_data, na.rm = T), sd = sd(cluster_data, na.rm = T))
+  }
+}
+
+#Apply fdr correction
+cluster.feature.test.adj <- cluster.feature.test %>% mutate(p.adj = p.adjust(p.value))
+
+# Features that drive clustering
+ggplot(cluster.feature.test.adj %>% na.omit()) + geom_col(aes(fct_relevel(feature, heatmap.chromatin.order),mean, fill = p.adj < 0.01)) + facet_wrap(~ cluster_name, nrow = 1) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + scale_fill_manual(values = c("grey60","orange"))
+
+```
+

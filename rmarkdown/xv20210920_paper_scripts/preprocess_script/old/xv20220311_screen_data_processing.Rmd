@@ -1,0 +1,563 @@
+---
+title: "xv20211121_epistasis_model_bas"
+output: html_document
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r, include= FALSE}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+#All variable table
+ddr.screen.all <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20220110_screen_ddr_all_computations.rds")
+ddr.screen.all.sel <- ddr.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep = bio.rep,t.rep = FinRep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "DNA_repair")
+
+#Chromatin all 
+chromatin.screen.all <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20220110_chromatin_library_all.rds")
+chromatin.screen.all.sel <- chromatin.screen.all %>% dplyr::select(well,plate,sample,gene,barcode,NHEJMMEJratio,MMEJscore, b.rep,t.rep, freqCut) %>% mutate(MMEJNHEJratio = 1/NHEJMMEJratio, library = "Chromatin")
+
+# bind both dataset
+both.screen.all.sel <- bind_rows(ddr.screen.all.sel,chromatin.screen.all.sel) %>% filter(!gene %in% c("DMSO","LBR_ctrl"))
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+#Chromatin data
+clone5_chrom_tib <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200519_clone5_newdoms_chromatin.RDS")
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+# Inhibitor experiment
+inhibitor.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210716_E1627_ATR_inhibitor/data/xv20210716_E1627_indel_script_ATRi.rds") %>% left_join(inhibitor.table)
+
+```
+
+#This is a analysis pipeline to study chromatin context dependencies (CCD)
+#This is a proposal to get to a final version where we can infer statistical significance from the data
+
+#I am currently working on these steps:
+  1- log2 MMEJ:NHEJ ratio calculation
+  2- Filter based on z-score of this data: Filter genes that have 1 significant IPR (z-score > 1.95) in at least 2 replicates.
+  3- Compute log2 MMEJ:NHEJ fold changes based on WT values: Compare with WT samples (This shows that data is reproducible and R are better for KO than WT)
+  4- Compute CCDs with WT wells (random CCDs) and KO samples
+    A- Table with mean CCDs
+    B- Table with all CCDs per replicate
+  5- Test for non-random CCDs (KS test, I could even use the WT from the other screen, it won't change much). These are the interactions that matter and they correlate decently between replicates
+    A- non-random genes based on mean CCDs
+    B- non-random genes based on all CCDs per replicate
+  
+
+#Check reproducibility at every step
+#Step 1 = log2 NHEJ:MMEJ ratio
+```{r}
+#Compute the log2 MMEJ:NHEJ balance: Initial dataset
+log2.ratio.screen.detail.all <- both.screen.all.sel %>% dplyr::select(t.rep, MMEJNHEJratio,library, gene,barcode,sample,well,plate) %>% mutate(log2ratio = log2(MMEJNHEJratio))
+
+#dcast data table for plotting reproducibility of the ratio
+balance.ratio.list <- log2.ratio.screen.detail.all %>% reshape2::dcast(gene + library + barcode + sample + well + plate ~ t.rep, value.var = "log2ratio")
+
+# Plot reproducibility DNA_repair library
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + geom_point(aes(R1,R4)) + xlab("R1 (log2 MMEJ:NHEJ balance))") + ylab("R4 (log2 MMEJ:NHEJ balance)") + geom_abline() + theme_bw() + geom_density2d(aes(R1,R4))
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + geom_point(aes(R4,R5)) + xlab("R4 (log2 MMEJ:NHEJ balance))") + ylab("R5 (log2 MMEJ:NHEJ balance)") + geom_abline() + theme_bw()  + geom_density2d(aes(R4,R5))
+ggplot(balance.ratio.list %>% filter(library == "DNA_repair")) + geom_point(aes(R1,R5)) + xlab("R1 (log2 MMEJ:NHEJ balance))") + ylab("R5 (log2 MMEJ:NHEJ balance)") + geom_abline() + theme_bw()  + geom_density2d(aes(R1,R5))
+
+# Plot reproducibility Chromatin library
+ggplot(balance.ratio.list %>% filter(library == "Chromatin")) + geom_point(aes(R1,R2)) + xlab("R1 (log2 MMEJ:NHEJ balance)") + ylab("R2 (MMEJ:NHEJ balance)") + geom_abline() + theme_bw()  + geom_density2d(aes(R1,R2))
+ggplot(balance.ratio.list %>% filter(library == "Chromatin")) + geom_point(aes(R1,R3)) + xlab("R1 (log2 MMEJ:NHEJ balance)") + ylab("R3 (log2 MMEJ:NHEJ balance)") + geom_abline() + theme_bw() + geom_density2d(aes(R1,R3))
+ggplot(balance.ratio.list %>% filter(library == "Chromatin")) + geom_point(aes(R2,R3)) + xlab("R2 (log2 MMEJ:NHEJ balance)") + ylab("R3 (log2 MMEJ:NHEJ balance)") + geom_abline() + theme_bw() + geom_density2d(aes(R2,R3))
+
+
+#Extract non-targetting samples from this dataset
+wt.set.ratio <- filter(log2.ratio.screen.detail.all , sample == "WT") %>% dplyr::group_by(barcode, t.rep,library) %>% dplyr::summarise(wt.log2ratio = mean(log2ratio, na.rm = T))
+
+```
+
+#Step 2: Filter based on z-score on log2 MMEJ:NHEJ
+```{r}
+# Compute z-score with wt log2(MMEJ:NHEJ ratio)
+null.distribtution.log2Ratio <- filter(log2.ratio.screen.detail.all , sample == "WT") %>% dplyr::group_by(barcode, t.rep,library) %>% dplyr::summarise(wt.log2ratio = mean(log2ratio, na.rm = T), sd.wt.log2ratio = sd(log2ratio, na.rm = T))
+
+# Calculate z-scores based on this values
+z.scores.ratio.IPR <- filter(log2.ratio.screen.detail.all, sample != "WT") %>% left_join(null.distribtution.log2Ratio) %>% na.omit() %>% mutate(z.score.log2ratio = (log2ratio - wt.log2ratio)/sd.wt.log2ratio)
+
+# Filter z-scores with two significant IPRs in at least 2 replicates
+z.scores.ratio.IPR.filtered <- filter(z.scores.ratio.IPR, abs(z.score.log2ratio) > 1.95) %>% dplyr::group_by(t.rep, gene,library, sample) %>% dplyr::summarise(IPR_signif_count = n()) %>% filter(IPR_signif_count  >= 1) %>% ungroup() %>% dplyr::group_by(gene,library,sample) %>% dplyr::mutate(rep_signif = n()) %>% filter(rep_signif > 1) %>% select(t.rep,gene,library,sample,rep_signif)
+
+```
+
+#Step 3: Compute log2 MMEJ:NHEJ fold changes
+```{r}
+# Compute log2 fold changes in different set ups for all the KO samples
+log2.distance.ratio.KO <- log2.ratio.screen.detail.all %>% left_join(z.scores.ratio.IPR.filtered, by = c("t.rep","gene","library","sample")) %>% na.omit() %>% filter(sample == "KO") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio)
+
+# Calculate fold changes between WT samples
+log2.distance.ratio.WT <- log2.ratio.screen.detail.all %>% filter(sample == "WT") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio)
+
+# Calculate fold changes between POLQ samples
+log2.distance.ratio.POLQ <- log2.ratio.screen.detail.all %>% filter(sample == "POLQ") %>% left_join(wt.set.ratio, by = c("t.rep", "library", "barcode")) %>% mutate(log2.foldchange = log2ratio - wt.log2ratio)
+
+```
+
+#QC test log2 MMEJ:NHEJ fold change reproducibility
+```{r}
+# Prepare data set to check for reproducibility across log2 fold change samples
+ratio.perturbations <- log2.distance.ratio.WT %>% bind_rows(log2.distance.ratio.KO) %>% reshape2::dcast(gene + library + barcode + sample + well + plate ~ t.rep, value.var = "log2.foldchange")
+
+# Plot reproducibility DNA_repair library
+#R1 vs. R4
+ggplot(ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "KO"), aes(R1,R4)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R1,R4), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R1,R4), label.y = 1.5, color = "red") +
+  xlab("R1 (log2 Fold change))") + 
+  ylab("R4 (log2 Fold change)") + 
+  theme_bw()
+
+#R1 vs. R5
+ggplot(ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "KO"), aes(R1,R5)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R1,R5), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R1,R5), label.y = 1.5, color = "red") +
+  xlab("R1 (log2 Fold change))") + 
+  ylab("R5 (log2 Fold change)") + 
+  theme_bw()
+
+#R4 vs. R5
+ggplot(ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "KO"), aes(R4,R5)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R4,R5), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "DNA_repair" & sample == "WT"), aes(R4,R5), label.y = 2.2, color = "red") +
+  xlab("R4 (log2 Fold change))") + 
+  ylab("R5 (log2 Fold change)") + 
+  theme_bw()
+
+# Plot reproducibility Chromatin library
+#R1 vs. R2
+ggplot(ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "KO"), aes(R1,R2)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R1,R2), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R1,R2), label.y = 1, color = "red") +
+  xlab("R1 (log2 Fold change))") + 
+  ylab("R2 (log2 Fold change)") + 
+  theme_bw()
+
+#R1 vs. R3
+ggplot(ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "KO"), aes(R1,R3)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R1,R3), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R1,R3), label.y = 0.6, color = "red") +
+  xlab("R1 (log2 Fold change))") + 
+  ylab("R3 (log2 Fold change)") + 
+  theme_bw()
+
+#R2 vs. R3
+ggplot(ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "KO"), aes(R2,R3)) +
+  geom_point() + 
+  geom_abline() + 
+  stat_cor() +
+  geom_point(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R2,R3), color = "red") + 
+  stat_cor(data = ratio.perturbations %>%
+         filter(library == "Chromatin" & sample == "WT"), aes(R2,R3), label.y = 0.6, color = "red") +
+  xlab("R2 (log2 Fold change))") + 
+  ylab("R3 (log2 Fold change)") + 
+  theme_bw()
+
+```
+
+#Step 4: Calculate CCDs for WT samples: 
+# A) Calculate this after computing the mean
+```{r}
+# WT samples per replicate
+non.targetting.CCD<- log2.distance.ratio.WT %>% dplyr::group_by(library,gene,well,plate,barcode) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% mutate(coordinate = paste(plate, well, sep = "_"))
+
+# Compute slopes for all experiments
+non.t.CCD.mean <- tibble(library = NA, coordinate = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+for (k in unique(non.targetting.CCD$library)) {
+for (h in unique(non.targetting.CCD$coordinate)) {
+  for (j in colnames(non.targetting.CCD)[9:33]) {
+    model.dt <- non.targetting.CCD %>% filter(library == k & coordinate == h)
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+   non.t.CCD.mean <- non.t.CCD.mean %>% add_row(library = k,coordinate = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value))
+  }
+}
+}
+
+#Compute CCDs for non-targeting samples (These will be the random CCD)
+CCD.non.targeting.mean <- non.t.CCD.mean %>% reshape2::dcast(library + coordinate + feature ~ term, value.var = "slope.log2") %>% dplyr::select(library, coordinate ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+
+# Dispersion of non targeting gRNAs
+# Plotted as boxplots
+ggplot(CCD.non.targeting.mean %>% na.omit()) + geom_boxplot(aes(library,CCD_value, fill = library)) + theme_bw()
+
+#Plotted as density
+ggplot(CCD.non.targeting.mean %>% na.omit()) + geom_density(aes(CCD_value, color = library)) + theme_bw()
+
+#Plotted as beeswarm plot (The zero value gets saturated in this plot)
+ggplot(CCD.non.targeting.mean %>% na.omit()) + geom_quasirandom(aes(library,CCD_value, color = library)) + theme_bw()
+
+#95 CI per feature and library
+perc.non.targ.CCD <- CCD.non.targeting.mean %>% na.omit() %>%  dplyr::group_by(feature,library) %>% dplyr::summarise(perc99 = quantile(CCD_value, 0.99), perc01 = quantile(CCD_value, 0.01))
+
+#95 CI per library
+perc.non.targ.CCD.library <- CCD.non.targeting.mean %>% na.omit() %>%  dplyr::group_by(library) %>% dplyr::summarise(perc99 = quantile(CCD_value, 0.99), perc01 = quantile(CCD_value, 0.01))
+
+```
+
+# Calculate CCDs for WT samples: 
+# B) Calculate this per replicate
+```{r}
+# WT samples per replicate
+non.targetting.CCD.per.replicate<- log2.distance.ratio.WT %>% dplyr::group_by(library,gene,well,plate,barcode,t.rep) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% mutate(coordinate = paste(plate, well, sep = "_"))
+
+# Compute slopes for all experiments
+non.t.CCD.mean.per.replicate <- tibble(library = NA,t.rep = NA, coordinate = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+for (k in unique(non.targetting.CCD.per.replicate$library)) {
+for (h in unique(non.targetting.CCD.per.replicate$coordinate)) {
+  for (i in unique(non.targetting.CCD.per.replicate$t.rep)) {
+  for (j in colnames(non.targetting.CCD.per.replicate)[14:38]) {
+    model.dt <- non.targetting.CCD.per.replicate %>% filter(library == k & coordinate == h & t.rep == i)
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = log2.foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+   non.t.CCD.mean.per.replicate <- non.t.CCD.mean.per.replicate %>% add_row(library = k,t.rep = i, coordinate = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value))
+  }
+}
+}
+}
+
+#Compute CCDs for non-targeting samples (These will be the random CCD)
+CCD.non.targeting.mean.per.replicate <- non.t.CCD.mean.per.replicate %>% reshape2::dcast(library + coordinate + feature + t.rep ~ term, value.var = "slope.log2") %>% dplyr::select(library, coordinate ,feature, t.rep,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+# Dispersion of non targeting gRNAs with the data per replicate kept separately
+# Plotted as boxplots
+ggplot(CCD.non.targeting.mean.per.replicate %>% na.omit()) + geom_boxplot(aes(library,CCD_value, fill = library)) + theme_bw()
+
+#Plotted as density
+ggplot(CCD.non.targeting.mean.per.replicate %>% na.omit()) + geom_density(aes(CCD_value, color = library)) + theme_bw()
+
+#Plotted as beeswarm plot (The zero value gets saturated in this plot)
+ggplot(CCD.non.targeting.mean.per.replicate %>% na.omit()) + geom_quasirandom(aes(library,CCD_value, color = library)) + theme_bw()
+
+#95 CI per feature and library
+perc.non.targ.CCD.per.replicate <- CCD.non.targeting.mean.per.replicate %>% na.omit() %>%  dplyr::group_by(feature,library) %>% dplyr::summarise(perc95 = quantile(CCD_value, 0.99), perc05 = quantile(CCD_value, 0.01))
+
+#95 CI per library
+perc.non.targ.CCD.library.per.replicate <- CCD.non.targeting.mean.per.replicate %>% na.omit() %>%  dplyr::group_by(library) %>% dplyr::summarise(perc95 = quantile(CCD_value, 0.99), perc05 = quantile(CCD_value, 0.01))
+```
+
+# Calculate CCDs for KO samples: 
+# A) Calculate this after computing the mean
+```{r}
+# KO samples per replicate
+gene.KO.CCD.dt <- log2.distance.ratio.KO %>% dplyr::group_by(library,gene,well,plate,barcode) %>% dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T)) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+# Compute slopes for all experiments
+gene.KO.CCD <- tibble(library = NA, gene = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+for (k in unique(gene.KO.CCD.dt$library)) {
+for (h in unique(gene.KO.CCD.dt$gene)) {
+  for (j in colnames(gene.KO.CCD.dt)[9:33]) {
+    model.dt <- gene.KO.CCD.dt %>% filter(library == k & gene == h)
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+   gene.KO.CCD <- gene.KO.CCD %>% add_row(library = k,gene = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value))
+  }
+}
+}
+
+#Calculate KO proteins (terms)
+gene.KO.CCD.mean <- gene.KO.CCD %>% reshape2::dcast(library + gene + feature ~ term, value.var = "slope.log2") %>% dplyr::select(library, gene ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+# Dispersion of non targetting gRNAs
+# Plotted as boxplots
+ggplot(gene.KO.CCD.mean %>% na.omit()) + geom_boxplot(aes(library,CCD_value , fill = library)) + theme_bw()
+#Plotted as density
+ggplot(gene.KO.CCD.mean %>% na.omit()) + geom_density(aes(CCD_value , color = library)) + theme_bw()
+
+#Plotted as beeswarm plot (The zero value gets saturated in this plot)
+ggplot(gene.KO.CCD.mean %>% na.omit()) + geom_quasirandom(aes(library,CCD_value, color = library)) + theme_bw()
+
+#95 CI per feature and library
+perc.KO.CCD <- gene.KO.CCD.mean %>% na.omit() %>%  dplyr::group_by(feature,library) %>% dplyr::summarise(perc99 = quantile(CCD_value, 0.99), perc01 = quantile(CCD_value, 0.01))
+
+#95 CI per library
+perc.KO.CCD.library <- gene.KO.CCD.mean %>% na.omit() %>%  dplyr::group_by(library) %>% dplyr::summarise(perc99 = quantile(CCD_value, 0.99), perc01 = quantile(CCD_value, 0.01))
+
+```
+
+#Do non-targetting and ko percentiles match? If they do, I should select the 99CI based on this (I need to select it per feature)
+```{r}
+plot.percentiles.CCD <- perc.KO.CCD %>% mutate(KO_range = perc99 - perc01) %>% dplyr::select(-perc99,-perc01) %>%  left_join(perc.non.targ.CCD %>% mutate(WT_range = perc99 - perc01) %>% dplyr::select(-perc99,-perc01))
+
+#Plot correlation
+ggplot(plot.percentiles.CCD, aes(KO_range,WT_range)) + geom_point(aes(KO_range,WT_range)) + stat_cor(label.x = 0.02, label.y = 0.2) + geom_smooth(method = "lm") + facet_wrap(~ library) + theme_bw() + coord_cartesian(xlim = c(0,0.25), ylim = c(0, 0.25)) + geom_abline()
+```
+
+# Calculate CCDs for KO samples: B) Calculate this per replicate
+```{r}
+# KO samples per replicate
+gene.KO.CCD.per.replicate <- log2.distance.ratio.KO %>% dplyr::group_by(library,gene,well,plate,barcode,t.rep) %>% left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+# Compute slopes for all experiments
+gene.KO.CCD.per.rep <- tibble(library = NA, gene = NA, t.rep = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+for (k in unique(gene.KO.CCD.per.replicate$library)) {
+for (h in unique(gene.KO.CCD.per.replicate$gene)) {
+  for (i in unique(gene.KO.CCD.per.replicate$t.rep)) {
+  for (j in colnames(gene.KO.CCD.per.replicate)[15:39]) {
+    model.dt <- gene.KO.CCD.per.replicate %>% filter(library == k & gene == h & t.rep == i)
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = log2.foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+   gene.KO.CCD.per.rep <- gene.KO.CCD.per.rep %>% add_row(library = k,gene = h, feature = j, t.rep = i, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value))
+  }
+}
+}
+}
+
+#Calculate KO proteins
+gene.KO.CCD.per.rep.converted <- gene.KO.CCD.per.rep %>% reshape2::dcast(library + gene + feature + t.rep ~ term, value.var = "slope.log2") %>% dplyr::select(library, gene ,feature, t.rep,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+# Dispersion of non targetting gRNAs
+# Plotted as boxplots
+ggplot(gene.KO.CCD.per.rep.converted %>% na.omit()) + geom_boxplot(aes(library,CCD_value , fill = library)) + theme_bw()
+
+#Plotted as density
+ggplot(gene.KO.CCD.per.rep.converted %>% na.omit()) + geom_density(aes(CCD_value , color = library)) + theme_bw()
+
+#Plotted as beeswarm plot (The zero value gets saturated in this plot)
+ggplot(gene.KO.CCD.per.rep.converted %>% na.omit()) + geom_quasirandom(aes(library,CCD_value, color = library)) + theme_bw()
+
+```
+
+#Step 5: Compute KS test for non-random effects (only with setting B, it does not have enough power for setting A) => A single feature is not able to push everything
+```{r}
+# Selecte which genes have non-random interactions with chromatin
+
+# Filter slopes of WT and KO
+gene.KO.CCD.per.rep.ks.test <- gene.KO.CCD.per.rep.converted %>% select(library, gene,feature,CCD_value,t.rep)
+non.targeting.CCD.per.rep.ks.test <- CCD.non.targeting.mean.per.replicate %>% select(library, coordinate,feature,CCD_value,t.rep)
+
+ks_test_genes <- tibble(gene = NA, library = NA,p.value = NA)
+for (i in unique(gene.KO.CCD.per.rep.ks.test$gene)) {
+for(j in unique(gene.KO.CCD.per.rep.ks.test$library)){
+  KO.values <- gene.KO.CCD.per.rep.ks.test %>% filter(gene == i & library == j) %>% pull(CCD_value)
+     if (length(KO.values) == 0) {
+next
+}
+  WT.values <- non.targeting.CCD.per.rep.ks.test %>% filter(library == j) %>% pull(CCD_value)
+  ks_test <- ks.test(KO.values,WT.values) %>% tidy()
+  ks_test_genes <- ks_test_genes %>% add_row(gene = i,library = j, p.value = ks_test %>% pull(p.value))
+}
+}
+
+ks_test_genes_adjust_DDR <- ks_test_genes %>% filter(library == "DNA_repair") %>% mutate(p.adj = p.adjust(p.value, method = "fdr"))
+ks_test_genes_adjust_Chromatin <- ks_test_genes %>% filter(library == "Chromatin") %>% mutate(p.adj = p.adjust(p.value, method = "fdr"))
+
+# Filter genes that have non-random CCDs
+genes.non.random.DDR <- filter(ks_test_genes_adjust_DDR, p.adj < 0.01)
+genes.non.random.Chromatin <- filter(ks_test_genes_adjust_Chromatin, p.adj < 0.01)
+
+```
+
+# Select pairs that are above 99CI: These are the interactions that I will highlight in the heatmaps
+```{r}
+# Genes with at least one CCD 99CI
+genes.99CI.DDR <- gene.KO.CCD.mean %>% left_join(perc.non.targ.CCD) %>% filter((CCD_value < perc01 | CCD_value > perc99) & library == "DNA_repair")
+
+# Genes with at least one CCD 99CI
+genes.99CI.Chr <- gene.KO.CCD.mean %>% left_join(perc.non.targ.CCD) %>% filter((CCD_value < perc01 | CCD_value > perc99) & library == "Chromatin")
+```
+
+# Last correlation test: I will run this once the per replicate is run (t.rep)
+```{r}
+#Non-random CCDs (KOs with ks p.adj < 0.01)
+KO.slopes.non.random <- KO.slopes %>% left_join(genes.non.random.CCD) %>% na.omit() %>% mutate(sample = "KO")
+
+#Combine data together
+combined.CCD.data <- KO.slopes.non.random %>% dplyr::select(-p.value,-p.adj) %>% bind_rows(WT.slopes %>% dplyr::select(library,gene = coordinate,feature,t.rep,epistasis.final) %>% mutate(sample = "WT"))
+
+#DNA repair dcast
+DDR.CCD.dcast <- combined.CCD.data %>% filter(library == "DNA_repair") %>% reshape2::dcast(library + gene + feature + sample ~ t.rep, value.var = "epistasis.final")
+
+#Chromatin repair dcast
+chromatin.CCD.dcast <- combined.CCD.data %>% filter(library == "Chromatin") %>% reshape2::dcast(library + gene + feature + sample ~ t.rep, value.var = "epistasis.final")
+
+#Correlation plots for DNA repair proteins
+ggplot(DDR.CCD.dcast, aes(R1,R4, color = sample)) + geom_point() + xlab("R1 (Chromatin Context Dependencies)") + ylab("R4 (Chromatin Context Dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+ggplot(DDR.CCD.dcast, aes(R4,R5,color = sample)) + geom_point() + xlab("R4 (Chromatin Context Dependencies)") + ylab("R5 (Chromatin Context dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+ggplot(DDR.CCD.dcast, aes(R5,R1, color = sample)) + geom_point() + xlab("R5 (Chromatin Context Dependencies)") + ylab("R1 (Chromatin Context Dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+
+#Correlation plots for Chromatin proteins
+ggplot(chromatin.CCD.dcast, aes(R1,R2, color = sample)) + geom_point() + xlab("R1 (Chromatin Context Dependencies)") + ylab("R2 (Chromatin Context Dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+ggplot(chromatin.CCD.dcast, aes(R1,R3,color = sample)) + geom_point() + xlab("R1 (Chromatin Context Dependencies)") + ylab("R3 (Chromatin Context dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+ggplot(chromatin.CCD.dcast, aes(R2,R3, color = sample)) + geom_point() + xlab("R2 (Chromatin Context Dependencies)") + ylab("R3 (Chromatin Context Dependencies)") + geom_abline() + theme_bw() + facet_wrap(~ sample) + stat_cor()
+```
+
+#Step 6: Make means out of the genes that have a significant KS
+```{r}
+# Calculate the means
+gene.KO.CCD.per.rep.means <- gene.KO.CCD.per.rep %>% reshape2::dcast(library + gene + feature ~ term, value.var = "slope.log2", fun.aggregate = mean) %>% dplyr::select(library, gene ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+
+#Calculate means over replicates and ks test p-value
+mean.DDR.CCD.per.rep <- gene.KO.CCD.per.rep.means %>% filter(library == "DNA_repair") %>% dplyr::group_by(gene,feature) %>% dplyr::summarise(m_CCD_value = mean(CCD_value, na.rm = T)) %>% left_join(ks_test_genes_adjust_DDR)
+
+#Calculate means over replicates and ks test p-value
+mean.chromatin.CCD.per.rep <- gene.KO.CCD.per.rep.means %>% filter(library == "Chromatin") %>% dplyr::group_by(gene,feature) %>% dplyr::summarise(m_CCD_value = mean(CCD_value, na.rm = T)) %>% left_join(ks_test_genes_adjust_Chromatin)
+
+#Calculate the 99CI with the non-targetings
+CCD.non.targeting.pr.mean <- non.t.CCD.mean.per.replicate %>% reshape2::dcast(library + coordinate + feature ~ term, value.var = "slope.log2", fun.aggregate = mean) %>% dplyr::select(library, coordinate ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% mutate(cross.x = -intercept/slope, CCD_value = case_when(cross.x < 1 ~ slope, cross.x > 1 ~ 0))
+
+
+perc.non.targ.CCD.per.replicate <- CCD.non.targeting.pr.mean %>% na.omit() %>% dplyr::group_by(feature,library,coordinate) %>% dplyr::summarise(m_nt_CCD = mean(CCD_value,na.rm = T)) %>% ungroup() %>%  dplyr::group_by(feature,library) %>% dplyr::summarise(perc99 = quantile(m_nt_CCD, 0.99), perc01 = quantile(m_nt_CCD, 0.01))
+
+#Put all data in one dt and assess significance with both
+DDR.CCD.values.pr <- mean.DDR.CCD.per.rep %>% left_join(perc.non.targ.CCD.per.replicate) %>% mutate(ks_test_sign = case_when(p.adj < 0.001 ~ T, T ~ F), CI_99_sign = case_when((m_CCD_value < perc01 | m_CCD_value > perc99) ~ T, T ~ F)) %>% select(-perc99, -perc01)
+
+chromatin.CCD.values.pr <- mean.chromatin.CCD.per.rep %>% left_join(perc.non.targ.CCD.per.replicate) %>% mutate(ks_test_sign = case_when(p.adj < 0.001 ~ T, T ~ F), CI_99_sign = case_when((m_CCD_value < perc01 | m_CCD_value > perc99) ~ T, T ~ F)) %>% select(-perc99, -perc01)
+```
+
+# Last check: Check reproducibility of interactions of high confidence
+```{r}
+# High_confidence CCD DNA repair
+DDR.high.conf.CCD <- DDR.CCD.values.pr %>% filter(ks_test_sign == T & CI_99_sign == T) %>% select(gene,feature)
+
+# High_confidence CCD Chromatin
+chromatin.high.conf.CCD <- chromatin.CCD.values.pr %>% filter(ks_test_sign == T & CI_99_sign == T) %>% select(gene,feature)
+
+# dcast and filter
+CCD_dcast_high_confidence_DDR <- gene.KO.CCD.per.rep.converted %>% filter(library == "DNA_repair") %>% right_join(DDR.high.conf.CCD) %>% reshape2::dcast(library + gene + feature ~ t.rep, value.var = "CCD_value")
+
+#Correlation plots between replicates
+ggplot(CCD_dcast_high_confidence_DDR) + geom_point(aes(R1,R5))
+ggplot(CCD_dcast_high_confidence_DDR) + geom_point(aes(R1,R4))
+ggplot(CCD_dcast_high_confidence_DDR) + geom_point(aes(R4,R5))
+
+# dcast and filter
+CCD_dcast_high_confidence_Chromatin <- gene.KO.CCD.per.rep.converted %>% filter(library == "Chromatin") %>% right_join(chromatin.high.conf.CCD) %>% reshape2::dcast(library + gene + feature ~ t.rep, value.var = "CCD_value")
+
+#Correlation plots between replicates
+ggplot(CCD_dcast_high_confidence_Chromatin) + geom_point(aes(R1,R2))
+ggplot(CCD_dcast_high_confidence_Chromatin) + geom_point(aes(R1,R3))
+ggplot(CCD_dcast_high_confidence_Chromatin) + geom_point(aes(R2,R3))
+
+```
+
+
+#Save every step
+```{r}
+# Step 1
+#saveRDS(data.for.plotting.all.ratio,file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+
+#Step 2
+#saveRDS(mean.log2.distance.ratio.all, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_2_step.rds")
+
+# Save all proteins correlation final
+#saveRDS(epistasis.ratio.sign, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220128b_ratio_epistasis_all_genes.rds")
+
+```
+

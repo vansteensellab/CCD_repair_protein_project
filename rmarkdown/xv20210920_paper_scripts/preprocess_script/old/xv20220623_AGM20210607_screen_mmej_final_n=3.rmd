@@ -1,0 +1,777 @@
+---
+title: "AGM20201222_screen_mmej_sep"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+#Report of the Chromatin DSB screening - This will be the last version.
+I will start importing data from previous scripts
+A - Data frame with different scores to use as input
+B - Table with clustering data (Needs to be included once Christ finalises his analysis)
+
+I will process data based on MMEJscore first. I filter data based gene editing % and read counts. Filtering strategy:
+  Gene editing %: There are some wells that have 20-30% cutting efficiency - These I'll discard. Modification 20210609, For that I filtered out every well that has an average cutting efficiency lower than 25%".
+  Read count: To avoid having low count read-outs, I will filter out things that have less than 30 mut.reads (+1 & -7)
+
+Read count filtering was performed in the previous script. In this report, I will filter wells with low count reads and I will perform z-score normalization for MMEJscore. I also thought to do the same processing for cutting efficiency, but this is not possible because technical noise in transfection efficiency.
+
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+```
+
+```{r setup, include=FALSE}
+library(tidyverse) 
+library(ggbeeswarm)
+library(corrplot)
+library(pheatmap)
+library(viridis)
+library(factoextra)
+library(NbClust)
+library(ggpubr)
+library(readxl)
+library(gridExtra)
+library(ggrepel)
+```
+## Functions
+```{r, echo=F}
+#Plot correlations
+replicate.correlation.plot <- function(dt, i, j, k){
+  ggplot(dt, aes_string(x = i, y = j,color = k)) +
+    geom_point(alpha = 0.5) +
+    theme_bw() + 
+    coord_cartesian(expand = F) +
+    theme(aspect.ratio = 1)
+}
+
+#mybreaks
+myBreaks <- function(test, p) {c(seq(min(test), 0, length.out=ceiling(p/2) + 1), 
+              seq(max(test)/p, max(test), length.out=floor(p/2)))}
+```
+
+#Columns in DDRDSB
+ [1] "plate"         "replicate"     "bio.rep"       "well"          "barcode"       "MMEJscore"    
+ [7] "NHEJscore"     "freqMMEJ"      "freqNHEJ"      "freqCut"       "NHEJMMEJratio" "sample"       
+[13] "indelreads"    "FinRep"  
+
+#Columns in new.domains.c5.bis
+[1] "barcode"          "H3K27me3"         "H3K9me2"          "LAD"              "late_replicating"
+[6] "euchromatin"      "transcription"    "chromatin" 
+
+#Note 1: If both data tables have these columns it should run properly, if there are columns that are named differently. These names have to be modified in the script.
+
+#Note 2: Go through the script and change every path after pdf() function to your home directory.
+
+## load data
+```{r}
+#File with all parameters
+DDRDSB <-readRDS("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/AGM20210527_screen_data_agm_ddr_final_genes.rds")
+
+#Chromatin data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+```
+
+#How data tables looks
+```{r}
+#Plot screen data
+head(DDRDSB)
+
+#Plot cluster data
+head(clone5_z.score_chrom_tib)
+```
+
+## Technical noise variability
+# Possible Suppl. figure in the paper. Noise evaluation in negative controls and KOs
+To calculate z-scores, it is important that the noise levels of each of the measurements (MMEJscore and cutting efficiency). If the noise is too big or measurement inconsistent, I will only pick noise differences and not biological differences. A way for estimating the noise level is to average every meaasurement per well and compare these. Any technical variability should be mainly be picked here and then I will plot correlation between different replicates. 
+
+
+# Technical noise in negative controls (WT background)
+```{r}
+# Possible supp technical figure with background noise levels. This is the reason why we exclusively focus on MMEJscore. 
+
+# Calculate average mmej and cut efficiencies
+noise.var.dt <- DDRDSB %>% 
+  filter(sample == "WT") %>% 
+  dplyr::group_by(well, plate, FinRep) %>% 
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T), mean.mmej = mean(MMEJscore, na.rm = T))
+
+# Plot gene editing efficiency noise level
+cut.var.dt <- noise.var.dt %>% 
+  reshape2::dcast(well + plate ~ FinRep, value.var = "mean.cut") %>%
+  na.omit()
+
+p.c.var.1 <- replicate.correlation.plot(cut.var.dt, "R1","R4","plate") + theme(legend.position = "top") + ylim(c(0.2,0.8)) + xlim(c(0.2,0.8))
+p.c.var.2 <- replicate.correlation.plot(cut.var.dt, "R1","R5","plate")+ theme(legend.position = "top") + ylim(c(0.2,0.8)) + xlim(c(0.2,0.8))
+p.c.var.3 <- replicate.correlation.plot(cut.var.dt, "R4","R5","plate")+ theme(legend.position = "top")+ ylim(c(0.2,0.8)) + xlim(c(0.2,0.8))
+g.c.var <- arrangeGrob(p.c.var.1,p.c.var.2,p.c.var.3, nrow = 1)
+
+# Plot MMEJscore gene editing efficiency noise level
+mmej.var.dt <- noise.var.dt %>% 
+  reshape2::dcast(well + plate ~ FinRep, value.var = "mean.mmej") %>%
+  na.omit()
+
+p.m.var.1 <- replicate.correlation.plot(mmej.var.dt, "R1","R4","plate") + theme(legend.position = "top") + ylim(c(0,0.5)) + xlim(c(0,0.5))
+p.m.var.2 <- replicate.correlation.plot(mmej.var.dt, "R1","R5","plate")+ theme(legend.position = "top")+ ylim(c(0,0.5)) + xlim(c(0,0.5))
+p.m.var.3 <- replicate.correlation.plot(mmej.var.dt, "R4","R6","plate")+ theme(legend.position = "top")+ ylim(c(0,0.5)) + xlim(c(0,0.5))
+g.m.var <- arrangeGrob(p.m.var.1,p.m.var.2,p.m.var.3, nrow = 1)
+
+#Combine both plots together with tittles
+t.c <- text_grob("WT background average cutting efficiency - Color code: Plate #")
+t.m <- text_grob("WT background average MMEJscore - Color code: Plate #")
+
+#These plots were already exported to pdf, so I wont run them.
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210608_KO_noise_bis.pdf", height = 5)
+grid.arrange(t.c,g.c.var,t.m,g.m.var, ncol = 1, heights = c(0.5,5,0.5,5))
+#dev.off()
+```
+
+##Technical noise plot (KO transfected)
+```{r}
+# Calculate average mmej and cut efficiencies
+noise.var.KO.dt <- DDRDSB %>% 
+  filter(sample == "KO") %>% 
+  dplyr::group_by(well, plate, FinRep) %>% 
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T), mean.mmej = mean(MMEJscore, na.rm = T))
+
+# Plot gene editing efficiency noise level
+cut.var.KO.dt <- noise.var.KO.dt %>% 
+  reshape2::dcast(well + plate ~ FinRep, value.var = "mean.cut") %>%
+  na.omit()
+
+p.c.var.4 <- replicate.correlation.plot(cut.var.KO.dt, "R1","R4","plate") + theme(legend.position = "none") + ylim(c(0,1)) + xlim(c(0,1))
+p.c.var.5 <- replicate.correlation.plot(cut.var.KO.dt, "R1","R5","plate")+ theme(legend.position = "none") + ylim(c(0,1)) + xlim(c(0,1))
+p.c.var.6 <- replicate.correlation.plot(cut.var.KO.dt, "R4","R5","plate")+ theme(legend.position = "none") + ylim(c(0,1)) + xlim(c(0,1))
+g.c.var.KO <- arrangeGrob(p.c.var.4,p.c.var.5,p.c.var.6, nrow = 1)
+
+# Plot MMEJscore gene editing efficiency noise level
+mmej.var.KO.dt <- noise.var.KO.dt %>% 
+  reshape2::dcast(well + plate ~ FinRep, value.var = "mean.mmej") %>%
+  na.omit()
+
+p.m.var.4 <- replicate.correlation.plot(mmej.var.KO.dt, "R1","R4","plate") + theme(legend.position = "none") + ylim(c(0,1)) + xlim(c(0,1))
+p.m.var.5 <- replicate.correlation.plot(mmej.var.KO.dt, "R1","R5","plate")+ theme(legend.position = "none")+ ylim(c(0,1)) + xlim(c(0,1))
+p.m.var.6 <- replicate.correlation.plot(mmej.var.KO.dt, "R4","R5","plate")+ theme(legend.position = "none")+ ylim(c(0,1)) + xlim(c(0,1))
+g.m.var.KO <- arrangeGrob(p.m.var.4,p.m.var.5,p.m.var.6, nrow = 1)
+
+#Combine both plots together with tittles
+t.c.KO <- text_grob("KO average cutting efficiency - Color code: Plate #")
+t.m.KO <- text_grob("KO average MMEJscore - Color code: Plate #")
+grid.arrange(t.c.KO,g.c.var.KO,t.m.KO,g.m.var.KO, ncol = 1, heights = c(0.5,5,0.5,5))
+
+#These plots were already exported to pdf, so I wont run them.
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210608_KO_noise_bis.pdf", height = 5)
+grid.arrange(t.c.KO,g.c.var.KO,t.m.KO,g.m.var.KO, ncol = 1, heights = c(0.5,5,0.5,5))
+#dev.off()
+
+```
+
+## Apply a filter based on gene editing efficiency per well (At this step, I'll filter out the data)
+```{r}
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- noise.var.KO.dt %>%
+  filter(mean.cut < 0.25) %>% 
+  select(well,plate,FinRep)
+
+#final filter
+DDRDSB <- DDRDSB %>% 
+  anti_join(filter.out.wells, by = c("plate", "well", "FinRep"))
+```
+
+## MMEJscore data processing
+MMEJ score processing contains three different steps:
+  1. Selection of WT background breaks (negative controls) and calculation of z-scores based on mean & sd (per barcode and replicate)
+  2. Combination of IPRs by chromatin type as dependent variables
+  3. Combination of replicates as independent variables
+  
+```{r}
+#STEP 1 : Calculate z-scores
+
+# Filter data for only wt DSBs
+wt.filter <- DDRDSB %>% 
+  filter(FinRep %in% c("R1","R4","R5"), sample == "WT") %>% 
+  dplyr::group_by(FinRep)
+
+wt.DDRDSB <- wt.filter %>% 
+  dplyr::group_by(barcode,FinRep) %>% 
+  dplyr::summarise(WT.mean = mean(MMEJscore, na.rm = T), WT.sd = sd(MMEJscore, na.rm = T)) %>% 
+  right_join(wt.filter, by = c("barcode","FinRep"))
+
+#Export data for future plots
+wt.mmej.score <- wt.DDRDSB %>% 
+  dplyr::select(barcode,FinRep,MMEJscore = WT.mean) %>% 
+  distinct() %>% 
+  left_join(new.domains.c5.bis %>% 
+              dplyr::select(barcode,chromatin)) %>% 
+  mutate(gene = "WT")
+
+# Calculate z-score (per Fin Rep)
+z.scores.calc.mmej <- DDRDSB %>% 
+  filter (FinRep %in% c("R1","R4","R5")) %>% 
+  left_join(wt.DDRDSB %>% 
+              dplyr::select(barcode,FinRep, WT.mean,WT.sd), by = c("barcode","FinRep")) %>% 
+  mutate(z.score = (MMEJscore - WT.mean)/WT.sd) %>% distinct()
+
+#STEP 2 : Combine z-scores per chromatin
+
+# Calculate z-score (per Fin REep)
+ch.z.scores.calc.mmej <- z.scores.calc.mmej %>% 
+  left_join(new.domains.c5.bis %>% 
+              dplyr::select(barcode,chromatin), by = c("barcode")) %>%
+  dplyr::group_by(FinRep, well,plate,chromatin,sample, gene) %>%
+  dplyr::mutate(ch.z.score = sum(z.score, na.rm = T)/n()) %>% 
+  distinct()
+
+# STEP 3: Combine three replicates together and calculate p.value conversion of Z score (t population with 1 or two freedom degrees)
+cchz.scores.calc.mmej <- ch.z.scores.calc.mmej %>% 
+  dplyr::select(FinRep, well,plate,chromatin,sample, gene, ch.z.score) %>% 
+  distinct() %>% 
+  dplyr::group_by(well,plate,chromatin,sample, gene) %>% 
+  dplyr::mutate(mmej.SCscore = sum(ch.z.score, na.rm = T)/sqrt(n())) %>% 
+  ungroup() %>% 
+  select(well,plate,chromatin,sample,gene,mmej.SCscore) %>% 
+  distinct() %>% 
+  dplyr::group_by(chromatin) %>% 
+  distinct() %>% 
+  right_join(ch.z.scores.calc.mmej, by = c("well", "plate","sample", "gene","chromatin")) %>% ungroup() 
+
+
+# STEP 4: Remove variables and export data (filter data that doesn't have a p.value - single value)
+chz.scores.mmej <- cchz.scores.calc.mmej %>% 
+  filter(!is.na(gene)) %>% 
+  dplyr::select(gene,barcode,chromatin,mmej.SCscore, mmej.ch.score = ch.z.score,MMEJscore,freqCut,mmej.z.score = z.score,bio.rep,FinRep,plate,well,sample) 
+
+
+#STEP 5: dcast genes per chromatin value and replicate
+chz.mmej.dcast <- reshape2::dcast(chz.scores.mmej %>% 
+                                    ungroup() %>%
+                                    dplyr::select(gene,chromatin,mmej.SCscore) %>%
+                                    distinct(), gene ~ chromatin, value.var = "mmej.SCscore", fun.aggregate = mean)
+
+## The output of this chunk is a melted data table that allows multiple grouping (chz.scores.mmej) and a casted dt that get each average chromatin score for each gene (chz.mmej.dcast)
+
+```
+
+#Correlation plots for each different step in controls and KO (Supplementary figure 2)
+
+##Correlation plots MMEJscore 
+```{r}
+# Correlation at STEP 0
+controls.DDRDSB <- DDRDSB %>% 
+  filter(FinRep %in% c("R1","R4","R5"),sample != "KO") %>%
+  reshape2::dcast(plate + well + barcode + sample ~ FinRep, value.var = "MMEJscore") %>%
+  na.omit()
+
+pa <- replicate.correlation.plot(controls.DDRDSB,"R1","R4","sample") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+pb <- replicate.correlation.plot(controls.DDRDSB,"R1","R5","sample") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+pc <- replicate.correlation.plot(controls.DDRDSB,"R4","R5","sample") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+rcp.l.up <- arrangeGrob(pa,pb,pc, nrow = 1)
+
+# Correlation at STEP 1
+control.z.mmej.screen.full <- z.scores.calc.mmej %>% 
+  filter(sample %in% c("WT","POLQ")) %>%
+  reshape2::dcast(well + plate + sample + barcode ~ FinRep, value.var = "z.score", fun.aggregate = mean) %>%
+  na.omit()
+
+pd <- replicate.correlation.plot(control.z.mmej.screen.full,"R1","R4","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+pe <- replicate.correlation.plot(control.z.mmej.screen.full,"R1","R5","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+pf <- replicate.correlation.plot(control.z.mmej.screen.full,"R4","R5","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+rcp.l.mid <- arrangeGrob(pd,pe,pf, nrow = 1)
+
+# Correlation at STEP 2
+control.chz.mmej.screen.full <- ch.z.scores.calc.mmej %>% 
+  filter(sample %in% c("WT","POLQ")) %>%
+  reshape2::dcast(well + plate + sample + chromatin ~ FinRep, value.var = "ch.z.score", fun.aggregate = mean) %>%
+  na.omit()
+
+pg <- replicate.correlation.plot(control.chz.mmej.screen.full,"R1","R4","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+ph <- replicate.correlation.plot(control.chz.mmej.screen.full,"R1","R5","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+pi <- replicate.correlation.plot(control.chz.mmej.screen.full,"R4","R5","sample") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+rcp.l.down <- arrangeGrob(pg,ph,pi, nrow = 1)
+
+#Density plot after combination
+pj <- ggplot(cchz.scores.calc.mmej %>% dplyr::select(chromatin, well,plate,mmej.SCscore,sample) %>% distinct() %>% filter(sample %in% c("WT","POLQ"))) + geom_jitter(aes(mmej.SCscore,"Controls", group = sample, color = sample)) + theme_bw() + coord_cartesian(expand = T) + theme(axis.title.y = element_blank(), axis.text.y = element_text(angle = 90,hjust = 0.5))
+
+# legends
+p.leg.control <- cowplot::get_legend(replicate.correlation.plot(control.chz.mmej.screen.full,"R4","R5","sample") + theme(legend.position = "bottom"))
+title.main <- text_grob("Controls sample correlation per replicate over steps")
+title.n.up <- text_grob("STEP 0 :  MMEJscore per barcode")
+title.n.mid <- text_grob("STEP 1 : Z scores per barcode")
+title.n.down <- text_grob("STEP 2 : Z scores per chromatin type")
+title.n.final <- text_grob("STEP 3 : Z scores difference combination")
+
+#Final plot saved
+cor.plot.mmej.c <- arrangeGrob(title.n.up,rcp.l.up,title.n.mid,rcp.l.mid,title.n.down,rcp.l.down,title.n.final,pj, ncol = 1, heights = c(0.1,3,0.1,3,0.1,3,0.2,2))
+```
+
+##Control plots
+```{r}
+#CONTROL PLOT: Correlation plot between biological replicates
+control.correlation <- chz.scores.mmej %>% 
+  filter(sample %in% c("POLQ","WT")) %>%
+  select(bio.rep,mmej.ch.score,chromatin,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(chromatin + sample + well + plate ~ FinRep, value.var = "mmej.ch.score") %>%
+  rowwise() %>%
+  mutate(mmej.SCscore = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(control.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.SCscore)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 2") + 
+  ggtitle("Control correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") +
+  facet_wrap(~ chromatin)
+
+#CONTROL PLOT2: KO correlation
+KO.correlation <- chz.scores.mmej %>% 
+  filter(sample == "KO") %>%
+  select(bio.rep,mmej.ch.score,chromatin,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(chromatin + sample + well + plate ~ FinRep, value.var = "mmej.ch.score") %>%
+  rowwise() %>%
+  mutate(mmej.SCscore = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(KO.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.SCscore)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 3") + 
+  ggtitle("KO correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") + 
+  facet_wrap(~ chromatin) 
+```  
+
+
+##Same plot for KO transfected wells
+```{r}
+# Correlation at STEP 0
+KO.DDRDSB <- DDRDSB %>% 
+  filter(FinRep %in% c("R1","R4","R5"),sample == "KO") %>%
+  reshape2::dcast(plate + well + barcode ~ FinRep, value.var = "MMEJscore") %>%
+  na.omit()
+
+#Plot_control correlation between replicates (MMEJscore)
+p1 <- replicate.correlation.plot(KO.DDRDSB,"R1","R4","barcode") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+p2 <- replicate.correlation.plot(KO.DDRDSB,"R1","R5","barcode") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+p3 <- replicate.correlation.plot(KO.DDRDSB,"R4","R5","barcode") + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = "none")
+
+
+#Grid three plots to one panel
+rcp.n.up <- arrangeGrob(p1,p2,p3, nrow = 1)
+
+# Correlation at STEP 1
+KO.z.mmej.screen.full <- z.scores.calc.mmej %>% 
+  filter(FinRep %in% c("R1","R4","R5"),sample == "KO") %>%
+  reshape2::dcast(well + plate + sample + barcode ~ FinRep, value.var = "z.score", fun.aggregate = mean) %>%
+  na.omit()
+
+p4 <- replicate.correlation.plot(KO.z.mmej.screen.full,"R1","R4","barcode") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+p5 <- replicate.correlation.plot(KO.z.mmej.screen.full,"R1","R5","barcode") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+p6 <- replicate.correlation.plot(KO.z.mmej.screen.full,"R4","R5","barcode") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+
+#Grid three plots to one panel
+rcp.n.mid <- arrangeGrob(p4,p5,p6, nrow = 1)
+
+# Correlation at STEP 2
+KO.chz.mmej.screen.full <- ch.z.scores.calc.mmej %>% 
+  filter(sample == "KO") %>%
+  reshape2::dcast(well + plate + sample + chromatin ~ FinRep, value.var = "ch.z.score", fun.aggregate = mean) %>%
+  na.omit()
+
+p7 <- replicate.correlation.plot(KO.chz.mmej.screen.full,"R1","R4","chromatin") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+p8 <- replicate.correlation.plot(KO.chz.mmej.screen.full,"R1","R5","chromatin") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+p9 <- replicate.correlation.plot(KO.chz.mmej.screen.full,"R4","R5","chromatin") + xlim(c(-15,10)) + ylim(c(-15,10)) + theme(legend.position = "none")
+
+#Grid three plots to one panel
+rcp.n.down <- arrangeGrob(p7,p8,p9, nrow = 1)
+
+#Density plot after combination
+p10 <- ggplot(cchz.scores.calc.mmej %>% dplyr::select(chromatin, well,plate,mmej.SCscore,sample) %>% distinct() %>% filter(sample == "KO")) + geom_jitter(aes(mmej.SCscore,chromatin, group = sample, color =chromatin)) + theme_bw() + coord_cartesian(expand = T) + theme(axis.title.y = element_blank())
+
+#Tittles
+title.main <- text_grob("Controls sample correlation per replicate over steps")
+title.n.up <- text_grob("STEP 0 :  MMEJscore per barcode")
+title.n.mid <- text_grob("STEP 1 : Z scores per barcode")
+title.n.down <- text_grob("STEP 2 : Z scores per chromatin type")
+title.n.final <- text_grob("STEP 3 : Z scores difference combination")
+                                     
+# grid arrange
+grid.arrange(title.n.up,rcp.n.up,title.n.mid,rcp.n.mid,title.n.down,rcp.n.down,title.n.final,p10, ncol = 1, heights = c(0.1,2.5,0.1,2.5,0.1,2.5,0.1,2.5))
+
+#This plot was already exported, I will block this lines
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/export/xv20210608_KO_z_scores.pdf", height = 5)
+#grid.arrange(title.n.up,rcp.n.up,title.n.mid,rcp.n.mid,title.n.down,rcp.n.down,title.n.final,p10, ncol = 1, heights = c(0.1,2.5,0.1,2.5,0.1,2.5,0.1,2.5))
+#dev.off()
+
+```
+
+#Other clasification
+I will clasify the data in other categories:
+1. Euchromatin & Heterochromatin
+2. LAD vs. iLADs
+3. Early replication vs. late replication
+4. Triple heterochromatin vs. rest
+
+```{r}
+#I will start arranging the IPR-chromatin datatable
+c5.extra.classification <- new.domains.c5 %>%
+  mutate(eu_het = case_when(euchromatin == 1 | transcription == 1 ~ "euchromatin",
+                   TRUE ~ "heterochromatin"),
+         is_triple = factor(if_else(chromatin == 'late_replicating-LAD-H3K9me2',1,0)))
+
+# Add this data table to the z.score table
+other.chr.z.scores <- z.scores.calc.mmej %>% 
+  left_join(c5.extra.classification %>% 
+              dplyr::select(barcode,LAD,late_replicating,eu_het,is_triple), by = c("barcode"))
+```
+
+# Calculate z-scores LAD vs. iLADs
+```{r}
+# calculate LAD.z.score
+LAD.z.score <- other.chr.z.scores %>% 
+  dplyr::group_by(FinRep, well,plate,LAD,sample, gene) %>%
+  dplyr::mutate(LAD.z.score = sum(z.score, na.rm = T)/n()) %>% 
+  distinct()
+
+# calculate over different replicates
+LAD.final.z.score <- LAD.z.score %>% 
+  dplyr::select(FinRep, well,plate,LAD,sample, gene, LAD.z.score) %>% 
+  distinct() %>% 
+  dplyr::group_by(well,plate,LAD,sample, gene) %>% 
+  dplyr::mutate(mmej.LADscore = sum(LAD.z.score, na.rm = T)/sqrt(n())) %>% 
+  ungroup() %>% 
+  select(well,plate,LAD,sample,gene,mmej.LADscore) %>% 
+  distinct() %>% 
+  dplyr::group_by(LAD) %>% 
+  distinct() %>% 
+  right_join(LAD.z.score, by = c("well", "plate","sample", "gene","LAD")) %>% ungroup() 
+
+#Control plots (reproducibility & differences)
+
+LAD.correlation <- LAD.z.score %>% 
+  filter(sample == "KO") %>%
+  select(bio.rep,LAD.z.score,LAD,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(LAD + sample + well + plate ~ FinRep, value.var = "LAD.z.score") %>%
+  rowwise() %>%
+  mutate(mmej.LAD.score = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(LAD.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.LAD.score)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 3") + 
+  ggtitle("KO correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") + 
+  facet_wrap(~ LAD) 
+
+# 2nd plot differences between LAD and iLAD
+LAD_vs_iLAD <- LAD.final.z.score %>% 
+  filter(sample == "KO") %>%
+  select(mmej.LADscore,LAD,gene) %>%
+  distinct() %>%
+  reshape2::dcast(gene ~ LAD, value.var = "mmej.LADscore", fun.aggregate = mean) %>%
+  mutate(is_ATR = gene == "ATR") %>%
+  arrange(is_ATR) %>%
+  na.omit()
+
+
+lad_vs_ilad_plot <- ggplot(LAD_vs_iLAD) + 
+  geom_point(aes(`0`,`1`, color = gene == "ATR" )) +
+  theme_bw() +
+  xlab("z-score iLAD") + 
+  ylab("z-score LAD") + 
+  ggtitle("LADs and iLADs correlation") +
+  geom_abline(slope = 1, intercept = 0, linetype = 2) +
+  geom_hline(yintercept = c(-2.5,2.5), linetype= 3) +
+  geom_vline(xintercept = c(-2.5,2.5), linetype = 3) + 
+  coord_fixed(xlim = c(-12,35), ylim = c(-12,35))
+
+```
+# Do the same for late replicating vs. early replicating
+```{r}
+#calculate repli.z.score
+repli.z.score <- other.chr.z.scores %>% 
+  dplyr::group_by(FinRep, well,plate,late_replicating,sample, gene) %>%
+  dplyr::mutate(repli.z.score = sum(z.score, na.rm = T)/n()) %>% 
+  distinct()
+
+# calculate over different replicates
+repli.final.z.score <- repli.z.score %>% 
+  dplyr::select(FinRep, well,plate,late_replicating,sample, gene, repli.z.score) %>% 
+  distinct() %>% 
+  dplyr::group_by(well,plate,late_replicating,sample, gene) %>% 
+  dplyr::mutate(mmej.repliscore = sum(repli.z.score, na.rm = T)/sqrt(n())) %>% 
+  ungroup() %>% 
+  select(well,plate,late_replicating,sample,gene,mmej.repliscore) %>% 
+  distinct() %>% 
+  dplyr::group_by(late_replicating) %>% 
+  distinct() %>% 
+  right_join(repli.z.score, by = c("well", "plate","sample", "gene","late_replicating")) %>% ungroup() 
+
+#Control plots (reproducibility & differences)
+
+repli.correlation <- repli.z.score %>% 
+  filter(sample == "KO") %>%
+  select(bio.rep,repli.z.score,late_replicating,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(late_replicating + sample + well + plate ~ FinRep, value.var = "repli.z.score") %>%
+  rowwise() %>%
+  mutate(mmej.repliscore = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(repli.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.repliscore)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 3") + 
+  ggtitle("KO correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") + 
+  facet_wrap(~ late_replicating) 
+
+# 2nd plot differences between LAD and iLAD
+late_vs_early <- repli.final.z.score %>% 
+  filter(sample == "KO") %>%
+  select(mmej.repliscore,late_replicating,gene) %>%
+  distinct() %>%
+  reshape2::dcast(gene ~ late_replicating, value.var = "mmej.repliscore", fun.aggregate = mean) %>%
+  mutate(is_ATR = gene == "ATR") %>%
+  arrange(is_ATR) %>%
+  na.omit()
+
+
+late_vs_early.plot <- ggplot(late_vs_early) + 
+  geom_point(aes(`0`,`1`, color = is_ATR)) +
+  theme_bw() +
+  xlab("z-score early replicating") + 
+  ylab("z-score late replicating") + 
+  ggtitle("Early vs. late replication") + 
+  geom_abline(slope = 1, intercept = 0, linetype = 2) +
+  geom_hline(yintercept = c(-2.5,2.5), linetype= 3) +
+  geom_vline(xintercept = c(-2.5,2.5), linetype = 3) +
+  coord_fixed(xlim = c(-12,35), ylim = c(-12,35))
+
+```
+# Now with euchromatin vs. heterochromatin
+
+```{r}
+#calculate repli.z.score
+eu.z.score <- other.chr.z.scores %>% 
+  dplyr::group_by(FinRep, well,plate,eu_het,sample, gene) %>%
+  dplyr::mutate(eu.z.score = sum(z.score, na.rm = T)/n()) %>% 
+  distinct()
+
+# calculate over different replicates
+eu.final.z.score <- eu.z.score %>% 
+  dplyr::select(FinRep, well,plate,late_replicating,sample, gene, eu.z.score) %>% 
+  distinct() %>% 
+  dplyr::group_by(well,plate,eu_het,sample, gene) %>% 
+  dplyr::mutate(mmej.euscore = sum(eu.z.score, na.rm = T)/sqrt(n())) %>% 
+  ungroup() %>% 
+  select(well,plate,eu_het,sample,gene,mmej.euscore) %>% 
+  distinct() %>% 
+  dplyr::group_by(eu_het) %>% 
+  distinct() %>% 
+  right_join(eu.z.score, by = c("well", "plate","sample", "gene","eu_het")) %>% ungroup() 
+
+#Control plots (reproducibility & differences)
+
+eu.correlation <- eu.z.score %>% 
+  filter(sample == "KO") %>%
+  select(bio.rep,eu.z.score,eu_het,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(eu_het + sample + well + plate ~ FinRep, value.var = "eu.z.score") %>%
+  rowwise() %>%
+  mutate(mmej.euscore = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(eu.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.euscore)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 3") + 
+  ggtitle("KO correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") + 
+  facet_wrap(~ eu_het) 
+
+# 2nd plot differences between LAD and iLAD
+eu_vs_het <- eu.final.z.score %>% 
+  filter(sample == "KO") %>%
+  select(mmej.euscore,eu_het,gene) %>%
+  distinct() %>%
+  reshape2::dcast(gene ~ eu_het, value.var = "mmej.euscore", fun.aggregate = mean) %>%
+  mutate(is_ATR = gene == "ATR" ) %>%
+  arrange(is_ATR) %>%
+  na.omit()
+
+
+eu_vs_het.plot <- ggplot(eu_vs_het) + 
+  geom_point(aes(euchromatin,heterochromatin,color = is_ATR)) +
+  theme_bw() +
+  ggtitle("Euchromatin vs. heterochromatin") +
+  xlab("z-score euchromatin") + 
+  ylab("z-score heterochromatin") +
+  geom_abline(slope = 1, intercept = 0, linetype = 2) +
+  geom_hline(yintercept = c(-2.5,2.5), linetype= 3) +
+  geom_vline(xintercept = c(-2.5,2.5), linetype = 3) +
+  coord_fixed(xlim = c(-15,45), ylim = c(-15,45))
+
+```
+
+# I will add a 4th correlation to this: Triple heterochromatin vs. rest
+```{r}
+#calculate repli.z.score
+th.z.score <- other.chr.z.scores %>% 
+  dplyr::group_by(FinRep, well,plate,is_triple,sample, gene) %>%
+  dplyr::mutate(th.z.score = sum(z.score, na.rm = T)/n()) %>% 
+  distinct()
+
+# calculate over different replicates
+th.final.z.score <- th.z.score %>% 
+  dplyr::select(FinRep, well,plate,is_triple,sample, gene, th.z.score) %>% 
+  distinct() %>% 
+  dplyr::group_by(well,plate,is_triple,sample, gene) %>% 
+  dplyr::mutate(mmej.thscore = sum(th.z.score, na.rm = T)/sqrt(n())) %>% 
+  ungroup() %>% 
+  select(well,plate,is_triple,sample,gene,mmej.thscore) %>% 
+  distinct() %>% 
+  dplyr::group_by(is_triple) %>% 
+  distinct() %>% 
+  right_join(th.z.score, by = c("well", "plate","sample", "gene","is_triple")) %>% ungroup() 
+
+#Control plots (reproducibility & differences)
+
+th.correlation <- th.z.score %>% 
+  filter(sample == "KO") %>%
+  select(bio.rep,th.z.score,is_triple,sample,well,plate,FinRep) %>%
+  distinct() %>%
+  reshape2::dcast(is_triple + sample + well + plate ~ FinRep, value.var = "th.z.score") %>%
+  rowwise() %>%
+  mutate(mmej.thscore = (R1 + R4 + R5)/sqrt(3)) %>%
+  na.omit()
+
+ggplot(th.correlation) + 
+  geom_point(aes(R1,R5, color = mmej.thscore)) +
+  coord_fixed(xlim = c(-12,25), ylim = c(-12,25)) +
+  theme_bw() +
+  xlab("z-score replicate 1") + 
+  ylab("z-score replicate 3") + 
+  ggtitle("KO correlation between two biological replicates") +
+  scale_color_gradient2(mid = "grey90") + 
+  facet_wrap(~ is_triple) 
+
+# 2nd plot differences between LAD and iLAD
+triple.cor <- th.final.z.score %>% 
+  filter(sample == "KO") %>%
+  select(mmej.thscore,is_triple,gene) %>%
+  distinct() %>%
+  reshape2::dcast(gene ~ is_triple, value.var = "mmej.thscore", fun.aggregate = mean) %>%
+  mutate(is_ATR = gene == "ATR" ) %>%
+  arrange(is_ATR) %>%
+  na.omit()
+
+
+tripl.cor.plot <- ggplot(triple.cor) + 
+  geom_point(aes(`0`,`1`,color = is_ATR)) +
+  theme_bw() +
+  ggtitle("Triple heterochromatin vs. others") +
+  xlab("z-score Others") + 
+  ylab("z-score Triple heterochromatin") +
+  geom_abline(slope = 1, intercept = 0, linetype = 2) +
+  geom_hline(yintercept = c(-2.5,2.5), linetype= 3) +
+  geom_vline(xintercept = c(-2.5,2.5), linetype = 3) +
+  coord_fixed(xlim = c(-10,30), ylim = c(-10,30))
+
+```
+
+# Plot all three plots
+```{r}
+#Plot all three correlations
+lad_vs_ilad_plot
+late_vs_early.plot
+eu_vs_het.plot
+tripl.cor.plot
+
+#Export to pdf
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/export/xv20210610_correlation_ATR.pdf")
+lad_vs_ilad_plot
+late_vs_early.plot
+eu_vs_het.plot
+tripl.cor.plot
+dev.off()
+```
+
+###Conclusions: This looks nice and process cleans data quite nicely. The outcome of this initial step is a dataframe with multiple categories and a z-score for each of them. We can answer several question with this dataset:
+1- Which genes lead to differential effects in chromatin?
+2- Is there any difference between LAD and iLADs when it comes to repair?
+3- Which genes have a global effect on DDR repair?
+
+After this quality control plots this data tables are fixed and I will export this data sets.
+
+
+```{r}
+# Export both data tables: full detail and dcast data table
+
+#Export initial data table with ratio
+saveRDS(DDRDSB %>% filter(FinRep %in% c("R1","R4","R5") & !gene %in% c("DMSO","LBR_ctrl")), "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20220110_screen_ddr_all_computations.rds")
+
+#All data with all the relevant info by chromatin type
+saveRDS(chz.scores.mmej, "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+
+# dcast data only by chromatin type
+saveRDS(chz.mmej.dcast %>%
+          filter(gene != "LBR_ctrl"), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+
+# All data per chromatin type
+saveRDS(cchz.scores.calc.mmej %>% 
+          filter(sample %in% c("WT","POLQ")) %>% 
+          dplyr::select(gene = sample,barcode,chromatin,mmej.SCscore, mmej.ch.score = ch.z.score,MMEJscore,freqCut,mmej.z.score = z.score,bio.rep,FinRep,plate,well,sample), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+
+#Dcast version of all the data for the different correlations by chromatin features
+saveRDS(LAD_vs_iLAD, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210610_lad_vs_ilad.rds")
+saveRDS(eu_vs_het, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210610_euchr_vs_heteroch.rds")
+saveRDS(late_vs_early, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210610_late_vs_early.rds")
+saveRDS(triple.cor, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210610_triple_het_corr.rds")
+
+
+```

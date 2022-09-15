@@ -1,0 +1,4 @@
+xv20220811: Note about metadata files. 
+The last plates in each screening batch was always problematic, the amount of library mix usually would run low and the pipetting would not be as efficient as with the first two plates in the screen. Initially we processed the third round plates in every batch, just in case they were needed. But, eventually we discarded them because of the problems we usually had during the processing. This is the reason there are two different meta_data files. 
+xv20210525b_meta_file_ddr_screen.tsv = The meta data file used initially
+xv20220811_final_meta_data_file.tsv = Meta file with samples used in the manuscript

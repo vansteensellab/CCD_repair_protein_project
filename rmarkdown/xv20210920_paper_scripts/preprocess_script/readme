@@ -1,0 +1,21 @@
+#Date: 2022 Aug 19
+#Author: Xabier Vergara
+
+High-throughput sequencing data was pre-processed with two different pipelines depending on the type of data:
+  Sequencing based repair pathway assay data deposited in SRA - Indel scoring pipeline (Step 2 in analysis diagram) {Schep, 2022, 35173762}
+  TCGA HNSCC tumour data analysis - BRASS pipeline with modification (by Mathijs Sanders).
+
+After preprocessing, all the data for this manuscript is processed in these three scripts:
+  1: xvDT_screen_data_processing_CCD.Rmd (screen data)
+  2: xvDT_repair_inhibitor_CCD_calculation_lm.Rm (validation inhibitors)
+  3: xvDT_FA_SCC_mutations.Rmd (TCGA tumor analysis)
+  
+DT = datetag, different version of the same file will be found if this scripts are rerun.
+This datetag fits with the day, I run the script and created that version
+
+The data tables needed to create the figures were exported into data/processed_data in .rds format
+The intermediate data tables were exported into:
+  "data/processed_data/CCD_analysis" in the case of screening and 
+  "data/processed_data/CCD_inhibitors" in the case of the validation inhibitors experiment.
+
+    
