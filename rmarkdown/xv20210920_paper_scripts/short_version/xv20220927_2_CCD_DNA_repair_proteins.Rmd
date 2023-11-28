@@ -1,0 +1,217 @@
+---
+title: "xv20220826_2_CCD_model"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to generate figure #2 in the paper.
+
+Fig. 2. CCDs of 89 DNA repair proteins. (A) Illustration of M- and N-synergy concepts. For chromatin feature – protein combinations with N-synergy (I in green) log2MMEJ:NHEJ scores increase as the chromatin feature levels increase. For combinations with M-synergy (II in brown) log2MMEJ:NHEJ scores decrease as the chromatin feature levels increase. For combinations with no synergy (III in black) log2MMEJ:NHEJ scores do not correlate with the individual chromatin features. (B) M-synergy example: linear fit (brown line) of RAD50 log2MMEJ:NHEJ scores with LMNB1 interaction. (C) No syn-ergy example: linear fit (black line) of MDC1 log2MMEJ:NHEJ scores with H2AFZ. (D) Heatmap of syn-ergy scores of all 89 proteins with significant CCDs. Proteins (columns) mentioned in the text are high-lighted in bold. Chromatin features (rows) are colored and ordered as in Fig. 1C. (E) Comparison of CCD effect sizes to global effect sizes of the proteins in (D). Global effect sizes are absolute values of global ∆log2MMEJ:NHEJ scores as calculated in Fig. 1B. CCD effect sizes are the predicted genome-wide dynamic range of ∆log2MMEJ:NHEJ values for each protein KO, as a function of variation in chromatin context  (see Methods). 
+
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    readRDS(correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  readRDS(correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# libraries:
+library(tidyverse)
+library(dendextend)
+library(ggdendro)
+library(grDevices)
+library(pheatmap)
+library(reshape2)
+library(tibble)
+library(ggpubr)
+library(scales)
+library(ggrepel)
+library(ggdendro)
+```
+
+# Import data tables
+```{r import , warning=FALSE, message=FALSE}
+#setwd
+setwd(in.dir)
+# Individual data point (intermediate step)
+step2.epistasis <- readRDS_proof("data/processed_data/CCD_analysis","log2_MMEJNHEJ_differentials_chromatin_KO")
+
+#DNA repair CCDs
+table_S3_CCDs  <- readRDS_proof("data/processed_data","Table_S7")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+```
+
+# Figure 2A: Mock examples
+(A) Illustration of M- and N-synergy concepts. For chromatin feature – protein combinations with N-synergy (I in green) log2MMEJ:NHEJ scores increase as the chromatin feature levels increase. For combinations with M-synergy (II in brown) log2MMEJ:NHEJ scores decrease as the chromatin feature levels increase. For combinations with no synergy (III in black) log2MMEJ:NHEJ scores do not correlate with the individual chromatin features.
+
+```{r Fig_2_A , warning=FALSE, message=FALSE}
+#Create mock examples
+mock.slopes <- tibble(z_score = seq(-3,3,0.25), A = z_score*0 + 0.6,B = z_score*0.1 +0.6, C = z_score*-0.1 - 0.6) %>% reshape2::melt(id.vars = "z_score")
+
+#Plot mock examples
+ggplot(mock.slopes, aes(z_score,value,color = variable)) + theme_bw() + 
+  geom_smooth() +
+  geom_vline(xintercept = 0, linetype = 2) + 
+  geom_hline(yintercept = 0, linetype = 2) + 
+  ylab("log2(fold change NHEJ:MMEJ)") + xlab("Feature signal (z-score)") + 
+  theme(legend.position = "none") + coord_cartesian(ylim= c(-1.5,1.5)) + scale_color_manual(values = c("black","#01665e","#8c510a"))
+```
+
+# Figure 2B:
+(B) M-synergy example: linear fit (brown line) of RAD50 log2MMEJ:NHEJ scores with LMNB1 interaction.
+  
+```{r Fig_2_B, warning=FALSE, message=FALSE}
+# Plot RAD50 with LMNB1
+ggplot(step2.epistasis %>% 
+         dplyr::filter(gene %in% c("RAD50")),
+       aes(LMNB1,mean.log2foldchange)) + 
+  geom_point() +
+  geom_smooth(aes(color = -0.114),method = "lm") +
+  stat_cor(label.x = -1.5, label.y = -0.7) +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
+```
+
+#2C: No interaction
+C) No syn-ergy example: linear fit (black line) of MDC1 log2MMEJ:NHEJ scores with H2AFZ. 
+```{r Fig_2_C , warning=FALSE, message=FALSE}
+# Plot MDC1 and H2AFZ
+ggplot(step2.epistasis %>% 
+         filter(gene == "MDC1"),
+       aes(H2AFZ,mean.log2foldchange)) + 
+  geom_point(color = "black") +
+  geom_smooth(method = "lm", color = "black") +
+  scale_color_gradient2(low = "#8c510a",mid = "#f5f5f5", high = "#01665e", limits = c(-0.15,0.15)) +
+  stat_cor()+
+  theme_bw() + ylab("log2(MDC1 MMEJ:NHEJ balance)") 
+```
+
+# Figure 2D: Matrix for hits
+(D) Heatmap of syn-ergy scores of all 89 proteins with significant CCDs. Proteins (columns) mentioned in the text are high-lighted in bold. Chromatin features (rows) are colored and ordered as in Fig. 1C.
+```{r Fig_2_D, warning=FALSE, message=FALSE}
+# Separate data based on the significant IPRs that they have (based on z-score)
+significant_proteins <- table_S3_CCDs %>% filter(CCD_model_p_adj < 0.05)
+
+# dcaast with selected
+slope.prot.features.dcast.hits <- significant_proteins %>% reshape2::dcast(gene ~ chrom_feature, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+signif_prots_heatmap <- pheatmap(t(slope.prot.features.dcast.hits), silent = T, clustering_method = "ward.D", cluster_rows = T, cutree_cols = 4)
+signif_prots.gene.order <- rev(rownames(slope.prot.features.dcast.hits[signif_prots_heatmap$tree_col[["order"]],]))
+
+# This are the effects
+
+# heatmap: All heatmaps together
+ggplot(significant_proteins) + 
+  geom_tile(aes(fct_relevel(gene,signif_prots.gene.order),fct_relevel(chrom_feature, heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+# Dendrogram
+ggdendrogram(rev(signif_prots_heatmap$tree_col))
+```
+#Fig. 2E: Cartoon explaining CCD and global effect estimation
+
+
+#Fig. 2F: Global to CCD effect comparison
+
+(E) Comparison of CCD effect sizes to global effect sizes of the proteins in (D). Global effect sizes are absolute values of global ∆log2MMEJ:NHEJ scores as calculated in Fig. 1B. CCD effect sizes are the predicted genome-wide dynamic range of ∆log2MMEJ:NHEJ values for each protein KO, as a function of variation in chromatin context  (see Methods). 
+
+
+#Preparatory chunk: Compare CCDs vs. global effect
+```{r prep_fig2F, warning=FALSE, message=FALSE}
+##Filter max estimated FC
+max_estimated_FC_CCD_gene <- table_S3_CCDs %>% dplyr::group_by(gene) %>% dplyr::summarise(max_CCD_estim_diff = max(abs(CCD_estim_diff)))
+
+## Filter max(CCDs)
+max_estimated_CCD_FC <- table_S3_CCDs %>% dplyr::select(gene,DR_effect_type,global_diff, CCD_model_p_adj, global_p_adj) %>% distinct() %>% left_join(max_estimated_FC_CCD_gene)
+```
+
+```{r Fig_2_F , warning=FALSE, message=FALSE}
+#Highlight proteins
+highlight_prots <- c("RAD50","FANCM","BOD1L1", "ATM")
+
+#Plot
+ggplot(max_estimated_CCD_FC %>% filter(DR_effect_type %in% c("CCD","both"))) + 
+  geom_point(aes(max_CCD_estim_diff, abs(global_diff), color = DR_effect_type)) +
+  geom_text_repel(data = subset(max_estimated_CCD_FC, gene %in% highlight_prots), aes(max_CCD_estim_diff, abs(global_diff), label = gene), box.padding = 2.5) +
+  scale_color_manual(values = c("#CBCE91","#EA738D")) + theme(legend.position = "top") + geom_abline(linetype = 2) + labs(color = "Favored pathway") + theme_bw() + coord_fixed(xlim = c(0,2), ylim = c(0,2))
+```
+
+
+
+
+#Output chunk
+```{r, eval = FALSE, echo = FALSE}
+setwd(in.dir)
+#Extract 4 clusters
+cluster_data <- cutree(signif_prots_heatmap$tree_col, k=4) 
+cluster_tibble <- tibble(gene = names(cluster_data), cluster = cluster_data) %>% mutate(cluster_name = case_when(cluster == "1" ~ "M-synergy_2", cluster == "2" ~ "M-synergy_1", cluster == "3" ~ "N-synergy", cluster == "4" ~"M-synergy_3"))
+
+#cluster summary
+cluster_summary <- cluster_tibble %>% dplyr::group_by(cluster_name) %>% dplyr::summarise(c = n())
+
+#Export cluster data to use it in file 4
+saveRDS_proof(cluster_tibble, "data/processed_data/xv20220927_DR_CCD_cluster_data.rds")
+```
