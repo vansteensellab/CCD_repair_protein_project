@@ -11,3 +11,6 @@ A- rmarkdown files: This contain all the scripts used for the paper and are clas
   2- short_version: Scripts needed to make figures in the paper, both main and supplementary figures (see readme in directory)
   
 B- data files: Intermediate files needed for the preprocessing and final figures. This includes sequencing logs, intermediate processed data and supplementary tables. This folder does not include raw sequencing data.
+
+Update date: 28th November 2023
+In this update, I will include the updated scripts for the revised version of the manuscript.
