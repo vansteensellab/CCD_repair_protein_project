@@ -80,9 +80,10 @@ library(ggbeeswarm)
 ```{r, warning=F, message=F}
 setwd(in.dir)
 
+
 #Function to import all the data
 #List of all driver mutations
-driver_mutations_indels <- list.files(path = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20231017_indel_data_mathijs_new/BOOTSTRAP", full.names = T)
+driver_mutations_indels <- list.files(path = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20231017_indel_data_mathijs_new/BOOTSTRAP", full.names = T)[c(1:4,6,7)]
 
 control_indel_file_names <- map_dfr(driver_mutations_indels, function(y) {
   control_directory <- paste0(y,"/controls_indel")
@@ -123,9 +124,8 @@ mutant_indel_data <- map_dfr(indel_file_names$file_names, function(x) {
 
 #Load data from manuscript
 #Tumor analysis
+setwd("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/")
 indel_data_tumors <- readRDS_proof("data/processed_data/","SCC_indel_MMEJ_NHEJ")
-
-
 ```
 
 #Load tumor info data
@@ -157,6 +157,9 @@ filtered_indels_samples <- mutant_indel_data %>%
   bind_rows(control_indel_data) %>%
   filter(!TYPE %in% multiple_drivers_data$TYPE) %>%
   filter(!TYPE %in% controls_with_driver_mutations$TYPE)
+
+#Export raw data (counts)
+openxlsx::write.xlsx(filtered_indels_samples, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/supplementary_tables/xv20231128_TableS9_indel_counts_per_tumor_data.xlsx")
 ```
 
 
@@ -199,7 +202,9 @@ total_changes_indels_project <- mutant_total_indels_project %>% bind_rows(contro
 #Bootstrap per tumor-type (I did it per project)
 ```{r, message=F, warning=F}
 #Create simplified table
-simplified_table_filter <- simplified_table
+simplified_table_filter <- filtered_indels_samples %>%
+  select(driver, project) %>%
+  distinct()
 
 #bootstrap_general_tumors
 boot_matched_distribution <- map2_dfr(simplified_table_filter$driver,simplified_table_filter$project, function(x,y) {
@@ -225,6 +230,9 @@ boot_matched_distribution <- map2_dfr(simplified_table_filter$driver,simplified_
                            bias = LAD_bal - iLAD_bal)
         })
 })
+
+#Save bootstrap values
+saveRDS(boot_matched_distribution, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20231128_bootstrap_counts_PCAWG.rds")
 
 #calculate mean and sd
 null_distriution <- boot_matched_distribution %>%
@@ -259,16 +267,16 @@ combinations_to_plot <- mean_project_value %>%
 ```{r, fig.width=6, fig.height=3, message = F, warning = F}
 balance_chromatin_plot_tumors <- total_changes_indels_project  %>%
   right_join(combinations_to_plot) %>%
-  filter(!driver %in% c("SETD2","TRRAP")) %>%
+  filter(!driver %in% c("SETD2")) %>%
   mutate(driver_s = paste0(driver, sample)) %>%
   select(driver_s, LAD_bal, iLAD_bal) %>% 
   reshape2::melt()
 
 #driver relevel
-driver_relevel <- c("ATMcontrol","ATMmutant","BRCA2control","BRCA2mutant","EGFRcontrol","EGFRmutant","MEN1control","MEN1mutant","ATRXcontrol","ATRXmutant","BRCA1control","BRCA1mutant")
+driver_relevel <- c("ATMcontrol","ATMmutant","BRCA2control","BRCA2mutant","MEN1control","MEN1mutant","ATRXcontrol","ATRXmutant","BRCA1control","BRCA1mutant")
 
 #Trend discordant: BRCA2 example
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_6_Tumor_analysis/xv20231027b_Fig6AC_tumor_analysis_balance.pdf", width = 6, height = 3)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_6_Tumor_analysis/xv20231027b_Fig6AC_tumor_analysis_balance.pdf", width = 6, height = 3)
 ggplot(balance_chromatin_plot_tumors,aes(fct_relevel(variable, c("iLAD_bal","LAD_bal")),value, fill = variable)) +
   stat_summary(geom = "col", fun.y = "median") +
   geom_quasirandom() +
@@ -291,6 +299,9 @@ distribution_tumor_indel_pathway <- indel_data_tumors %>%
                                 cLAD == 1 ~ "cLAD")) %>%
   dplyr::group_by(tumor_type, tumor_id, LAD_status, total_mutation, CLASS) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
   reshape2::dcast(tumor_type + tumor_id ~ CLASS+LAD_status, value.var = "mut_count", fill = 0)
+
+#Export previously reported data
+openxlsx::write.xlsx(distribution_tumor_indel_pathway, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/supplementary_tables/xv20231129_TableS9b_HNSCC_indel_data.xlsx")
 
 #Calculate mean values
 mean_balances_bias <- distribution_tumor_indel_pathway %>%

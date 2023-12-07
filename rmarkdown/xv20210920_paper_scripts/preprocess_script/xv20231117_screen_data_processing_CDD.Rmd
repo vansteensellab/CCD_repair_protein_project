@@ -345,7 +345,8 @@ test.mean.diff.balance <- log2.distance.ratio %>%
 #Prepare data frame for export
 mean.diff.balance.export <- test.mean.diff.balance %>%
   dplyr::select(gene,p,p.adj,mean.balance.diff = mean.fc) %>% 
-  left_join(log2.distance.ratio %>% select(gene,well,plate))
+  left_join(log2.distance.ratio %>% dplyr::select(gene,well,plate)) %>%
+  distinct()
 
 #Significant MMEJ
 mean_significant_MMEJ <- filter(mean.diff.balance.export, p.adj < 0.001 & mean.balance.diff < 0) %>% nrow() #149 proteins favor MMEJ
@@ -637,7 +638,7 @@ export_screen_result_TS7 <- estimated_FC_CCD %>%
                                    T ~ "none"),
          cell_line = "K562_clone5") %>%
   left_join(synergy_per_gene %>% 
-              select(gene, CCD_effect))
+              dplyr::select(gene, CCD_effect))
 
 export_screen_result_TS7[is.na(export_screen_result_TS7$DR_effect_type), "DR_effect_type"] <- "none"
 export_screen_result_TS7[is.na(export_screen_result_TS7$CCD_effect), "CCD_effect"] <- "none"
@@ -667,7 +668,7 @@ saveRDS_proof(DDR.KO.CCD.dt, file = "data/processed_data/CCD_analysis/xv20220819
 saveRDS_proof(mean.diff.balance.export, file = "data/processed_data/CCD_analysis/xv20220819_global_diff_MMEJNHEJ.rds")
 
 #Save final results as rds
-saveRDS_proof(export_screen_result_TS7, file = "data/processed_data/xv20231117_Table_S7_DR_screen_results.rds")
+saveRDS_proof(export_screen_result_TS7, file = "data/processed_data/xv20231130_Table_S7_DR_screen_results.rds")
 
 ```
 
@@ -683,6 +684,6 @@ setwd(in.dir)
 #write.xlsx(export_screen_result_TS6, file = "data/supplementary_tables/xv20220819_Table_S6_clone_5_chromatin_features.xlsx")
 
 #Table S7: Chromatin context dependent effects of proteins in the screen.
-write.xlsx(export_screen_result_TS7, file = "data/supplementary_tables/xv20231117_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx", keepNA = T)
+openxlsx::write.xlsx(export_screen_result_TS7, file = "data/supplementary_tables/xv20231130_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx", keepNA = T)
 
 ```

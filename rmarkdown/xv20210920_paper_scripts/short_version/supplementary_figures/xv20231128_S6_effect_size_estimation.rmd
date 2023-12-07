@@ -1,0 +1,216 @@
+---
+title: "xv20220712_S5_effect_size_estimation"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S5 in the short version of the paper.
+
+Fig. S5: Estimation of genome-wide dynamic ranges of chromatin features. A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
+
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+library(ggbeeswarm)
+```
+
+# Import data tables
+```{r import, warning=FALSE,message=FALSE}
+setwd(in.dir)
+
+print("For this script the following data was inputed:")
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","cl20201026_ChIP_zscore_selection")
+
+#Import TIF ratio measurements per replicate
+TIF.ddr.screen.all.sel <- readRDS_proof( "data/processed_data/CCD_analysis","raw_data_TIF")
+
+#Import mean value measurements
+global_diff_TIF <- readRDS_proof( "data/processed_data/CCD_analysis","diff_TIF")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+
+# Individual data point (intermediate step)
+step2.epistasis <- readRDS_proof("data/processed_data/CCD_analysis","log2_MMEJNHEJ_differentials_chromatin_KO")
+
+#DNA repair CCDs
+table_S3_CCDs  <- readRDS_proof("data/processed_data","Table_S7")
+
+
+```
+
+#Supplementary Figures
+
+#Figure S6A:
+
+A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
+```{r Fig_S6_A}
+chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
+
+##95% CI for each feature
+CI99_chromatin_features <- chromatin_features_plot %>% dplyr::group_by(variable) %>% dplyr::summarise(CI0.5 = quantile(value, 0.005), CI99.5 = quantile(value, 0.995), range = CI99.5 - CI0.5, mean = mean(value))
+
+#Plot S7A:  Chromatin ranges
+ggplot(chromatin_features_plot) + 
+  geom_violin(aes(fct_relevel(variable, heatmap.chromatin.order), value), fill = "grey70", color = "black") + theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ 
+  geom_quasirandom(data = chromatin_features_plot %>% filter(ID %in% clone5_bc_cluster), aes(fct_relevel(variable, heatmap.chromatin.order), value), color = "red", size = 1)  + 
+  geom_errorbar(data = CI99_chromatin_features, aes(x = variable,ymin = CI0.5, ymax = CI99.5), color = "black", width = 0.5) 
+```
+
+#Calculate global effect RAD50
+```{r, fig.width=2,fig.height=3}
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example.pdf",width = 2, height = 3)
+ggplot(step2.epistasis %>% 
+         dplyr::filter(gene %in% c("RAD50")),
+       aes(gene, mean.log2foldchange)) + 
+  geom_quasirandom() +
+  stat_summary(geom = "errorbar",fun.min = mean, fun = mean, fun.max = mean, color = "red", size = 1, width = 0.5) +
+  theme_bw() + ylab("∆log2MMEJ:NHEJ RAD50 KO") + theme(legend.position = "none") +
+  theme(panel.grid = element_blank()) + ylim(c(-1.5,0.25)) +
+  geom_hline(yintercept = 0, linetype =2 )
+dev.off()
+```
+
+#correlation
+```{r, fig.width=4,fig.height=3}
+
+# Plot RAD50 with LMNB1
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example_CCD_delta.pdf",width = 4, height = 3)
+ggplot() + 
+  geom_segment(aes(x = -2, xend = 2.7,y = -1.0064 - 0.1143*2.7, yend = -1.0064 - 0.1143*2.7), color = "grey60", linetype = 3) +
+  geom_segment(aes(x = -2, xend = -1.64,y = -1.0064 - 0.1143*-1.64, yend = -1.0064 - 0.1143*-1.64), color = "grey60", linetype = 3) +
+  geom_segment(aes(x = -2, xend = -2,y = -1.0064 - 0.1143*-1.64, yend = -1.0064 - 0.1143*2.7), color = "red", linetype = 2) +
+  geom_segment(aes(x = -1.64, xend = -1.64, y = -1.0064 - 0.1143*-1.64+0.05, yend = -1.0064 - 0.1143*-1.64-0.05),color = "#8c510a", size = 1.5)  +
+  geom_segment(aes(x = 2.7, xend = 2.7, y = -1.0064 - 0.1143*2.7+0.05, yend = -1.0064 - 0.1143*2.7-0.05),color = "#8c510a", size = 1.5) +
+  geom_segment(aes(x = -1.64, xend = 2.7,y = -1.0064 - 0.1143*-1.64, yend = -1.0064 - 0.1143*2.7),color = "#8c510a", linetype = 2) +
+
+  geom_smooth(data = step2.epistasis %>% 
+         dplyr::filter(gene %in% c("RAD50")),
+       aes(LMNB1,mean.log2foldchange),
+       method = "lm", se = F, color = "#8c510a", size = 1.5) +
+  geom_point(data = step2.epistasis %>% 
+         dplyr::filter(gene %in% c("RAD50")),
+       aes(LMNB1,mean.log2foldchange)) +
+  theme_bw() + ylab("∆log2MMEJ:NHEJ RAD50 KO") + theme(legend.position = "none") +
+  theme(panel.grid = element_blank()) + ylim(c(-1.5,0.25)) + xlim(c(-2,3)) + geom_hline(yintercept = 0, linetype =2)
+dev.off()
+
+```
+
+#Column plot with both global and CCD ∆log2
+```{r, fig.width= 2, fig.height=3}
+RAD50_example <- tibble(effect = c("CCD","Global"), log2MMEJNHEJ = c(0.4954,1.025))
+
+#Plot
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_abs_estimation.pdf",width = 2, height = 3)
+ggplot(RAD50_example) +
+  geom_col(aes(effect, log2MMEJNHEJ)) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_blank()) + 
+  ylab("abs(∆log2MMEJ:NHEJ)")
+dev.off()
+
+```
+
+#Fig. S6EF: Global to CCD effect comparison
+
+(E) Comparison of CCD effect sizes to global effect sizes of the proteins in (D). Global effect sizes are absolute values of global ∆log2MMEJ:NHEJ scores as calculated in Fig. 1B. CCD effect sizes are the predicted genome-wide dynamic range of ∆log2MMEJ:NHEJ values for each protein KO, as a function of variation in chromatin context  (see Methods). 
+
+
+#Preparatory chunk: Compare CCDs vs. global effect
+```{r prep_fig2F, warning=FALSE, message=FALSE}
+##Filter max estimated FC
+max_estimated_FC_CCD_gene <- table_S3_CCDs %>% dplyr::group_by(gene) %>% dplyr::summarise(max_CCD_estim_diff = max(abs(CCD_estim_diff)))
+
+## Filter max(CCDs)
+max_estimated_CCD_FC <- table_S3_CCDs %>% dplyr::select(gene,DR_effect_type,global_diff, CCD_model_p_adj, global_p_adj) %>% distinct() %>% left_join(max_estimated_FC_CCD_gene)
+```
+
+
+```{r Fig_2_F , warning=FALSE, message=FALSE}
+#Highlight proteins
+highlight_prots <- c("RAD50","FANCM","BOD1L1", "ATM")
+
+#Plot
+ggplot(max_estimated_CCD_FC %>% filter(DR_effect_type %in% c("CCD","both"))) + 
+  geom_point(aes(max_CCD_estim_diff, abs(global_diff), color = DR_effect_type)) +
+  geom_text_repel(data = subset(max_estimated_CCD_FC, gene %in% highlight_prots), aes(max_CCD_estim_diff, abs(global_diff), label = gene), box.padding = 2.5) +
+  scale_color_manual(values = c("#CBCE91","#EA738D")) + theme(legend.position = "top") + geom_abline(linetype = 2) + labs(color = "Favored pathway") + theme_bw() + coord_fixed(xlim = c(0,2), ylim = c(0,2))
+```
+
