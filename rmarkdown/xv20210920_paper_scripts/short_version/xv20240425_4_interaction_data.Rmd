@@ -1,0 +1,662 @@
+---
+title: "xv20220623_4_interactions_data"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to generate figure 4 in the paper. 
+Fig. 4: Proteins that physically interact tend to have similar CCD patterns. 
+
+```{r function, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    base::readRDS(file = correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  base::readRDS(file = correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(umap)
+library(igraph)
+library(lsa)
+library(tibble)
+library(utils)
+library(base)
+library(scales)
+library(openxlsx)
+library(ggbeeswarm)
+```
+
+# Import data tables
+```{r input files, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+# Proteins used in the validation experiment
+proteins_gRNA <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","gRNA_gene") #gRNA gene conversion
+
+#DNA repair protein KO CCD analysis
+table_S3_CCDs <- readRDS_proof("data/processed_data/","S7")
+
+#Filter previous data table only for significant CCDs: Created here
+significant_proteins <- table_S3_CCDs %>% filter(CCD_model_p_adj < 0.05) %>% na.omit() #Melt
+ddr_significant_CCDs_dcast <- significant_proteins %>% reshape2::dcast(gene ~ chrom_feature, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "gene") #dcast
+
+#Import validation experiment data
+#Processed CCD data (4 cell lines)
+PRO_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","PRO_CCD")
+DEF_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","DEF_CCD")
+K562_CCD_all <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","Table_S7") %>%
+  mutate(cell_line = "K562") %>% 
+  select(-screen_position,-DR_effect_type) %>% 
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(pathway_signif = case_when(sum(CCD_synergy_score < 0) == 0 & sum(CCD_synergy_score > 0) != 0 ~ "NHEJ",
+                                    sum(CCD_synergy_score > 0) == 0 & sum(CCD_synergy_score < 0) != 0 ~ "MMEJ",
+                                    sum(CCD_synergy_score > 0) != 0 & sum(CCD_synergy_score < 0) != 0 ~ "both",
+                                    T ~ "none"),
+                n = 19,
+                toxicity = "non_toxic")
+
+K562_CCD_validation <- K562_CCD_all %>%
+  right_join(proteins_gRNA) %>%
+  select(-gRNA)
+
+#Bind all table together
+cell_lines_CCD <- bind_rows(PRO_CCD, DEF_CCD,K562_CCD_validation)
+
+#Cluster data (named as cluster tibble)
+cluster_tibble <- readRDS_proof("data/processed_data","DR_CCD_cluster_data")
+
+#Inhibitor data
+CCD_inhibitors_data <- readRDS_proof("data/processed_data/","drug_CCD")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+#Viability data
+viability_data <- readRDS(file= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230908_dna_quantification_viability.rds")
+
+#log2 chromatin values
+#All log2_values
+PRO_log2_chrom <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","PRO_log2")
+DEF_log2_chrom <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","DEF_log2")
+
+#Bind both data frames
+DEF_PRO_log2_chrom <- bind_rows(PRO_log2_chrom, DEF_log2_chrom)
+
+#Chromatin concordance
+chromatin_concordance <- DEF_PRO_log2_chrom %>% select(-gene,-gRNA,-mean.log2foldchange, -n_rep, -binsize, - dam_LMNB2) %>% distinct() %>% melt() %>% mutate(chrom_feature = str_extract(variable, "(H3|l|L).*"))
+
+#Filter out chromatin 
+filter_out_chromatin <- chromatin_concordance %>% filter(value > 0.5) %>% dplyr::group_by(cell_line, chrom_feature) %>% dplyr::summarise(IPR_n = n()) %>% filter(IPR_n < 3)
+
+```
+
+# Import BIOgrid database
+```{r database, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+#Import human database
+human.biogrid.database <- read.table(file = "import/BIOGRID_database/xv20220530_BIOGRID-ALL-4.4.209.tab3.txt", sep = "\t", fill = T)[c(1,4,5,8,9,12,13,14,36,37)] %>% filter(V36 == "Homo sapiens" & V37 == "Homo sapiens")
+
+#Human physical biogrid database
+h.physical.biogrid.db <- human.biogrid.database %>% filter(V13 == "physical" & !V12 %in% c("Biochemical Activity","Far Western","Protein-RNA","Protein-peptide","Reconstituted Complex"))
+
+#filter significant proteins
+significant_protein.vector <- c(significant_proteins$gene %>% unique(), "BRE","C19orf40","NDNL2","C20orf196","OBFC1","UFD1L") #Vector with significant proteins
+ddr.ccd.physical.biogrid.db <- h.physical.biogrid.db %>% filter(V8 %in% significant_protein.vector & V9 %in% significant_protein.vector) #Filter interaction database for interaction happening between proteins with CCDs
+
+#Change colnames
+colnames(ddr.ccd.physical.biogrid.db) <- c("interaction_ID","gene1_ID", "gene2_ID", "gene1","gene2","int_method","int_type","publication","sp_gene1", "sp_gene2")
+
+#Repair names to match screening data
+ddr.ccd.physical.biogrid.rep.db <- ddr.ccd.physical.biogrid.db %>% mutate(gene1 = case_when(gene1 == "BRE" ~ "BABAM2",
+                                                                                               gene1 == "C19orf40" ~"FAAP24",
+                                                                                               gene1 == "NDNL2" ~ "NSMCE3",
+                                                                                               gene1 == "C20orf196" ~ "SHILD1",
+                                                                                               gene1 == "OBFC1" ~ "STN1",
+                                                                                               gene1 == "UFD1L" ~ "UFD1",
+                                                                                               T ~ gene1),
+                                                                          gene2 = case_when(gene2 == "BRE" ~ "BABAM2",
+                                                                                               gene2 == "C19orf40" ~"FAAP24",
+                                                                                               gene2 == "NDNL2" ~ "NSMCE3",
+                                                                                               gene2 == "C20orf196" ~ "SHILD1",
+                                                                                               gene2 == "OBFC1" ~ "STN1",
+                                                                                               gene2 == "UFD1L" ~ "UFD1",
+                                                                                               T ~ gene2))
+
+#Unique interactions
+interacting_pairs <- ddr.ccd.physical.biogrid.db %>% dplyr::select(gene1,gene2) %>% distinct() %>% dim()
+```
+Conclusion: There are 138 physically interacting protein pairs between proteins with significant CCDs
+
+# Figure 4A
+## Data processing
+```{r prep_Fig_3AB, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+#Create a dataframe with all possible protein pairs
+signif.protein.vector.ddr <- significant_proteins %>% pull(gene) %>% unique() #Get gene vector with CCDs
+comb_signif.ddr <- combn(signif.protein.vector.ddr, 2, simplify = F) #Create all possible protein pairs between DR prots with CCDs
+comb_signif_dt.ddr <- do.call("rbind", comb_signif.ddr) %>% as.data.frame() #Create data frame
+colnames(comb_signif_dt.ddr) <- c("gene1","gene2") #Change column names
+
+#Calculate cosine distances between each gene
+cos.distance <- cosine(t(as.matrix(ddr_significant_CCDs_dcast))) #as.matrix
+melt.dist.matrix <- reshape2::melt(cos.distance) #as.tibble
+colnames(melt.dist.matrix) <- c("gene1", "gene2", "cos.distance") #Change column names
+
+#Filter out redundant pairs (A-B & B-A): There is no directionality in these interactions
+dist.matrix.int.biogrid <-comb_signif_dt.ddr %>% left_join(melt.dist.matrix)
+
+#Add interaction data to all possible pairs
+dist.int.partners.biogrid <- dist.matrix.int.biogrid %>% 
+  left_join(ddr.ccd.physical.biogrid.rep.db) %>% #Add interaction data
+  mutate(interaction = case_when(is.na(int_type) ~ FALSE, T ~ TRUE)) %>% #Does each pair interact or not?
+  dplyr::group_by(gene1, gene2, cos.distance) %>% #Clean possible redundant pairs in BioGRID
+  dplyr::summarise(interaction = case_when(sum(interaction) == 0 ~ F, T ~ T)) #Summarize phyisical interactions
+
+#Summary numbers of interaction
+summary_interacting_pairs <- dist.int.partners.biogrid %>% dplyr::group_by(interaction) %>% dplyr::summarise(c = n())
+
+#Sample random pairs
+sample_correlations.ddr.biogrid <- tibble() #Empty tibble for sampling
+n.interacting.biogrid <- dist.int.partners.biogrid %>% filter(interaction == T) %>% nrow() #Number of physical interactions in our data
+
+#Sampling loop to select random samples of equal size as interacting pairs
+   for (i in c(1:1000)){ #n=1000
+  set.seed(i)
+  t <- dist.int.partners.biogrid %>% ungroup() %>% sample_n(n.interacting.biogrid) %>% mutate(seed =i)
+  sample_correlations.ddr.biogrid <- sample_correlations.ddr.biogrid %>% bind_rows(t)
+   }
+
+#Create density matrices for plotting later
+density.matrix.datapoints <- tibble()
+for (i in c(1:1000)){
+  seed.unique <- filter(sample_correlations.ddr.biogrid, seed == i) %>% pull(cos.distance)%>% as.numeric()
+  dens.seed.unique <- density(seed.unique, from = -1, to = 1) %>% tidy() %>% mutate(seed = i) %>% mutate(round_x = round(x, digits = 2)) %>% dplyr::group_by(round_x) %>% dplyr::summarise(mean_y = mean(y), seed = i)
+  density.matrix.datapoints <- density.matrix.datapoints %>% bind_rows(dens.seed.unique)
+}
+
+#Calculate mean and sd to plot in density plots for random effects
+summarise.mean.sd_sample <- density.matrix.datapoints %>% dplyr::group_by(round_x) %>% dplyr::summarise(avg_y = mean(mean_y), sd_y = sd(mean_y), counts = n())
+
+#Calculate real interaction density data
+interacting.prots <- filter(dist.int.partners.biogrid, interaction == T)
+real_density_plot <- density(interacting.prots %>% pull(cos.distance), from = -1, to = 1) %>% tidy()  %>% mutate(round_x = round(x, digits = 2)) %>% dplyr::group_by(round_x) %>% dplyr::summarise(mean_y = mean(y))
+```
+
+## Plot cosine similarities between proteins that interact.
+```{r Fig_4A, warning=FALSE, message=FALSE,fig.width=2.75,fig.height=2.5}
+ggplot(summarise.mean.sd_sample) + 
+  geom_ribbon(aes(round_x, ymax = avg_y + sd_y, ymin = avg_y - sd_y), alpha = 0.2, fill = "grey40") +
+  geom_line(aes(round_x,avg_y), color = "grey40", linetype = 2) + 
+  geom_line(data = real_density_plot, aes(round_x,mean_y), color = "red") +
+    theme_bw() + theme(legend.position = "top",
+        panel.grid = element_blank()) + 
+  ylab("Density") + xlab("Cosine distance")
+
+#Mean value
+mean_per_iteration <- sample_correlations.ddr.biogrid %>% 
+  dplyr::group_by(seed) %>% 
+  dplyr::summarise(mean_cosdist = mean(cos.distance))
+
+pval <- t.test(mean_per_iteration$mean_cosdist, mu = 0.3641)
+
+z_score <- (0.3641 - mean(mean_per_iteration$mean_cosdist)) /sd(mean_per_iteration$mean_cosdist)
+
+p_value = 2*pnorm(abs(z_score), lower.tail=F)
+  
+#99CI
+CI_99 <-  quantile(mean_per_iteration$mean_cosdist, c(0.025,0.975))
+
+print(CI_99)
+
+#Real_data mean
+mean(interacting.prots %>% pull(cos.distance))
+
+# Source data table
+fig4a <- summarise.mean.sd_sample %>%
+  left_join(real_density_plot) %>%
+  select(x_similarity = round_x, y_realdata = mean_y, y_meanrandom = avg_y, y_sdrandom = sd_y) %>%
+  mutate(figure = "Figure_4A")
+
+write.table(fig4a, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4a_bottom.txt", row.names = F)
+```
+(A) Distributions of pairwise similarity scores for CCD patterns across the 25 chromatin features, between interacting proteins (red; 118 pairs) and between randomly picked protein pairs (mean ± s.d. of 1,000 draws of 118 random pairs). 
+
+# Figure 4B
+```{r Fig_4B, warning=FALSE, message=FALSE, fig.width = 3, fig.height=2}
+#Figure 3B: Random mean distributions
+sample_correlation_ddr_mean_biogrid <- sample_correlations.ddr.biogrid %>% dplyr::group_by(seed) %>% dplyr::summarise(m = mean(cos.distance))
+normal_fit_data <- 
+real_correlation_mean_biogrid <- dist.int.partners.biogrid %>% filter(interaction == T) %>% pull(cos.distance) %>% mean()
+
+
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_4_Interaction_data/xv20230927_Fig4B_mean_distribution_changes.pdf", width = 3, height = 2)
+ggplot(sample_correlation_ddr_mean_biogrid) + 
+  geom_histogram(aes(m), bins = 100) + 
+  geom_linerange(aes(real_correlation_mean_biogrid,ymin = 0, ymax = 25),color = "red") + 
+  coord_cartesian(expand = T, xlim = c(0,0.4)) + 
+  theme_bw() +
+  theme(panel.grid = element_blank())
+#dev.off()
+
+# Source data table
+fig4b <- sample_correlation_ddr_mean_biogrid %>%
+  select(x_meansimilarity = m, sampling_seed = seed) %>%
+  mutate(figure = "Figure_4B")
+
+write.table(fig4b, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4b.txt", row.names = F)
+```
+(B) Mean similarity score of 118 interacting protein pairs (red line) compared to the distribution of mean similarity scores of 1,000 random draws as in (A) (grey histogram), indicating that high similarities of CCD patterns of interacting protein pairs cannot be explained by random chance (two-sided p-value = 0.0006).
+
+# Figure 4C
+## Data processing: Plot showing number of cliques
+```{r prep_fig_4C, warning=FALSE, message=FALSE}
+#CCD data visualization as UMAP
+set.seed(4) #Get consistend umap
+umap.hits <- umap(ddr_significant_CCDs_dcast) #umap algorithm {umap package}
+colnames(umap.hits$layout) <- c("A","B") #Change colnames
+cluster_umap <- cluster_tibble %>% separate(cluster_name, into = c("pathway", "cluster_b"), sep = "_") #separate cluster data into pathway and interaction type
+umap.hits.plot <- umap.hits$layout %>% as.data.frame() %>% rownames_to_column(var = "gene") %>% left_join(cluster_umap) #Import data from previous line
+umap.hits.plot[which(umap.hits.plot$pathway == "N-synergy"),]$cluster_b <- 3 #Manually change nadd N-synergy clusters
+umap.hits.plot[which(umap.hits.plot$gene == "CHAF1A"),]$cluster_b <- 1
+
+#Find highest order cliques in the data {igraph package}
+igraph_interaction_biogrid <- graph_from_data_frame(interacting.prots) #Create igraph object with interaction data
+
+#Find maximum cliques in the data
+maximum_cliques_data <- largest_cliques(igraph_interaction_biogrid) #Find largest cliques in the network (In this case five 4-node cliques)
+
+#Find plot summary of all cliques in the data
+all_max_cliques <- max_cliques(igraph_interaction_biogrid)
+
+#Extract element numbers in the dataset
+summary_max_cliques <- tibble(clique = NA, elements = NA)
+for (i in 1: length(all_max_cliques)) {
+  summary_max_cliques <- summary_max_cliques %>% add_row(clique = i, elements = length(names(all_max_cliques[[i]])))  
+}
+#Summary plot
+ggplot(summary_max_cliques) +
+  geom_bar(aes(elements)) +
+  theme_bw() + xlab("Clique complexity")
+
+```
+
+## Plotting umap visualization (This figure was further edited in Illustrator)
+```{r Fig_4C_plot, warning=FALSE, message=FALSE}
+# Clique data table: Summarizing maximum_cliques_data output
+
+all_cliques <- tibble(gene = c("ATM","FANCD2","MDC1","TOPBP1","FANCM","FANCF","FANCG","FANCD2","BLM","RMI2","FANCD2","FANCM"), clique = c(rep(1,4), rep(2,4),rep(3,4)), type = c(rep("ATM",4), rep("FA",4), rep("mixed",4))) %>% left_join(umap.hits.plot)
+#Plot with umap with 4-node cliques
+#pdf(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_4_Interaction_data/xv20240424_Fig3C_umap_visualization.pdf", height=4, width = 6)
+ggplot() +
+     geom_polygon(data = all_cliques, aes(x = A, y = B, group = clique, fill = type), alpha = 0.4) +
+     stat_density2d(data = umap.hits.plot, geom = "polygon", aes(A,B, fill = cluster_b, alpha = ..level..), bins = 8) + xlim(-4,5) + ylim(-4,5) +
+     theme_bw() + geom_point(data = umap.hits.plot, aes(A,B, color = gene %in% all_cliques$gene, shape = pathway), size = 3) + 
+     theme(panel.grid = element_blank()) + 
+     scale_fill_manual(values = c("#9E75B2","#F088B6","#FAC075","#1D71B8","#E94E1B","#B2B2B2")) + scale_alpha(range = c(0.15,0.3)) +
+     geom_text_repel(data = subset(umap.hits.plot, gene %in% all_cliques$gene), aes(A,B,label = gene), force = 40) + 
+     ylab("UMAP2") + xlab("UMAP1")
+#dev.off()
+# Source data table
+fig4c <- umap.hits.plot %>% 
+  left_join(all_cliques) %>%
+  select(id_gene = gene, x_umap1 = A, y_umap2 = B, symbol_pathway = pathway, background_cluster = cluster_b, highlight_clique = clique, description_clique = type) %>%
+  mutate(figure = "Figure_4C")
+
+write.table(fig4c, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4c.txt", row.names = F)
+```
+(C) Uniform Manifold Approximation and Projection (UMAP) visualization of proteins with CCDs. Each dot represents a protein, with the shape indicating the type of synergy. Color clouds show the major chromatin state that explains each CCD. Three ‘cliques’ of four interacting proteins are shown as colored quadrangles. Proteins shared between multiple cliques are marked by concentric circles with the color of each clique.
+
+# Data processing for figures 4D-H
+```{r prep_figD_H, warning=FALSE, message=FALSE}
+#Select genes in cliques
+cosine.cliques.dcast <- significant_proteins %>% filter(gene %in% all_cliques$gene) %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+
+#Generate cosine distance matrix
+cosine.d.cliques <- cosine(as.matrix(cosine.cliques.dcast)) %>% reshape2::melt()
+```
+
+# Figure 4D
+```{r Fig_3_D, warning=FALSE, message=FALSE}
+#Clique ATMi
+ggplot(cosine.d.cliques %>% filter(Var1 %in% c("ATM","FANCD2","TOPBP1","MDC1") & Var2 %in% c("ATM","FANCD2","TOPBP1","MDC1"))) + 
+     geom_tile(aes(fct_relevel(Var1,c("ATM","FANCD2","TOPBP1","MDC1")), fct_relevel(Var2,c("ATM","FANCD2","TOPBP1","MDC1")), fill = value))+ 
+     theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + 
+     coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + 
+     geom_text(aes(fct_relevel(Var1,c("ATM","FANCD2","TOPBP1","MDC1")), fct_relevel(Var2,c("ATM","FANCD2","TOPBP1","MDC1")),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+# Source data table
+fig4d <- cosine.d.cliques %>% 
+  filter(Var1 %in% c("ATM","FANCD2","TOPBP1","MDC1") & 
+           Var2 %in% c("ATM","FANCD2","TOPBP1","MDC1")) %>% 
+  select(x_gene = Var1, y_gene = Var2, fill_similarity = value) %>%
+  mutate(figure = "Figure_4D")
+
+write.table(fig4d, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4d.txt", row.names = F)
+```
+
+# Figure 4E
+```{r Fig_3_E, warning=FALSE, message=FALSE}
+#Clique FA
+ggplot(cosine.d.cliques %>% filter(Var1 %in% c("FANCD2","FANCM","FANCG","FANCF") & Var2 %in% c("FANCD2","FANCM","FANCG","FANCF"))) + 
+     geom_tile(aes(fct_relevel(Var1,c("FANCD2","FANCM","FANCG","FANCF")), fct_relevel(Var2,c("FANCD2","FANCM","FANCG","FANCF")), fill = value))+ 
+     theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + 
+     coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + 
+     geom_text(aes(fct_relevel(Var1,c("FANCD2","FANCM","FANCG","FANCF")), fct_relevel(Var2,c("FANCD2","FANCM","FANCG","FANCF")),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+# Source data table
+fig4e <- cosine.d.cliques %>% 
+  filter(Var1 %in% c("FANCD2","FANCM","FANCG","FANCF") & 
+           Var2 %in% c("FANCD2","FANCM","FANCG","FANCF")) %>% 
+  select(x_gene = Var1, y_gene = Var2, fill_similarity = value) %>%
+  mutate(figure = "Figure_4E")
+
+write.table(fig4e, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4e.txt", row.names = F)
+```
+
+# Figure 4F
+```{r Fig_4F, warning=FALSE, message=FALSE}
+#Clique Mixed
+ggplot(cosine.d.cliques %>% filter(Var1 %in% c("FANCD2","FANCM","BLM","RMI2") & Var2 %in% c("FANCD2","FANCM","BLM","RMI2"))) + 
+     geom_tile(aes(fct_relevel(Var1,c("FANCD2","FANCM","BLM","RMI2")), fct_relevel(Var2,c("FANCD2","FANCM","BLM","RMI2")), fill = value))+ 
+     theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + 
+     coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + 
+     geom_text(aes(fct_relevel(Var1,c("FANCD2","FANCM","BLM","RMI2")), fct_relevel(Var2,c("FANCD2","FANCM","BLM","RMI2")),label = round(value, digits = 2))) + theme(axis.title = element_blank())
+
+# Source data table
+fig4f <- cosine.d.cliques %>% 
+  filter(Var1 %in% c("FANCD2","FANCM","BLM","RMI2") & Var2 %in% c("FANCD2","FANCM","BLM","RMI2")) %>% 
+  select(x_gene = Var1, y_gene = Var2, fill_similarity = value) %>%
+  mutate(figure = "Figure_4F")
+
+write.table(fig4f, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4f.txt", row.names = F)
+```
+(D-F) CCD similarity score matrix of proteins in (D) ATM clique, (E) FA clique and (F) mixed clique. 
+
+# Data processing for Figures 4G-I
+```{r prep_figG_i, warning=FALSE, message=FALSE}
+
+cell_lines <- c("PRO","DEF","K562")
+#
+cosine_similarity_cell_line <- map_dfr(cell_lines, function(x) {
+  one_cell_line <- cell_lines_CCD %>% 
+    anti_join(filter_out_chromatin) %>%
+    na.omit() %>%
+    filter(cell_line == x)
+  #Create dcast for DEF CCD table
+  one_cell_line_CCD_dcast <- one_cell_line %>% 
+    reshape2::dcast(gene ~ chrom_feature, value.var = "CCD_synergy_score") %>% na.omit() %>%
+    column_to_rownames(var = "gene")
+  #Calculate cosine distances between each gene
+  one_cell_cos.distance <- cosine(t(as.matrix(one_cell_line_CCD_dcast))) #as.matrix
+  one_cell_melt.dist.matrix <- reshape2::melt(one_cell_cos.distance) %>% mutate(cell_line = x)#as.tibble
+})
+
+#Clique summary table
+all_cliques <- tibble(gene = c("ATM","FANCD2","MDC1","TOPBP1","FANCM","FANCF","FANCG","FANCD2","BLM","RMI2","FANCD2","FANCM"), clique = c(rep(1,4), rep(2,4),rep(3,4)), type = c(rep("ATM",4), rep("FA",4), rep("mixed",4)))
+
+```
+
+# Figure 4G 
+```{r Fig_4G, warning=FALSE, message=FALSE, fig.width=2, fig.height=3}
+#Plot diferent
+clique1_data <- cosine_similarity_cell_line %>% 
+  filter(Var1 %in% c("ATM","FANCD2","TOPBP1","MDC1") &
+         Var2 %in% c("ATM","FANCD2","TOPBP1","MDC1") &
+         Var1 != Var2)
+
+#Similarity scores across cell lines
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_4_Interaction_data/xv20230927_Fig4E_clique_1_conservation_other_cell_lines.pdf", width = 2, height = 3)
+ggplot(clique1_data %>% select(cell_line, value) %>% distinct(), aes(fct_relevel(cell_line,c("K562","PRO","DEF")), value)) +
+  stat_summary(geom = "col", aes(fill = cell_line)) +
+  geom_quasirandom() + 
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482")) +
+  coord_cartesian(ylim = c(-1,1)) +
+  theme(axis.title.x = element_blank(), legend.position = "none", panel.grid = element_blank()) + ylab("Cosine similarity score")
+#dev.off()
+
+# Source data
+fig4d <- umap.hits.plot %>% 
+  left_join(all_cliques) %>%
+  select(id_gene = gene, x_umap1 = A, y_umap2 = B, symbol_pathway = pathway, background_cluster = cluster_b, highlight_clique = clique, description_clique = type) %>%
+  mutate(figure = "Figure_4D")
+
+write.table(fig4c, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig4c.txt", row.names = F)
+
+```
+
+# Figure 4H
+```{r Fig_4H, warning=FALSE, message=FALSE, fig.width=3.5, fig.height=2.5}
+#Plot diferent
+clique3_data <- cosine_similarity_cell_line %>% 
+  filter(Var1 %in% c("FANCD2","FANCM","FANCG","FANCF") &
+         Var2 %in% c("FANCD2","FANCM","FANCG","FANCF") &
+         Var1 != Var2)
+
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_4_Interaction_data/xv20231027_Fig4F_clique_FA1_conservation_other_cell_lines.pdf", width = 2, height = 3)
+ggplot(clique3_data %>% select(cell_line, value) %>% distinct(), aes(fct_relevel(cell_line,c("K562","PRO","DEF")), value)) +
+  stat_summary(geom = "col", aes(fill = cell_line)) +
+  geom_quasirandom() + 
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482")) +
+  coord_cartesian(ylim = c(-1,1)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme(axis.title.x = element_blank(), legend.position = "none",
+        panel.grid = element_blank()) + ylab("Cosine similarity score")
+#dev.off()
+
+```
+
+# Figure 4I
+```{r Fig_4I, warning=FALSE, message=FALSE,}
+clique4_data <- cosine_similarity_cell_line %>% 
+  filter(Var1 %in% c("FANCD2","FANCM","BLM","RMI2") &
+         Var2 %in% c("FANCD2","FANCM","BLM","RMI2") &
+         Var1 != Var2)
+
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_4_Interaction_data/xv20231027_Fig4Fb_mixed_clique_conservation_other_cell_lines.pdf", width = 2, height = 3)
+ggplot(clique4_data %>% select(cell_line, value) %>% distinct(), aes(fct_relevel(cell_line,c("K562","PRO","DEF")), value)) +
+  stat_summary(geom = "col", aes(fill = cell_line)) +
+  geom_quasirandom() + 
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482")) +
+  coord_cartesian(ylim = c(-1,1)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme(axis.title.x = element_blank(), legend.position = "none",
+        panel.grid = element_blank()) + ylab("Cosine similarity score")
+#dev.off()
+
+```
+(G-I) Similarity scores of proteins in (G) ATM clique, (H) FA clique and (I) mixed clique in K562, RPE-1 p53KO and p53/BRCA1dKO cells.
+
+# Data processing for Figures 4J-N
+```{r, warning=FALSE, message=FALSE}
+#Import interesting genes
+cosine.highlights.genes <- table_S3_CCDs %>% filter(gene %in% c("ATM", "CHEK2","PRKDC")) %>% na.omit()
+#Import inhibitor data
+cosine.highlights.drugs <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi", "DNAPKi")) %>% dplyr::select(gene = drug, chrom_feature,CCD_synergy_score)
+#Bind all data
+cosine.highlights.all <- bind_rows(cosine.highlights.genes, cosine.highlights.drugs) 
+
+#dcast
+cosine.highlights.dcast <- cosine.highlights.all %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+
+#Cosine distance
+cosine.d.highlingts <- cosine(as.matrix(cosine.highlights.dcast)) %>% melt()
+```
+
+# Figure 4J
+```{r, warning=FALSE, message=FALSE}
+#dcast epistatic interactions (PARP proteins)
+ATM.proteins.CCD <- table_S3_CCDs %>% filter(gene %in% c("ATM", "CHEK2"))
+
+#dcast epistatic interactions (PARP inhibitors)
+ATM_inhibitors <- CCD_inhibitors_data %>% filter(drug %in% c("ATMi"))
+
+#Cosine distance between all of them
+#Prepare for binding
+ATM.inhibitor.sel <- ATM_inhibitors %>% dplyr::select(gene = drug, chrom_feature, CCD_synergy_score)
+ATM.combined <- ATM.proteins.CCD %>% dplyr::select(gene, chrom_feature, CCD_synergy_score) %>% bind_rows(ATM.inhibitor.sel) 
+ATM.dcast <- ATM.combined %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+cosine.d.ATM<- cosine(as.matrix(ATM.dcast))
+
+#PARP combined heatmap
+ggplot(ATM.combined) + 
+  geom_tile(aes(fct_relevel(gene, c("ATM","ATMi","CHEK2")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+#Figure 4K
+```{r, warning=FALSE, message=FALSE}
+#FA proteins order
+FA_prots <- c("FANCM","FAAP24","FANCG","FANCA","FANCF","FANCC","FANCB","FANCL","FANCD2","FANCI")
+
+# Filter FANC proteins
+FA.proteins.CCD <- table_S3_CCDs %>% filter(gene %in% FA_prots) 
+
+# dCast FANC proteins
+FA.proteins.dcast <- FA.proteins.CCD %>% reshape2::dcast(gene ~ chrom_feature, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "gene")
+
+#Cosine distance between all of them
+cosine.d.FANC <- cosine(as.matrix(t(FA.proteins.dcast)))
+
+#Plot heatmap
+ggplot(FA.proteins.CCD) + 
+  geom_tile(aes(fct_relevel(gene,FA_prots), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",  breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15))  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+```
+
+
+#Figure 4L
+```{r, warning=FALSE, message=FALSE}
+#dcast epistatic interactions (PARP proteins)
+SMC5_compl <- table_S3_CCDs %>% filter(gene %in% c("SMC5","NSMCE1","NSMCE3","NSMCE2","NSMCE4","SMC6")) %>% na.omit()
+
+SMC5.dcast <- SMC5_compl %>% reshape2::dcast(chrom_feature ~ gene, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+cosine.d.SMC5<- cosine(as.matrix(SMC5.dcast))
+
+#PARP combined heatmap
+ggplot(SMC5_compl) + 
+  geom_tile(aes(fct_relevel(gene,c("NSMCE1","NSMCE3","SMC5","SMC6")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.15,0.15), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+# Figure 4M
+```{r, warning=FALSE, message=FALSE}
+#dcast epistatic interactions (PARP proteins)
+DNAPK.proteins.CCD <- table_S3_CCDs %>% filter(gene == "PRKDC") %>% dplyr::select(gene, chrom_feature, CCD_synergy_score)
+DNAPK.inhibitors <- CCD_inhibitors_data %>% filter(drug == "DNAPKi") %>% dplyr::select(gene = drug, chrom_feature, CCD_synergy_score)
+
+# Bind rows
+DNAPK.perturbations <- bind_rows(DNAPK.proteins.CCD, DNAPK.inhibitors)
+
+# DNAPK inhibition
+ggplot(DNAPK.perturbations) + 
+    geom_tile(aes(fct_relevel(gene, c("PRKDC","DNAPKi")), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+    scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), breaks = c(-0.1,0, 0.1), oob = squish)  + 
+    coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+```
+
+# Figure 4N
+```{r, warning=FALSE, message=FALSE}
+#BRC1A complex proteins
+BRCA1A_complex <- c("BRCC3","UIMC1","ABRAXAS1","BABAM2")
+
+# Separate data based on the significant IPRs that they have (based on z-score)
+UIMC1_BRCC3<- table_S3_CCDs %>% filter(gene %in% BRCA1A_complex)  %>% na.omit()
+
+# heatmap: All heatmaps together
+ggplot(UIMC1_BRCC3) + 
+  geom_tile(aes(fct_relevel(gene, BRCA1A_complex),fct_relevel(chrom_feature, heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e",limits = c(-0.15,0.15), oob = squish, breaks = c(-0.1,0,0.1)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + coord_fixed(expand = F,ratio = 1) + xlab("DNA repair proteins with significant chromatin dependencies") + ylab("Chromatin features")
+
+```
+
+# Export Table S8
+This table includes the protein pairs that interact with each other.
+```{r, warning=FALSE, message=FALSE}
+setwd(in.dir)
+#Prepare the file to export
+export_protein_protein_table <- ddr.ccd.physical.biogrid.rep.db %>% left_join(melt.dist.matrix)
+
+#Table S4
+write.xlsx(export_protein_protein_table, file = "data/supplementary_tables/xv20220913_Table_S8_BioGRID_interaction_CCD.xlsx")
+```

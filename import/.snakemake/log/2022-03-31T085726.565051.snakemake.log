@@ -1,0 +1,3 @@
+WorkflowError in line 9 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_coverage.snakemake:
+Failed to open /DATA/usr/c.leemans/projects/chip_snake/chip_align.snakemake.
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_coverage.snakemake", line 9, in <module>

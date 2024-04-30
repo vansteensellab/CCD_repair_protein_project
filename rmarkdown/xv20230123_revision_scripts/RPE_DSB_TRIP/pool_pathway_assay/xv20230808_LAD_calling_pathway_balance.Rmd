@@ -1,0 +1,184 @@
+---
+title: "xv20230808_pathway_balance_LAD_calls"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will go through the mutation accumulation in BRCA2 mutant tumors
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+
+```
+
+## Libraries:
+
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+```
+
+## Import balance data
+
+```{r pressure, echo=FALSE}
+#Balance data
+pathway_balance_RPE1_pools <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230808_DSB_TRIP_pools_balance.rds")
+
+#Inhibitor effect
+inhibitor_balance_effect <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230809_inhibitors_balance_change.rds")
+
+#IPR position data
+RPE1_position <- read.delim2(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv") %>%
+  bind_rows(read.delim2(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv")) %>%
+  mutate(end = start + 1)
+
+```
+
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+
+```
+
+
+#Map indel data for BRCA2 and sporadic tumors
+```{r}
+#Create function to call unique LADs
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T) #Make LADs into GR ranges
+
+#Function to map IPRs in LADs or iLADs
+LADs_status_call_IPR <- function(x) {
+  print(dim(x))
+  mutations_GR <- makeGRangesFromDataFrame(x, keep.extra.columns = T) #Make a GR object with the coordinated of the deletion
+  LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutations_GR) #Find overlaps between deletions and LAD states
+  LAD_overlaps_dt <- tibble(x[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6]) #Extract the LAD_status of the mapped deletion
+}
+
+#Calls
+RPE1_IPR_calls <- LADs_status_call_indel(RPE1_position)
+
+LAD_iLAD_calling <- RPE1_IPR_calls %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity)
+
+#Balance in LADs and iLADs
+RPE_balance_LAD <- pathway_balance_RPE1_pools %>% left_join(LAD_iLAD_calling)
+
+#Inhibitor effect
+inh_effect_LAD <- inhibitor_balance_effect %>% left_join(LAD_iLAD_calling)
+
+```
+
+#Calculate statistic test
+```{r}
+test_LAD_iLAD <- map_dfr(c("RPEPro","RPEDef","U2OS"), function(x) {
+  #filter data
+  cLAD_data <- RPE_balance_LAD %>% filter(cell_line == x & LAD_status == "cLAD")
+  print(dim(cLAD_data))
+  #test
+  ciLAD_data <- RPE_balance_LAD %>% filter(cell_line == x & LAD_status == "ciLAD")
+  print(dim(ciLAD_data))
+  t.test(cLAD_data$mean_bal, ciLAD_data$mean_bal) %>% broom::tidy() %>% mutate(cell_line = x)
+})
+
+#Plot cLAD & ciLADs
+ggplot(RPE_balance_LAD %>% filter(grepl("c", LAD_status))) +
+  geom_quasirandom(aes(LAD_status, mean_bal)) + 
+  facet_wrap(~ cell_line) +
+  ggpubr::stat_compare_means(method = "wilcox.test", aes(LAD_status, mean_bal), label.y = 0.5) +
+  theme_bw() +
+  ylim(c(0,0.6))
+```
+#Conclusion: Pathway balance differences are also very small between LAD and iLADs
+
+###Test if ∆log2MMEJ::NHEJ are different
+```{r}
+test_LAD_iLAD <- map_dfr(c("RPEPro","RPEDef","U2OS"), function(x) {
+  #filter data
+  cLAD_data <- RPE_balance_LAD %>% filter(cell_line == x & LAD_status == "cLAD")
+  print(dim(cLAD_data))
+  #test
+  ciLAD_data <- RPE_balance_LAD %>% filter(cell_line == x & LAD_status == "ciLAD")
+  print(dim(ciLAD_data))
+  t.test(cLAD_data$mean_bal, ciLAD_data$mean_bal) %>% broom::tidy() %>% mutate(cell_line = x)
+})
+
+#Plot cLAD & ciLADs
+ggplot(inh_effect_LAD %>% filter(grepl("c", LAD_status))) +
+  geom_quasirandom(aes(LAD_status, mean_diff)) + 
+  facet_grid(condition ~ cell_line) +
+  ggpubr::stat_compare_means(method = "wilcox.test", aes(LAD_status, mean_diff), label.y = 0.5) +
+  theme_bw() 
+```
+#CONCLUSION: This also doesn't help with it. None of inhibitor has strond synergies with LADs.
+
+GENERAL CONCLUSION: THIS METHOD IS NOT BETTER THAN THE PREVIOUS ONE!

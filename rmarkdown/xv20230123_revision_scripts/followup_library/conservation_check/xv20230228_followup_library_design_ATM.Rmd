@@ -1,0 +1,139 @@
+---
+title: "xv20230227_follow_up_library"
+author: "Xabier Vergara"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Follow up library design
+in this markdown, I will design a library to validate the main findings on the screen.
+Potential candidate list for genes to target
+NHEJ_factors <- POLL, BRCA2, CHAF1A ('D'), BABAM2, UIMC1, BRCC3.
+MMEJ_factors_TH <- RBBP8 ('D'), ATM, FANCD2, TOPBP1 ('E'), MDC1, RAD50, ATR ('E')
+MMEJ_factors_K27 <- CHEK2, FANCM ('D'), FANCG, FAAP24, SMC5 ('E')
+MMEJ_factors_euch <- RMI2 ('D'), BLM, PARP1
+Dual <- BOD1L1
+
+
+```{r libraries}
+library(tidyverse)
+library(ggbeeswarm)
+```
+
+
+#Import data tables: mouse and human
+```{r pressure, echo=FALSE}
+#ATM example
+human_gRNA <- read.delim(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/ATM_hg38.csv", sep = ",")
+
+mouse_gRNA <- read.delim(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_mouse/ATM_mm10.csv", sep = ",")
+
+#Common gRNAs: select for the common gRNAs
+gRNAs_both_species <- intersect(human_gRNA$gRNA,mouse_gRNA$gRNA)
+
+```
+
+#
+```{r}
+#kgID summary table
+kgID_summary <- human_gRNA %>% 
+  select(kgID, Exon.number) %>%
+  distinct() %>%
+  dplyr::group_by(kgID) %>% 
+  dplyr::summarise(exon_counts = n())
+
+#max exons
+kgID_reference <- top_n(kgID_summary, 1, exon_counts) %>% pull(kgID)
+
+#Summary sentence
+print(paste("The kgID/s with the highest amount of exons are the following ones",kgID_reference))
+```
+#Plot
+```{r}
+# Plot kgID
+ggplot(human_gRNA) + geom_point(aes(Cutsite.coordinate, kgID, color = kgID %in% kgID_reference)) +
+  theme_bw()
+```
+
+
+#Calculate summary table of gRNAs
+```{r}
+#Number of gRNAs per exon
+summary_gRNA_hs <- human_gRNA %>% 
+  filter(kgID %in% kgID_reference) %>%
+  dplyr::group_by(kgID, Exon.number) %>%
+  dplyr::summarise(gRNA_n = n(),
+                   common_gRNA_n = sum(gRNA %in% gRNAs_both_species),
+                   Exon.length = Exon.end - Exon.start)
+
+#Calculate distance to previous and next exon
+distance_exon <- map_dfr(unique(interaction(human_gRNA$kgID, human_gRNA$Exon.number, sep = "_")), function(x){
+  gene <- as.character(str_extract(x, ".*(?=_)"))
+  exon <- as.integer(str_extract(x, "(?<=_).*"))
+  prev_exon_end <- filter(human_gRNA, kgID == gene & Exon.number == (exon - 1)) %>% pull(Exon.end) %>% unique()
+  exon_start <- human_gRNA %>% filter(kgID == gene & Exon.number == exon) %>% pull(Exon.start) %>% unique()
+  exon_end <- human_gRNA %>% filter(kgID == gene & Exon.number == exon) %>% pull(Exon.end) %>% unique()
+  next_exon_start <- filter(human_gRNA, kgID == gene & Exon.number == (exon + 1)) %>% pull(Exon.start) %>% unique()
+  
+  tibble(kgID = gene,
+         Exon.number = exon,
+         Dist.prev.exon = exon_start - prev_exon_end,
+         Dist.next.exon = next_exon_start - exon_end)
+  })
+
+#Left_join
+summary_gene_hs <- left_join(summary_gRNA_hs, distance_exon, by = c("kgID","Exon.number")) %>% distinct()
+```
+
+#Summary plots: Exons
+```{r}
+#number of gRNAs per exon per position
+ggplot(summary_gene_hs) +
+  geom_point(aes(gRNA_n,common_gRNA_n,size = Exon.number/max(Exon.number))) + 
+  facet_wrap(~kgID) + theme_bw() + 
+  theme(legend.position = "top")
+
+```
+
+#Plot where the conserved gRNAs are
+```{r}
+ggplot(summary_gene_hs) +
+  geom_point(aes(Exon.number,common_gRNA_n)) + 
+  facet_wrap(~kgID) + theme_bw() + 
+  theme(legend.position = "top")
+```
+
+
+#Select the exon or exonst that will be targetted
+```{r}
+correct_exon <- summary_gene_hs %>% 
+  dplyr::group_by(kgID) %>%
+  dplyr::mutate(rel_ex_number = Exon.number/max(Exon.number)) %>%
+  ungroup() %>%
+  filter(common_gRNA_n > 1 &
+           rel_ex_number < 0.2 &
+           gRNA_n > 10)
+
+#Which exon to target
+print(correct_exon)
+```
+
+#How many gRNAs could be used in mouse cells?
+```{r}
+#Print
+if (nrow(correct_exon) > 0) {
+print(paste("There are a total of", unique(correct_exon$common_gRNA_n), "gRNAs in the selected exon that target both human and mouse gene."))
+} else {
+  print("There are not gRNAs that can be targetted both in human and mouse genes")
+}
+```
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

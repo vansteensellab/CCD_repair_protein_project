@@ -1,0 +1,246 @@
+---
+title: "xv20220623_3_interactions_data"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to generate figure #3 in the paper. 
+
+Fig. 3: Proteins that physically interact tend to have similar CCD patterns. (A) Distributions of pair-wise similarity scores for CCD patterns across the 25 chromatin features, between interacting proteins (red; 118 pairs) and between randomly picked protein pairs (mean  s.d. of 1,000 draws of 118 ran-dom pairs). (B) Mean similarity score of 118 interacting protein pairs (red line) compared to the distribu-tion of mean similarity scores of 1,000 random draws as in (A) (grey histogram), indicating that high sim-ilarities of CCD patterns of interacting protein pairs cannot be explained by random chance (p<0.001). (C) Uniform Manifold Approximation and Projection (UMAP) visualization of proteins with CCDs. Each dot represents a protein, with the shape indicating the type of synergy. Color clouds show the major chromatin state that explains each CCD. Three ‘cliques’ of four interacting proteins are shown as col-ored quadrangles. Proteins shared between multiple cliques are marked by concentric circles with the color of each clique they are part of. (D-H) CCD similarity score matrix of proteins in ATM clique (D), FA clique (E), mixed clique (F), ATM signaling (G) and DNAPKcs KO and inhibition (H). I-M) M- and N-synergies discussed in the text. Column labels are names of proteins or the inhibitor used (‘i’ suffix). Proteins or inhibitors with significant CCDs (FDRCCD < 0.05) are marked with an asterisk. Chromatin fea-tures are colored as in Fig. 1C. (I) ATM signaling. (J) Fanconi anemia complex. (K) SMC5/6 complex. (L) DNAPKcs KO and inhibition. (M) BRCA1-A complex.
+
+```{r function, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    base::readRDS(file = correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  base::readRDS(file = correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(umap)
+library(igraph)
+library(lsa)
+library(tibble)
+library(utils)
+library(base)
+library(scales)
+library(openxlsx)
+```
+
+# Input files for this script: All these scripts will come from the processed_data
+```{r input files, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+#DNA repair protein KO CCD analysis
+siRNA_CCDs <- readRDS_proof("data/processed_data/","S7_siRNA")
+colnames(siRNA_CCDs)[1] <- "gene"
+screen_CCDs <- readRDS_proof("data/processed_data/","S7_DR") %>% filter(gene %in% c("BRCA1","BRCA2","RAD51","POLQ"))
+
+#Global effect
+siRNA_delta <- readRDS_proof("data/processed_data/CCD_siRNA/","differentials_log2")
+colnames(siRNA_delta)[1] <- "gene"
+screen_delta <- readRDS_proof("data/processed_data/CCD_analysis","differentials_log2") %>% filter(gene %in% c("BRCA1","BRCA2","RAD51","POLQ"))
+
+#Bind rows
+all_CCDs <- bind_rows(siRNA_CCDs, screen_CCDs)
+all_deltas <- bind_rows(siRNA_delta, screen_delta)
+
+#Levels
+siRNA_levels <- c("BRCA1","siBRCA1","RAD51","siRad51","BRCA2","siBRCA2","POLQ","siPolQ")
+
+```
+
+#Global scores
+```{r, fig.width=3, fig.height=4}
+#Create a tibble with pathway favor
+favr_path <- tibble(gene = siRNA_levels, pathway = c("MMEJ","MMEJ","MMEJ","MMEJ","NHEJ","NHEJ","MMEJ","MMEJ"))
+
+
+ggplot(all_deltas %>% filter(gene != "siNT") %>% left_join(favr_path), aes(fct_relevel(gene, siRNA_levels),mean.log2foldchange)) +
+  stat_summary(geom = "col", aes(fill = pathway)) +
+  geom_quasirandom(alpha = 0.5) +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        legend.position = "top") +
+  scale_fill_manual(values = c("#8C510A","#01665E")) +
+  ylab("∆log2MMEJ:NHEJ")
+```
+
+#Calculate CCDs in the screen and siRNA experiment from Ruben
+```{r}
+#siRNA filter CCD plot
+CCD_plot_siRNA <- all_CCDs %>% 
+  filter(!is.na(chrom_feature) &
+         !gene %in% c("BRCA1","siNT")) %>%
+  mutate(target = case_when(gene == "siBRCA1" ~ "BRCA1",
+                            gene == "siRad51" ~ "RAD51",
+                            gene == "siPolQ" ~ "POLQ",
+                            T ~ gene))
+
+#PARP combined heatmap
+ggplot(CCD_plot_siRNA) + 
+  geom_tile(aes(fct_relevel(gene, siRNA_levels), fct_relevel(chrom_feature,heatmap.chromatin.order), fill = CCD_synergy_score)) +
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.2,0.2), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+```
+
+#Calculate similarity scores between them
+```{r, fig.width=3,fig.height=3}
+cos_similarity_siRNA <- siRNA_CCDs %>%
+  select(gene,chrom_feature,siRNA_synergy = CCD_synergy_score) %>%
+  mutate(target = case_when(gene == "siBRCA1" ~ "BRCA1",
+                            gene == "siBRCA2" ~ "BRCA2",
+                            gene == "siRad51" ~ "RAD51",
+                            gene == "siPolQ" ~ "POLQ")) %>%
+  select(-gene)
+
+cos_similarity_screen <- screen_CCDs %>%
+  select(target = gene,chrom_feature,screen_synergy = CCD_synergy_score) %>% distinct()
+
+
+cos_similarity <- left_join(cos_similarity_siRNA, cos_similarity_screen, by = c("chrom_feature", "target"))
+
+#cosine similarity
+cosine_similarity_siRNA <- map_dfr(c("BRCA2","RAD51","POLQ"), function(x) {
+  one_target <- cos_similarity %>% 
+    filter(target == x)
+  #Calculate cosine distances between each gene
+  one_cell_cos.distance <- cosine(one_target$siRNA_synergy, one_target$screen_synergy) #as.matrix
+  one_cell_melt.dist.matrix <- reshape2::melt(one_cell_cos.distance) %>% mutate(target = x)#as.tibble
+})
+
+#ggplot synergy scores
+ggplot(cosine_similarity_siRNA) +
+  geom_col(aes(target, value)) +
+  ylim(-1,1) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ylab("Similarity score")
+
+
+```
+
+#Compare the effect sizes
+```{r, fig.width=4,fig.height=2}
+all_CCD_plot <- all_CCDs %>%
+    mutate(target = case_when(gene == "siBRCA1" ~ "BRCA1",
+                            gene == "siBRCA2" ~ "BRCA2",
+                            gene == "siRad51" ~ "RAD51",
+                            gene == "siPolQ" ~ "POLQ",
+                            T ~ gene),
+           technique = case_when(grepl("si", gene) ~ "siRNA",
+                                 T ~ "screen"))
+
+#Global effects
+ggplot(all_CCD_plot %>% select(technique, global_diff, target, gene) %>% distinct() %>% filter(gene != "siNT")) +
+  geom_col(aes(technique, abs(global_diff))) +
+  facet_wrap(~ target, ncol = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))  +
+  ylab("Global ∆log2MMEJ:NHEJ")
+
+#Fold changes CCD
+#POLQ = 1.79
+#BRCA2 = 1.3
+#RAD51 = 3.54
+#BRCA1 = 32.11 (didn't work in the screen)
+
+
+#Global effects
+max_CCD_effect <- all_CCD_plot %>% 
+  select(technique, CCD_estim_diff, target, gene) %>% 
+  distinct() %>% 
+  filter(gene != "siNT") %>%
+  dplyr::group_by(gene) %>%
+  slice_max(abs(CCD_estim_diff))
+
+ggplot(max_CCD_effect %>% filter(target != "BRCA1")) +
+  geom_col(aes(technique, abs(CCD_estim_diff))) +
+  facet_wrap(~ target, ncol = 4) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ylab("Max. CCD ∆log2MMEJ:NHEJ")
+
+#Fold changes CCD
+#POLQ = 1.72
+#BRCA2 = 2.22
+#RAD51 = 2.74
+
+
+```

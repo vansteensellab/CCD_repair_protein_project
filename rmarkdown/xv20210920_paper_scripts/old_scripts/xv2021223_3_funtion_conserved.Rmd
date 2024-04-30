@@ -1,0 +1,485 @@
+---
+title: "xv20211004_3_DNA_repair_chromatin"
+output: html_document
+---
+
+# V1.0 (xv20211105)
+Figure 3: DNA repair pathways are very robust across chromatin types
+Analysis suggested by Bas with different filters
+
+First question: Run Analysis in 19 IPRs or 4 chromatin types
+Second question: Variance analysis
+Third question: Correlate yes or no
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(scales)
+library(ggdendro)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r, include= FALSE}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+#Chromatin data
+clone5_chrom_tib <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200519_clone5_newdoms_chromatin.RDS")
+
+```
+
+# Put both screens together
+```{r}
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+# Hit selection (same as in figure 1)
+# Compute the average effect for every biological replicate (mean x = 19 IPR)
+both.screen.gene.value <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>% 
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(IPR.z.score = mean(mmej.z.score, na.rm = T)) %>% ungroup() %>%
+  dplyr::group_by(ID_gene) %>%
+  dplyr::summarise(comb.data = sum(IPR.z.score, na.rm = T)/sqrt(n())) %>%
+  mutate(pathway = case_when(comb.data < -1.95 ~ "MMEJ", comb.data > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Select hits 
+hit.genes <- both.screen.gene.value %>% filter(pathway != "NA") %>% separate(ID_gene, into = "gene", remove = T)
+
+
+# Get heatmap by chromatin type (4 types, but maybe it's better to make 4 "same as RS paper")
+clasification.4.chroms <- clone5_chrom_tib %>% select(chromatin,barcode) %>% dplyr::mutate(chrom.4 = case_when(chromatin %in% c("euchromatin-transcription","other-euchromatin","transcription") ~ "euchromatin", T ~ chromatin)) %>% select(-chromatin)
+
+```
+
+
+#Threshold to call something a hit depends on the amount of measures behind?
+#IPR classification 3 measurements (95 CI = 4.3 (with 2 degrees of freedom), I don't have enough measurements to assess IPR differences with more confidence, 99 CI "z-score 9")
+#Chromatin classification 12 measurement (99 CI = 3.106 (with 11 degrees of freedom))
+```{r}
+# Hits per IPR
+per_19IPR_data <- both.screen.detail %>% dplyr::group_by(barcode, gene) %>% dplyr::summarise(IPR.score = mean(mmej.z.score), count = n())
+
+```
+
+# Figure A: Heatmap in every chromatin type
+
+# Per IPR (19 rows)
+```{r}
+# Per 19 IPR heatmap
+balance.IPR.hits <-per_19IPR_data %>% filter(gene %in% hit.genes$gene) %>% select(gene, barcode,IPR.score)
+
+#dcast for heatmap
+dcast.balance.IPR.hits <- balance.IPR.hits  %>% reshape2::dcast(gene ~ barcode, value.var = "IPR.score") %>% column_to_rownames(var = "gene")
+
+#plot heatmap silently
+heatmap.balance.IPR.hits <- pheatmap(dcast.balance.IPR.hits)
+
+#Extract gene and IPR orders
+gene.o.balance.IPR.hits <- rownames(dcast.balance.IPR.hits[heatmap.balance.IPR.hits$tree_row[["order"]],])
+IPR.o.balance.IPR.hits <- colnames(dcast.balance.IPR.hits[,heatmap.balance.IPR.hits$tree_col[["order"]]])
+
+# heatmap
+ggplot(balance.IPR.hits) + 
+  geom_tile(aes(fct_relevel(gene,gene.o.balance.IPR.hits),fct_relevel(barcode, IPR.o.balance.IPR.hits), fill = IPR.score)) +
+  scale_fill_gradient2( low = "#EB2030",mid = "grey90", high = "#2E358F", limits = c(-15,15), oob = squish)  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top", axis.text.y = element_blank()) + coord_fixed(expand = F,ratio = 1)
+
+# Dendrogram
+ggdendrogram(heatmap.balance.IPR.hits$tree_row)
+
+```
+
+# Plot all genes
+```{r}
+# Plot those that have at least one barcode significan
+per_19IPR_data_hits <- filter(per_19IPR_data, abs(IPR.score) > 1.95 & count == 3) %>% pull(gene) %>% unique()
+
+# Per 19 IPR heatmap
+balance.IPR.hits.all <-per_19IPR_data %>% filter(gene %in% per_19IPR_data_hits) %>% select(gene, barcode,IPR.score)
+
+#dcast for heatmap
+dcast.balance.IPR.hits.all <- balance.IPR.hits.all  %>% reshape2::dcast(gene ~ barcode, value.var = "IPR.score") %>% column_to_rownames(var = "gene")
+
+#plot heatmap silently
+heatmap.balance.IPR.hits.all <- pheatmap(dcast.balance.IPR.hits.all)
+
+#Extract gene and IPR orders
+gene.o.balance.IPR.hits.all <- rownames(dcast.balance.IPR.hits.all[heatmap.balance.IPR.hits.all$tree_row[["order"]],])
+IPR.o.balance.IPR.hits.all <- colnames(dcast.balance.IPR.hits.all[,heatmap.balance.IPR.hits.all$tree_col[["order"]]])
+
+# heatmap
+ggplot(balance.IPR.hits.all) + 
+  geom_tile(aes(fct_relevel(gene,gene.o.balance.IPR.hits.all),fct_relevel(barcode, IPR.o.balance.IPR.hits.all), fill = IPR.score)) +
+  geom_point(data = subset(balance.IPR.hits.all, abs(IPR.score) > 1.95),aes(fct_relevel(gene,gene.o.balance.IPR.hits.all),fct_relevel(barcode, IPR.o.balance.IPR.hits.all), fill = IPR.score)) +
+  scale_fill_gradient2( low = "#EB2030",mid = "grey90", high = "#2E358F", limits = c(-15,15), oob = squish)  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top", axis.text.y = element_blank()) + coord_fixed(expand = F,ratio = 1)
+
+# Is there any that has significant perturbation in both situation
+genes.both.dir <- balance.IPR.hits %>% mutate(pos = IPR.score >1.95, neg = IPR.score < -1.95) %>% dplyr::group_by(gene) %>% dplyr::summarise(pos = sum(pos), neg = sum(neg))
+
+# Dendrogram
+ggdendrogram(heatmap.balance.IPR.hits$tree_row)
+```
+
+
+
+
+
+# Arrange dendogram
+dst.hits.IPR95 <- dist(heatmap.IPR.95.hits)
+hc_row.hits.IPR95 <- hclust(dst.hits.IPR95)
+row_dend.hits.IPR95 <- as.dendrogram(hc_row.hits.IPR95)
+row_dend.hits.IPR95 <- seriate_dendrogram(row_dend.hits.IPR95, dst.hits.IPR95, method="OLO")
+
+#Plot heatmap 19 IPRS
+pheatmap(as.matrix(t(heatmap.IPR.95.hits)), 
+         breaks = seq(-15,15, by = 0.3),
+         cellwidth = 8,
+         cellheight = 12, 
+         treeheight_col = 80, 
+         show_colnames = T,
+         show_rownames = T,
+         border_color = NA, 
+         cluster_row = F,
+         cluster_cols=as.hclust(row_dend.hits.IPR95),
+         color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+
+```
+# Heatmap per barcode for hits that selected based on chromatin types
+```{r}
+# Per 19 IPR heatmap
+heatmap.IPR.99.hits <-per_19IPR_data %>% filter(ID_gene %in% per_4chrhits) %>% select(ID_gene, barcode,IPR.score)%>% distinct() %>% reshape2::dcast(ID_gene ~ barcode, value.var = "IPR.score") %>% column_to_rownames(var = "ID_gene")
+
+# Arrange dendogram columns
+dst.hits.IPR99 <- dist(heatmap.IPR.99.hits)
+hc_row.hits.IPR99 <- hclust(dst.hits.IPR99)
+row_dend.hits.IPR99 <- as.dendrogram(hc_row.hits.IPR99)
+row_dend.hits.IPR99 <- seriate_dendrogram(row_dend.hits.IPR99, dst.hits.IPR99, method="OLO")
+
+# Generate annotation row by chromatin type
+ann.chrom4 <- clasification.4.chroms %>% column_to_rownames(var = "barcode")
+
+#Plot heatmap 19 IPRS
+pheatmap(as.matrix(t(heatmap.IPR.99.hits)), 
+         breaks = seq(-10,10, by = 0.2),
+         cellwidth = 8,
+         cellheight = 12, 
+         treeheight_col = 80, 
+         show_colnames = T,
+         show_rownames = T,
+         border_color = NA,
+         cluster_cols=as.hclust(row_dend.hits.IPR99),
+         annotation_row = ann.chrom4,
+         color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+```
+
+# Per IPR (4 chromatin types)
+```{r}
+# Per 19 IPR heatmap
+heatmap.99chr.hits <-score.per.4chrom %>% filter(ID_gene %in% per_4chrhits) %>% select(ID_gene,chrom.4,screen.score)  %>% distinct() %>% reshape2::dcast(ID_gene ~ chrom.4, value.var = "screen.score") %>% column_to_rownames(var = "ID_gene")
+
+# Arrange dendogram
+dst.hits.99chr <- dist(heatmap.99chr.hits)
+hc_row.hits.99chr <- hclust(dst.hits.99chr)
+row_dend.hits.99chr <- as.dendrogram(hc_row.hits.99chr)
+row_dend.hits.99chr <- seriate_dendrogram(row_dend.hits.99chr, dst.hits.99chr, method="OLO")
+
+#Plot heatmap
+pheatmap(as.matrix(t(heatmap.99chr.hits)), 
+         breaks = seq(-10,10, by = 0.2),
+         cellwidth = 8,
+         cellheight = 12, 
+         treeheight_col = 80, 
+         show_colnames = T,
+         show_rownames = T,
+         border_color = NA, 
+         cluster_row = F,
+         cluster_cols=as.hclust(row_dend.hits.99chr),
+         color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+
+```
+
+# 2nd point Variance difference (Is there a difference per IPRs and or Chromatin type)
+
+#In 19 IPRs 
+```{r}
+#Is variance similar across 19IPRs? ((I should check better this))
+data.for.test.IPR <-  both.screen.detail.4chrom %>% filter(ID_gene %in% per_19IPR_hits)
+variance.perIPR <-data.for.test.IPR %>% dplyr::group_by(ID_gene, barcode) %>% dplyr::summarise(stdev = sd(mmej.z.score), mean.effect = mean(mmej.z.score))
+ggplot(variance.perIPR) + geom_point(aes(mean.effect, stdev)) + facet_wrap(~ barcode)
+
+#aov2
+aov2.summary.IPR <- tidy(aov(mmej.z.score ~ barcode + ID_gene, data = data.for.test.IPR))
+
+#make empty tibble
+aov.chromatin.IPR<-tibble(term=NA, df=NA, sumsq=NA, meansq=NA, statistic=NA, p.value=NA, ID_gene=NA)
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(data.for.test.IPR$ID_gene)) {
+  aovtest<-data.for.test.IPR%>%
+    filter(ID_gene==i)%>%
+    aov(mmej.z.score ~ barcode, data = .)
+ 
+  aov.chromatin.IPR<-aov.chromatin.IPR%>%
+    add_row(tidy(aovtest), ID_gene=i)
+}
+
+# Do pvalues look normal
+ggplot(aov.chromatin.IPR) + geom_density(aes(p.value))
+
+### adjust multiple hypothesis testing
+aov.chrom.IPR.corrected <- aov.chromatin.IPR %>% filter(term == "barcode") %>% distinct() %>%
+  mutate(CorrPvalue=p.adjust(p.value, "BH"))
+
+# Filter the ones that are positive in the variance analysis
+#Genes with highest variance across 4 categories
+variance.hits.IPR <- per_19IPR_data %>% 
+  filter(ID_gene %in% per_19IPR_hits) %>% 
+  group_by(ID_gene) %>% 
+  dplyr::summarise(variance = sd(IPR.score)) %>% 
+  arrange(desc(variance))
+
+# Merge with statistict
+stat.variance.IPR <- variance.hits.IPR %>% left_join(aov.chrom.IPR.corrected) %>% filter(CorrPvalue <0.05)
+
+# Plot values for all
+df.plot.variance.IPR <- per_19IPR_data %>% filter(ID_gene %in% stat.variance.IPR$ID_gene)
+
+ggplot(df.plot.variance.IPR) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_quasirandom(aes(fct_reorder(ID_gene,IPR.score),IPR.score, color = chrom.4)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust =1, vjust = 0.5))
+
+```
+
+# In 4 chromatin types
+```{r}
+#DATA TO BE USED
+data.for.test.chromatin <- both.screen.detail.4chrom %>% filter(ID_gene %in% per_4chrhits)
+
+# Variance test for all these 
+variance.chromatin <- data.for.test.chromatin %>% dplyr::group_by(ID_gene, chrom.4) %>% dplyr::summarise(stdev = sd(mmej.z.score), mean.effect = mean(mmej.z.score))
+ggplot(variance.chromatin) + geom_point(aes(mean.effect, stdev)) + facet_wrap(~ chrom.4)
+
+#aov2
+aov2.summary.chrom <- tidy(aov(mmej.z.score ~ chrom.4 + ID_gene, data = data.for.test.chromatin))
+
+#make empty tibble
+aov.chromatin<-tibble(term=NA, df=NA, sumsq=NA, meansq=NA, statistic=NA, p.value=NA, ID_gene=NA)
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(data.for.test.chromatin$ID_gene)) {
+  aovtest<-data.for.test.chromatin%>%
+    filter(ID_gene==i)%>%
+    aov(mmej.z.score ~ chrom.4, data = .)
+ 
+  aov.chromatin<-aov.chromatin%>%
+    add_row(tidy(aovtest), ID_gene=i)
+}
+
+# Do pvalues look normal
+ggplot(aov.chromatin) + geom_density(aes(p.value))
+
+### adjust multiple hypothesis testing
+aov.chrom.corrected.tmp<- aov.chromatin%>% filter(term == "chrom.4") %>% distinct() %>%
+  mutate(CorrPvalue=p.adjust(p.value, "BH"))
+
+# Filter the ones that are positive in the variance analysis
+#Genes with highest variance across 4 categories
+variance.hits <- score.per.4chrom %>% 
+  filter(ID_gene %in% per_4chrhits) %>% 
+  group_by(ID_gene) %>% 
+  dplyr::summarise(variance = sd(screen.score)) %>% 
+  arrange(desc(variance))
+
+# Merge with statistict
+stat.variance <- variance.hits %>% left_join(aov.chrom.corrected) %>% filter(CorrPvalue <0.05 | ID_gene =="POLL_DNA_repair") # Variance filte not sure if it should be there
+
+# Plot values for all
+df.plot.variance <- data.for.test.chromatin %>% dplyr::group_by(barcode,chrom.4, ID_gene) %>% dplyr::summarise(IPR.score = mean(mmej.z.score)) %>% filter(ID_gene %in% stat.variance$ID_gene)
+
+ggplot(df.plot.variance) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_quasirandom(aes(fct_reorder(ID_gene,IPR.score),IPR.score, color = chrom.4)) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust =1, vjust = 0.5))
+
+```
+
+
+# Correlation plots (What do I think it makes most sense with the narrative): Only with subset of genes that were selected previously
+```{r}
+#Genes that are picked in the ANOVA test or high variance
+genes.with.variance <- df.plot.variance %>% pull(ID_gene)
+
+# Compue IPR scores and arrange data table
+prots.with.stats <- both.screen.detail.4chrom %>%
+  filter(ID_gene %in% genes.with.variance) %>%
+  dplyr::group_by(ID_gene, barcode) %>% 
+  dplyr::summarise(IPR.MMEJscore = abs(sum(mmej.z.score, na.rm = T)/sqrt(n())), counts = n()) %>%
+  reshape2::dcast(barcode ~ ID_gene, value.var = "IPR.MMEJscore") %>%
+  column_to_rownames(var = "barcode")
+
+#Chromatin features
+cor.values <- clone5_chrom_tib %>% select(-grep("dom", colnames(clone5_chrom_tib)),- IPR, -euchromatin, -transcription, -chrom_group, -chromatin) %>% column_to_rownames(var = "barcode")
+
+
+# Correlation plot where x & y are not similar
+correlation.all.stat.sign <- cor(prots.with.stats,cor.values, method = "spearman")
+
+
+heatmap.stat.sign <- pheatmap(correlation.all.stat.sign, cell_height = 8, cellwidth = 8)
+heatmap.gene.order.stat.sign <- rownames(correlation.all.stat.sign[heatmap.stat.sign$tree_row[["order"]],])
+heatmap.chromatin.order.stat.sign <- colnames(correlation.all.stat.sign[,heatmap.stat.sign$tree_col[["order"]]])
+
+
+#Significance test across all these values
+p.val.corr <- rcorr(as.matrix(prots.with.stats),as.matrix(cor.values), type = "spearman")$P[1:11,12:35]
+p.val.corr.melt <- p.val.corr %>% reshape2::melt()
+colnames(p.val.corr.melt) <- c("ID_gene","Feature","pvalue")
+p.val.corr.adjust <- p.val.corr.melt %>% mutate(CorrPvalue = p.adjust(pvalue, method = "BH"))
+
+#Create dataframe for plotting
+correlation.transformed.stat.sign <- correlation.all.stat.sign %>% as.data.frame()%>%  rownames_to_column(var = "ID_gene") %>% reshape2::melt(value.name = "coefficient", variable.name = "Feature") %>% left_join(p.val.corr.adjust)
+
+
+#Plot correlations (As a heatmap with corrected pvalues)
+ggplot(correlation.transformed.stat.sign) + 
+  geom_tile(aes(fct_relevel(Feature, heatmap.chromatin.order.stat.sign),fct_relevel(ID_gene,heatmap.gene.order.stat.sign), fill = coefficient)) +
+  scale_fill_gradient2(limits = c(-1,1), low = "#01665e" ,mid = "#f5f5f5", high = "#8c510a") + 
+  geom_point(data = subset(correlation.transformed.stat.sign, CorrPvalue < 0.05), aes(Feature, ID_gene)) + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+
+```
+
+
+# Fanconi anemia core complex regulates chromatin specific pathway balance
+```{r}
+# FANCONI ANEMIA CORE COMPLEX genes
+FA.core.complex <- c("FANCA_DNA_repair","FANCB_DNA_repair","FANCC_DNA_repair","FANCE_DNA_repair","FANCF_DNA_repair","FANCG_DNA_repair","FANCM_DNA_repair")
+
+# Plot correlation with H3K27me3 and with LMNB1
+sel.cor.values <- cor.values %>% select(HDAC3, TTseq,H3K27me3,LMNB1,H3K4me1) %>% rownames_to_column(var = "barcode") %>% reshape2::melt()
+
+#Filter FA genes
+FA.cc.data <- both.screen.detail.4chrom %>%
+  filter(ID_gene %in% FA.core.complex) %>%
+  dplyr::group_by(barcode) %>% 
+  dplyr::summarise(IPR.MMEJscore = sum(mmej.z.score, na.rm = T)/sqrt(n()), counts = n()) %>%
+  left_join(sel.cor.values)
+
+#Plot
+ggplot(FA.cc.data,aes(value,abs(IPR.MMEJscore))) +
+  geom_point() +
+  geom_smooth( method = "lm") +
+  stat_cor(aes(method = "spearman")) +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_bw()
+
+# POLL has a different regulation
+POLL.data <- both.screen.detail.4chrom %>%
+  filter(ID_gene == "POLL_DNA_repair") %>%
+  dplyr::group_by(barcode) %>% 
+  dplyr::summarise(IPR.MMEJscore = sum(mmej.z.score, na.rm = T)/sqrt(n()), counts = n()) %>%
+  left_join(sel.cor.values)
+
+#Plot
+ggplot(POLL.data,aes(value,IPR.MMEJscore)) +
+  geom_point() +
+  geom_smooth( method = "lm") +
+  stat_cor(aes(method = "spearman")) +
+  facet_wrap(~ variable, scales = "free_x")
+
+```
+
+
+# Do this same approach but for all hits in chromatin types
+```{r}
+# Repeat test on the ones that showed chromatin specific
+
+# Filter POLL & POLQ (z-scores)
+all.prots.stat <- both.screen.detail %>%
+  filter(ID_gene %in% per_4chrhits) %>%
+  dplyr::group_by(ID_gene, barcode) %>% 
+  dplyr::summarise(IPR.MMEJscore = sum(mmej.z.score, na.rm = T)/sqrt(n()), counts = n()) %>%
+  reshape2::dcast(barcode ~ ID_gene, value.var = "IPR.MMEJscore") %>%
+  column_to_rownames(var = "barcode")
+
+# Correlation plot where x & y are not similar
+correlation.all.stat <- cor(all.prots.stat,cor.values, method = "pearson")
+
+heatmap.stat <- pheatmap(correlation.all.stat, cell_height = 8, cellwidth = 8)
+heatmap.gene.order.stat <- rownames(correlation.all.stat[heatmap.stat$tree_row[["order"]],])
+heatmap.chromatin.order.stat <- colnames(correlation.all.stat[,heatmap.stat$tree_col[["order"]]])
+
+
+correlation.transformed.stat <- correlation.all.stat %>% as.data.frame()%>%  rownames_to_column(var = "gene") %>% reshape2::melt(value.name = "coefficient") %>% mutate(class = case_when(grepl("z", variable) ~ "CRISPR", T ~ "chromatin"))
+
+#Plot correlations
+ggplot(correlation.transformed.stat) + 
+  geom_tile(aes(fct_relevel(variable, heatmap.chromatin.order.stat),fct_relevel(gene,heatmap.gene.order.stat), fill = coefficient)) +
+  scale_fill_gradient2(limits = c(-1,1)) + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+```
+```

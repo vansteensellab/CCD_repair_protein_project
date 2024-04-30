@@ -1,0 +1,124 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim: In this file, I will explore some of the possible plots, where I get general conclusions from K562 and RPE1wt data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+#Proteins_validation
+proteins_gRNA <- tibble(gRNA = c("36","38","40","42","44","46","48","50","52","54","56","58","60","62","64","66","68","70","72","74"),
+                        gene = c("ATM","ATR","BLM","BOD1L1","BRCA2","BRCC3","CHAF1A","CHEK2","FAAP24","FANCD2","FANCG","FANCM","MDC1","PARP1","POLL","RAD50","RBBP8","RMI2","SMC5","TOPBP1"))
+
+#Processed data
+PRO_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_CCD_analysis_summary_PRO_freq_0.0025_n3.rds") %>% 
+  left_join(proteins_gRNA) %>% 
+  mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature)) %>%
+  select(gene, fdr, chrom_feature, CCD_score,global_diff, global_p_adj, gRNA, cell_line, pathway)
+
+
+K562_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220819_Table_S7_DR_screen_results.rds") %>% 
+  left_join(proteins_gRNA) %>%
+  mutate(cell_line = "K562") %>%
+  select(gene, fdr = CCD_model_p_adj, chrom_feature, CCD_score =CCD_synergy_score,global_diff, global_p_adj, gRNA, cell_line) %>% na.omit() %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(pathway = case_when(sum(CCD_score < 0) == 0 & sum(CCD_score > 0) != 0 ~ "NHEJ",
+                                    sum(CCD_score > 0) == 0 & sum(CCD_score < 0) != 0 ~ "MMEJ",
+                                    sum(CCD_score > 0) != 0 & sum(CCD_score < 0) != 0 ~ "both",
+                                    T ~ "none"))
+
+RPE1_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230912_CCD_analysis_summary_RPE1_5reads_n3.rds") %>% 
+  left_join(proteins_gRNA) %>% 
+  mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature)) %>%
+  select(gene, fdr, chrom_feature, CCD_score,global_diff, global_p_adj, gRNA, cell_line, pathway)
+
+DEF_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_CCD_analysis_summary_DEF_all_viable_3reps.rds") %>% 
+  left_join(proteins_gRNA) %>% 
+  mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature)) %>%
+  select(gene, fdr, chrom_feature, CCD_score,global_diff, global_p_adj,gRNA, cell_line, pathway)
+
+#All combined CCD summary table
+all_cell_lines_summary_CCD <- bind_rows(PRO_CCD, K562_CCD, DEF_CCD, RPE1_CCD)
+
+viability_data <- readRDS(file= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230908_dna_quantification_viability.rds")
+
+#All log2_values
+PRO_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230912_log2_balance_chromatin_PRO.rds") %>% left_join(proteins_gRNA)
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% left_join(proteins_gRNA) %>% na.omit()
+DEF_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230911_log2_balance_chromatin_DEF.rds") %>% left_join(proteins_gRNA) %>% filter(reps == 3)
+RPE1_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230916_log2_balance_chromatin_RPE1_5reads.rds") %>% left_join(proteins_gRNA) %>% filter(reps == 3)
+
+
+
+#K562 data on proteins in the validation screen
+K562_validation_prots <- K562_CCD %>% na.omit() %>% filter(chrom_feature %in% c("H3K4me1","H3K36me3","LMNB1","H3K27me3","H3K27ac","H3K4me2","H3K4me3","H3K9me3","H3K9me2","late_replicating"))
+
+#Export data frame
+chromatin_data_RPE1 <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230806_DSB_TRIP_pool_chromatin_data.rds")
+
+```
+
+#Prepare data frame for this
+```{r}
+#All log2_values
+PRO_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230912_log2_balance_chromatin_PRO.rds") %>% 
+  left_join(proteins_gRNA) %>% filter(binsize == "2000" & reps == 3) %>% select(-binsize, -reps, -dam_LMNB2)
+colnames(PRO_log2) <- gsub(pattern = "dam_|chip_","", colnames(PRO_log2))
+
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% left_join(proteins_gRNA) %>% na.omit() %>%
+  select(barcode, gene, gRNA,mean_diff=mean.log2foldchange,H3K27ac, H3K36me3,H3K4me1, H3K4me3, H3K4me2, H3K27me3, H3K9me2, H3K9me3, LMNB1, late_replicating) %>% mutate(cell_line = "K562")
+
+DEF_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230911_log2_balance_chromatin_DEF.rds") %>% left_join(proteins_gRNA) %>% filter(reps == 3 & binsize == "2000") %>% select(-binsize, -reps, -dam_LMNB2)
+colnames(DEF_log2) <- gsub(pattern = "dam_|chip_","", colnames(DEF_log2))
+
+RPE1_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230916_log2_balance_chromatin_RPE1_5reads.rds") %>% left_join(proteins_gRNA) %>% filter(reps == 3 & binsize == "2000") %>% select(-binsize, -reps, -dam_LMNB2)
+colnames(RPE1_log2) <- gsub(pattern = "dam_|chip_","", colnames(RPE1_log2))
+
+#Bind rows
+all_log2_changes <- bind_rows(PRO_log2, K562_log2, DEF_log2) %>% distinct()
+```
+
+
+#Run a PCA with all barcodes
+```{r}
+chromatin_data <- all_log2_changes[c(1,4:13)] %>% distinct() %>% ungroup()
+
+pca_IPR_all_cells <- prcomp(chromatin_data %>% select(-barcode))
+
+#Select first three components
+pc1_3 <- as_tibble(pca_IPR_all_cells$x) %>% select(PC1, PC2, PC3) %>% bind_cols(chromatin_data)
+
+#Bind with KO data 
+PCA_analysis <- all_log2_changes[c(1:3,14,15)] %>% left_join(pc1_3[1:4]) %>%  mutate(cell_line = factor(cell_line, levels = c("K562", "DEF", "PRO","RPE1")))
+
+#Create a linear regression model
+linear_regression_model <- map_dfr(unique(PCA_analysis$gene)[1:20], function(x) {
+  one_gene_dt <- filter(PCA_analysis, gene == x)
+   lm(mean_diff ~ PC1*cell_line + PC2*cell_line + PC3*cell_line, data = one_gene_dt) %>% tidy() %>% mutate(gene = x)
+}) %>% dplyr::group_by(term) %>% dplyr::mutate(fdr = p.adjust(p.value, method = "BH"))
+
+
+#Filter data
+fdr_values <- linear_regression_model %>% reshape2::dcast(gene ~ term, value.var = "fdr")
+statistic_values <- linear_regression_model %>% reshape2::dcast(gene ~ term, value.var = "statistic")
+
+#Significant in PC1
+fdr_PC1 <-fdr_values %>% filter(PC1 < 0.25) %>% select(gene,grep("PC1",colnames(fdr_values)))
+fdr_PC2 <-fdr_values %>% filter(PC2 < 0.25) %>% select(gene,grep("PC2",colnames(fdr_values)))
+fdr_PC3 <-fdr_values %>% filter(PC3 < 0.25) %>% select(gene,grep("PC3",colnames(fdr_values)))
+
+
+stat_PC1 <-statistic_values %>% filter(gene %in% fdr_PC1$gene) %>% select(gene,grep("PC1",colnames(statistic_values)))
+stat_PC2 <-statistic_values %>% filter(gene %in% fdr_PC2$gene) %>% select(gene,grep("PC2",colnames(statistic_values)))
+stat_PC3 <-statistic_values %>% filter(gene %in% fdr_PC3$gene) %>% select(gene,grep("PC3",colnames(statistic_values)))
+  
+```
+

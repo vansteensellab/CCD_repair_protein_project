@@ -1,0 +1,181 @@
+---
+title: "xv20210517_figure1_meeting"
+output: html_document
+---
+
+#This will be part of a seriees of Rmarkdowns for the meeting. I will make figures that could go together eventually.
+
+Figure 1: This figure will show the main conclusions of the CRISPR screen. The message of this figure will be - chromatin genes regulate either MMEJ or NHEJ.
+
+```{r setup, include=FALSE}
+library(tidyverse) 
+library(ggbeeswarm)
+library(corrplot)
+library(pheatmap)
+library(viridis)
+library(factoextra)
+library(NbClust)
+library(ggpubr)
+#library(ggbiplot)
+library(ggrepel)
+library(readxl)
+library(gridExtra)
+#library(gprofiler2)
+library(readxl)
+library(RColorBrewer)
+```
+
+#Import data
+```{r}
+chip.dt = readRDS('/DATA/projects/DSBrepair/data/R/cl20191219_ChIP_zscore_selection_chipmentation.RDS')
+clone5bcs <- gsub(".B", "" ,unique(screen.detail$barcode))
+chip_clone5 = chip.dt[pool=='clone5' & ID %in% clone5bcs,c('ID','LMNB1', 'late_replicating', 'H3K9me2', 'H3K27me3', 'H3K4me1',
+                                    'H3K4me2', 'H3K4me3', 'H3K27ac',
+                                     'H3K36me3', 'POL2AS2',
+                                    'POL2')] %>% column_to_rownames('ID')
+
+pheatmap(t(chip_clone5), cluster_rows=T,
+         color = colorRampPalette(rev(brewer.pal(n = 11, name="RdBu")))(100), annotation_col = annotation.col, breaks = myBreaks(t(chip_clone5),100))
+```
+
+```{r}
+#functions
+#mybreaks
+myBreaks <- function(test, p) {c(seq(min(test), 0, length.out=ceiling(p/2) + 1), 
+              seq(max(test)/p, max(test), length.out=floor(p/2)))}
+```
+#Import data tables
+```{r setup, include=FALSE}
+screen.score <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+screen.detail <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+screen.score.totals <-  readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+
+screen.controls <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+```
+
+# Figure A in this panel will be the outline of the screen
+
+# Figure B in the panel will be comparison between controls (WT vs. POLQ). Show that controls behave properly! 
+```{r}
+# WT vs. POLQ
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_control_effect.pdf", height = 3, useDingbats = F)
+ggplot(screen.controls %>% select(gene,mmej.SCscore,chromatin) %>% distinct()) + geom_quasirandom(aes(gene,mmej.SCscore, color = fct_relevel(chromatin,chromatin.levels))) + theme_bw() + coord_cartesian() + ylab("z-score (MMEJscore)") + scale_color_manual(values = chromatin.colors) + coord_fixed(ratio = 0.15, ylim = c(-20,6))
+dev.off()
+```
+#Figure C: Clustering on selected hits (CI 90, based on z-score)
+
+```{r cars}
+#Select hits with abs(z.score) > 1.65
+gene.hits.hmap <- screen.score.totals
+CI.90.hits.list <- apply(gene.hits.hmap[2:length(gene.hits.hmap)],2, function(x){gene.hits.hmap %>% filter(x > 1.65 | x < -1.65) %>% pull(gene)})
+CI.90.hits <- Reduce(union,CI.90.hits.list)
+gene.hits.hmap.b <- gene.hits.hmap %>% filter(gene %in% CI.90.hits) %>% column_to_rownames(var = "gene")
+
+#UMAP for hits
+umap.hits <- umap(gene.hits.hmap.b)
+
+#Add global pathway balance effect (global perturbation)
+screen.score <- screen.detail %>% ungroup() %>% dplyr::group_by(gene) %>% dplyr::summarise(mmej.score = mean(mmej.SCscore, na.rm = T)) %>% filter(gene %in% CI.90.hits)
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_umap_hits.pdf", height = 3, useDingbats = F)
+ggplot(as.tibble(umap.hits$layout)) + geom_point(aes(V2,V1, color = gene.hits.hmap.b$`Regulatory elements (4 IPRs)`)) + theme_bw() + coord_fixed(ratio = 2) + scale_color_gradient2(limits = c(-10,4),na.value = "red", low = "#EB2030", mid = "grey90",high = "#2E358F") + xlab("UMAP 2") + ylab("UMAP 1") + labs(color = "Reg. Elements")
+ggplot(as.tibble(umap.hits$layout)) + geom_point(aes(V2,V1, color = gene.hits.hmap.b$`H3K27me3 (4 IPRs)`)) + theme_bw() + coord_fixed(ratio = 2) + scale_color_gradient2(limits = c(-10,4),na.value = "red", low = "#EB2030", mid = "grey90",high = "#2E358F") + xlab("UMAP 2") + ylab("UMAP 1") + labs(color = "H3K27me3")
+
+ggplot(as.tibble(umap.hits$layout)) + geom_point(aes(V2,V1, color = gene.hits.hmap.b$`Triple heterochromatin (4 IPRs)`)) + coord_fixed(ratio = 2) + theme_bw() + scale_color_gradient2(limits = c(-10,4),na.value = "red", low = "#EB2030", mid = "grey90",high = "#2E358F") + xlab("UMAP 2") + ylab("UMAP 1") + labs(color = "Triple Het.")
+dev.off()
+```
+#Figure 3: heatmap in different chromatin categories. Are there differences between chromatin types?
+```{r}
+#Change colnames
+colnames(gene.hits.hmap.b) <- c("Regulatory elements (4 IPRs)","H3K27me3 (4 IPRs)","Triple heterochromatin (4 IPRs)","Others (5 IPRs)","Gene bodies (2 IPRs)")
+
+# The dendrogram for rows
+dst <- dist(gene.hits.hmap.b)
+hc_row <- hclust(dst)
+row_dend <- as.dendrogram(hc_row)
+row_dend <- seriate_dendrogram(row_dend, dst, method="OLO")
+
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_gene_heatmap_horizontal_names.pdf", width = 10)
+pheatmap((as.matrix(t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)')))), breaks = seq(-5,5, by = 0.1), cellwidth = 3,cellheight = 12, treeheight_col = 80, show_colnames = F, border_color = NA, cluster_row = F, cluster_cols=as.hclust(row_dend), color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+dev.off()
+```
+# add correlation matrix
+```{r}
+gene.order <- data.frame(gene = tmp.clust$labels, order = tmp.clust$order) %>% arrange(order)
+
+tmp <- cor((as.matrix(t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)')))), method = "spearman")
+
+corrplot(tmp, type ="upper",method = "color",)
+
+pheatmap(tmp,cluster_cols=as.hclust(row_dend),cluster_rows=as.hclust(row_dend), cellwidth = 1,cellheight = 1, show_colnames = F, show_rownames = F)
+```
+
+
+#Figure E: Tip60 and 53BP1 (link to complexes)
+```{r}
+#Check 53BP1 and Tip60 effect (both major chromatin sensors in DNA repair)
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_53bp1_tip60.pdf",height = 3, useDingbats = F)
+ggplot(screen.detail %>% filter(gene %in% c("KAT5","TP53BP1")) %>% select(chromatin,mmej.SCscore,gene) %>% distinct()) + geom_quasirandom(aes(gene,mmej.SCscore, color = chromatin)) + theme_bw() + coord_cartesian() + ylab("z-score (MMEJscore)") + scale_color_manual(values = chromatin.colors) + coord_fixed(ratio = 0.25, ylim = c(-6,6))
+dev.off()
+```
+
+# Figure F: Tip60 complex proteins correlate to each other?
+```{r}
+#TIP60 and 53BP1 correlation
+tip60.complex <- c("KAT5","EP400","ING3","TRRAP","YEATS4","BRD8","EPC1","EPC2","DMAP1","MORF4L1","RUVBL1","RUVBL2")
+
+# Select only the ones selected from screening
+tip60.barcode <- screen.detail %>% filter(gene %in% tip60.complex) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.tip60 <- cor(tip60.barcode, method = "spearman")
+tip60.corr <- cor.tip60[upper.tri(cor.tip60)]
+
+# Random set of 11 genes
+set.seed(1)
+random.genes <- sample(screen.detail$gene, 11)
+
+# Select only the ones selected from screening
+random.barcode <- screen.detail %>% filter(gene %in% random.genes) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.random <- cor(random.barcode, method = "spearman")
+random.corr <- cor.random[upper.tri(cor.random)]
+
+
+#Put two things together
+random.cor.bc <- tibble(type = rep("random",length(random.corr)), value = random.corr)
+tip60.cor.bc <- tibble(type = rep("Tip60-NuA4 complex",length(tip60.corr)), value = tip60.corr)
+plot.cor.analysis.bc <- bind_rows(random.cor.bc,tip60.cor.bc)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+#plot
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_tip60_complex.pdf", height = 3,width = 5, useDingbats = F)
+ggplot(plot.cor.analysis.bc, aes(fct_relevel(type, c("Tip60-NuA4 complex")),value)) + geom_quasirandom() + geom_boxplot(aes(fill = type),alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), label.x.npc = 0.4) + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient") + theme(axis.title.x = element_blank())
+dev.off()
+```
+
+#Figure F: Alternative (geom_tile with dots)
+```{r}
+#Plot 
+pheatmap(cor.tip60)
+
+# Geom_tile
+tip60 <- screen.detail %>% filter(gene %in% tip60.complex) %>% select(chromatin,gene,mmej.SCscore) %>% distinct() %>% filter(gene %in% tip60.complex)
+
+pdf(file =  "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210520_tip60_complex_heatmap.pdf", width = 5)
+ggplot(tip60 %>% distinct()) + 
+    geom_tile(aes(chromatin,fct_relevel(gene,tip60.complex), fill = mmej.SCscore)) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    geom_point(data = tip60 %>% 
+                   filter(abs(mmej.SCscore) > 1.65), aes(chromatin,fct_relevel(gene,tip60.complex)), size = 1, alpha = 0.5) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F") + 
+    coord_cartesian(expand = F)
+dev.off()
+
+
+```

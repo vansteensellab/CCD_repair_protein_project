@@ -1,0 +1,341 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+```
+
+# Import coordinates: from iPCR and Tagmap
+```{r, eval=T, warning=F, message=F}
+#Tagmap data
+#List files
+dir="/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20230123_revision_scripts/RPE_DSB_TRIP/clone_mapping/"
+setwd(dir)
+clone_files <- list.files(pattern= "XV", full.names = T)[c(4,10)]
+
+clone_integrations <- map_dfr(clone_files, function(x){
+  setwd(dir)
+  read_delim(x, show_col_types = F) %>%
+    mutate(filename = x) %>%
+    separate(filename, into = c("a","owner","clone_number", "filetype")) %>%
+    mutate(method = "Tagmap") %>%
+    arrange(-read_count_1)
+})
+
+#iPCR data
+iPCR_dir="/DATA/projects/DSBrepair/data/xv20230328_RPE_DSB_TRIP_clones_iPCR/table/"
+setwd(iPCR_dir)
+iPCR_files <- list.files(full.names=F)
+
+clone_integrations_iPCR <- map_dfr(iPCR_files, function(x){
+  read_delim(x, show_col_types = F) %>%
+    mutate(filename = x) %>%
+    separate(filename, into = c("a", "exp","cell","b","c","clone","read")) %>%
+    mutate(method = "iPCR") %>%
+    arrange(-total_mapped)
+})
+
+```
+
+# Check number of reads
+```{r, eval=T, warning=F, message=F}
+#Prepare dataframe
+IPR_tagmap <- clone_integrations %>% 
+  mutate(clone_number = case_when(clone_number == 14 ~ "clone14",
+                                  clone_number == 32 ~ "clone32",
+                                  T ~ clone_number)) %>%
+  select(read_count, read_count_1, read_count_2, clone_number, method)
+
+IPR_iPCR <- clone_integrations_iPCR %>%
+  select("read_count"= total_mapped, "read_count_1" = reads1, "read_count_2" = reads2, "clone_number" = clone, method, read)
+
+combine_read_counts <- bind_rows(IPR_tagmap, IPR_iPCR)
+
+
+#Plot number of reads (correlation of read numbers)
+plot1 = ggplot(combine_read_counts) +
+  geom_point(aes(log10(read_count_1), log10(read_count_2), color = read)) +
+  coord_fixed(expand = T, ratio =1) + facet_wrap(~ clone_number + method)
+
+#Plot total number of reads
+plot2 = ggplot(combine_read_counts) +
+  geom_quasirandom(aes(method,log10(read_count))) +
+  facet_wrap(~clone_number) + 
+  geom_hline(yintercept = 1, linetype = 2) +
+  theme_bw()
+
+ggplotly(plot1)
+ggplotly(plot2)
+
+```
+# Conclusion: I will take reporters with more than 10 total_reads
+
+# Check coordinates
+```{r}
+#Tagmap
+IPR_filter_tagmap <- clone_integrations %>% 
+  filter(read_count > 10) %>%
+  mutate(clone = case_when(clone_number == 14 ~ "clone14",
+                                  clone_number == 32 ~ "clone32",
+                                  T ~ clone_number))
+IPR_filter_iPCR <- clone_integrations_iPCR %>% filter(total_mapped > 10)
+
+# Do files 1 and 2 from iPCR pipeline match?
+melt_iPCR <- IPR_filter_iPCR %>% select(barcode, start_pos, clone, read) %>% reshape2::dcast(clone+barcode ~ read, value.var = "start_pos")
+
+plot3 = ggplot(melt_iPCR) +
+  geom_point(aes(`1`, `2`, IPR = barcode)) +
+  theme_bw() + xlab("Coordinate_file_1") + ylab("Coordinate_file_2")
+
+ggplotly(plot3)
+
+```
+# CONCLUSION: for most IPRs both coordinates match. I will keep these!
+
+# Filter IPRs with both coordinates matching
+```{r}
+# Get IPRs with high confidence
+iPCR_barcodes <- melt_iPCR %>% 
+  mutate(mapping_dist = abs(`2`-`1`)) %>% 
+  filter(mapping_dist < 5000) %>%
+  select(clone, barcode) %>%
+  distinct()
+
+# Filter barcodes
+IPR_high_confidence_1 <- IPR_filter_iPCR %>% 
+  right_join(iPCR_barcodes) %>% 
+  filter(read == 1) %>%
+  select(barcode, clone, seqname, "start" = start_pos, "reads_iPCR_1" = total_mapped, method)
+
+# Filter barcodes
+IPR_high_confidence_2 <- IPR_filter_iPCR %>% 
+  right_join(iPCR_barcodes) %>% 
+  filter(read == 2) %>%
+  select(barcode, clone, seqname, "end" = start_pos, "reads_iPCR_2" = total_mapped, method)
+
+plot4 =ggplot() + 
+  geom_point(data = IPR_filter_tagmap,
+             aes(chr, start, color = method), size = 2) + 
+    geom_point(data = IPR_high_confidence_1, 
+             aes(seqname, start, color = method, IPR = barcode), size = 0.5) +
+  theme_bw() + facet_wrap(~ clone) +
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplotly(plot4)
+
+
+```
+#CONCLUSION: Clone #14 is out, I am not going to proceed with it.
+
+# Map iPCR locations with chip coverage pipeline
+```{r}
+#prepare data table (chr start end name)
+IPR_clone32 <- IPR_high_confidence_2 %>% 
+  left_join(IPR_high_confidence_1) %>% 
+  filter(clone == "clone32") %>%
+  select(barcode, clone, seqname, start, end)
+
+export_mapping <- IPR_clone32 %>%
+  select("chr" = seqname, start, end, "name" = barcode)
+
+write_tsv(export_mapping, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230330_RPE_clone32_mapping.tsv")
+
+```
+#CONCLUSION: I run TRIP_location_info.snakemake with this file and RPE1 data
+
+
+#Load chromatin info of the reporters
+```{r}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230330_RPE_clone32_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+
+#Make a dataframe with all the files
+chromatin_features_clone32_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_clone32_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% reduce(left_join, by = "name")
+
+#Bind both
+chromatin_features_clone32 <-  left_join(chromatin_features_clone32_chip, chromatin_features_clone32_dam, by = c("ID"="name"))
+
+
+```
+# CONCLUSION: I created a dataframe with all values
+
+#Chromatin features of IPRs
+```{r}
+
+heatmap_matrix <-  chromatin_features_clone32 %>% filter(nchar(ID) == 16) %>% column_to_rownames(var = "ID")
+
+#Plot heatmap
+#pheatmap
+clone32_heatmap <- pheatmap(heatmap_matrix, silent = T)
+
+#Cluster IPRs by features
+clone32_bc_cluster <- rownames(heatmap_matrix[clone32_heatmap$tree_row[["order"]],])
+chromatin_cluster <-  colnames(heatmap_matrix[,clone32_heatmap$tree_col[["order"]]])
+
+#write.table(clone32_bc_cluster, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/figures/xv20220927_barcode_clustering.txt")
+
+#dt for plotting
+clone_32_IPR_melt <- heatmap_matrix %>% rownames_to_column(var = "barcode") %>% melt(value.name = "z_score", var.name = "feature")
+
+#Plot
+ggplot(clone_32_IPR_melt %>% filter(variable != "dam_H3K27me3")) + 
+  geom_tile(aes(fct_relevel(barcode, clone32_bc_cluster),fct_relevel(variable,chromatin_cluster), fill = z_score)) +
+  scale_fill_gradient2(low = "#009B9E",mid = "#F1F1F1", high = "#C75DAB", limits = c(-2,2), oob =scales::squish)  + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title = element_blank(), 
+        legend.position = "top") + 
+  coord_fixed(expand = F,ratio = 0.75)
+
+
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230123_RPE_clones_targetted_pA_DamID/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+
+clone_32_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230123_RPE_clones_targetted_pA_DamID/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("seq_run","sample_ID","exp","ID","NA","clone","gRNA","replicate"))
+}) %>% filter(clone == 32 & barcode %in% chromatin_features_clone32$ID) 
+
+```
+
+#Process pathway balance data
+```{r}
+#total counts per barcode in each clone
+read_per_barcode <- clone_32_pathway_assay %>%
+  dplyr::group_by(barcode, clone,replicate, gRNA) %>%
+  dplyr::summarise(total = sum(count))
+
+# Check editing efficiency
+pathway_assay_clones <- clone_32_pathway_assay %>% 
+  right_join(read_per_barcode) %>%
+  na.omit() %>%
+  mutate(freq = count/total,
+         mut = paste(call, gsub("-","",indel), sep = "_"))
+
+#dcast total counts
+dcast_counts_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + exp + clone + gRNA + replicate ~ mut, value.var = "count", fill=0, fun.aggregate = mean)
+
+#dcast total counts
+dcast_freq_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + exp + clone + gRNA + replicate ~ mut, value.var = "freq", fill= 0, fun.aggregate = mean)
+
+colnames(dcast_freq_clones)[6:length(colnames(dcast_freq_clones))] <- paste0("freq_", colnames(dcast_counts_clones)[6:length(dcast_counts_clones)])
+
+#combine both
+dcast_counts_freq_clones <- dcast_counts_clones %>%
+  left_join(dcast_freq_clones)
+
+# Process kinase inhibitor data
+pathway_assay_clones.processed <- dcast_counts_freq_clones %>% 
+  filter(del_7 + ins_1 > 30) %>% #Apply the read number filtering step
+  mutate(freqCut = 1 - freq_wt_0,
+         log2MMEJNHEJratio = log2(del_7 / ins_1),
+         MMEJ_freq = del_7/(del_7+ins_1)) %>%
+  dplyr::select(barcode, exp,clone,gRNA, replicate,log2MMEJNHEJratio,MMEJ_freq,freqCut, del_7, ins_1, wt_0)  %>% distinct()
+
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- pathway_assay_clones.processed %>% 
+  dplyr::group_by(exp, replicate,gRNA,clone) %>%
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>%
+  filter(mean.cut < 0.90) %>% 
+  dplyr::select(exp,replicate,gRNA,clone)
+
+#Filter based on cutting efficiency
+filtered.RPE.clones.tib <- pathway_assay_clones.processed %>% 
+  anti_join(filter.out.wells, by = c("exp", "replicate","gRNA","clone"))
+
+#Calculate average values
+average_values <- filtered.RPE.clones.tib %>%
+  dplyr::group_by(barcode,clone,gRNA) %>%
+  dplyr::summarise(mean_ratio = mean(MMEJ_freq),
+                   sd_ratio = sd(MMEJ_freq),
+                   mean_cut = mean(freqCut),
+                   sd_cut = sd(freqCut))
+
+```
+
+#Check first plot (individual values)
+```{r}
+#Left_join
+pathway_location_clone32 <- average_values %>% left_join(chromatin_features_clone32, by = c("barcode" = "ID"))
+
+#Calculate correlation coeficients
+
+spearman_coefficients <- map_dfr(colnames(pathway_location_clone32[8:28]), function(x){
+  balance <- pathway_location_clone32$mean_ratio
+  feature <-  pathway_location_clone32[x]
+  spearman.rho <- stats::cor(balance, feature, method = "spearman")
+  tibble(chromatin = x, rho = spearman.rho[1])
+})
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% filter(chromatin != "dam_H3K27me3")) + 
+  geom_col(aes(reorder(chromatin,rho),rho)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.")
+
+```
+
+#Correlation examples
+```{r}
+#With LMNB2
+ggplot(pathway_location_clone32, aes(dam_H3K9me3, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+
+#With H3K4me3
+ggplot(pathway_location_clone32, aes(chip_H3K27ac.x, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+#With LMNB2
+ggplot(pathway_location_clone32, aes(chip_H3K27me3.y, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+
+```

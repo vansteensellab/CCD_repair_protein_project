@@ -1,0 +1,6 @@
+TYPE	NHEJ	MMEJ
+0cf9bbc2-cbd5-4b64-8d90-cfa416307b39	2	7
+5f94cb62-4019-47ff-bf6a-eeda8e9e033c	3	3
+aa4a868a-df23-4eef-a618-e945aa2ce98a	1	10
+b37d6283-6f95-4975-a794-f3d5c4bbc7b3	1	2
+ee5d5e7d-78cf-4a29-a9ee-56aa3da877dd	4	5

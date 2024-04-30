@@ -1,0 +1,160 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim: In this file, I will explore some of the possible plots, where I get general conclusions from K562 and RPE1wt data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+#Proteins_validation
+proteins_gRNA <- tibble(gRNA = c("36","38","40","42","44","46","48","50","52","54","56","58","60","62","64","66","68","70","72","74"),
+                        gene = c("ATM","ATR","BLM","BOD1L1","BRCA2","BRCC3","CHAF1A","CHEK2","FAAP24","FANCD2","FANCG","FANCM","MDC1","PARP1","POLL","RAD50","RBBP8","RMI2","SMC5","TOPBP1"))
+
+#Import validation experiment data
+#Processed CCD data (4 cell lines)
+PRO_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","PRO_CCD")
+DEF_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","DEF_CCD")
+
+#Bind all table together
+PRO_DEF_CCD <- bind_rows(PRO_CCD, DEF_CCD)
+
+#Load ATMi data 
+inhibitor_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","inhibitor_CCD")
+
+#Load raw data with controls
+PRO_controls <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","PRO_screening_raw") %>% filter(gRNA == "halfLBR2")
+DEF_controls <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","DEF_screening_raw") %>% filter(gRNA == "LBR2")
+
+#Bind_rows 
+PRO_DEF_controls <- bind_rows(PRO_controls, DEF_controls)
+
+
+#log2 chromatin
+PRO_log2_chrom <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","PRO_log2")
+DEF_log2_chrom <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","DEF_log2")
+#Bind_rows 
+PRO_DEF_log2_chrom <- bind_rows(PRO_log2_chrom, DEF_log2_chrom)
+
+#log2 inhibitor
+inhibitor_log2_chrom <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_validation_RPE1/","inhibitor_log2")
+
+#Export data frame
+chromatin_data_RPE1 <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230806_DSB_TRIP_pool_chromatin_data.rds")
+
+```
+
+#Plot correlation between PRO & DEF
+
+```{r}
+PRO_DEF_dcast <- PRO_DEF_CCD %>% 
+  select(gene, cell_line, global_diff) %>%
+  distinct() %>%
+  reshape2::dcast(gene ~ cell_line,value.var = "global_diff") %>%
+  na.omit()
+```
+
+#Plot differencial effects of these genes
+```{r, fig.width=4, fig.height=2.5}
+ATM_MDC1_balance <- PRO_DEF_log2_chrom %>%
+  distinct() %>% na.omit() %>% filter(gene %in% c("ATM")) %>%
+  bind_rows(inhibitor_log2_chrom %>% select(cell_line, gene = inhibitor, mean.log2foldchange, dam_LMNB1, dam_H3K9me2,dam_H3K9me3))
+
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_5_ATM_MDC1/xv20231027_Fig5AB_global_ATM_MDC1_log2diff.pdf",width = 4, height = 2.5)
+ggplot(ATM_MDC1_balance) +
+  geom_quasirandom(aes(fct_relevel(cell_line,c("PRO","DEF")), mean.log2foldchange, color = cell_line)) + 
+  facet_wrap(~ fct_relevel(gene, c("ATM","ATMi")),nrow =1) +
+  geom_hline(yintercept = 0, linetype =2) +
+  scale_color_manual(values = c("#9f86bf","#95c482")) +
+  theme_bw() +
+  theme(legend.position = "none", panel.grid = element_blank()) + ylab("Global ∆log2 MMEJ:NHEJ") + xlab("Cell line")
+dev.off()
+
+#Test
+ATM_MDC1_balance_wilcox <- ATM_MDC1_balance %>% 
+  dplyr::group_by(gene) %>%
+  rstatix::t_test(mean.log2foldchange ~ cell_line) %>%
+  mutate(fdr = p.adjust(p, method = "BH"))
+
+#P-value is very siginificant in BRCA1 pos vs. null
+
+# Data source table for ATM KO (fig5a)
+fig5a <- ATM_MDC1_balance %>%
+  filter(gene == "ATM") %>%
+  select(id_perturbation = gene, x_celltype = cell_line, id_barcode = barcode, y_globaldelta = mean.log2foldchange) %>%
+  mutate(figure = "Figure_5A")
+
+
+write.table(fig5a, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig5a.txt", row.names = F)
+
+
+# Data source table for ATM inhibitor (fig5a)
+fig5b <- ATM_MDC1_balance %>%
+  filter(gene == "ATMi") %>%
+  select(id_perturbation = gene, x_celltype = cell_line, id_barcode = barcode, y_globaldelta = mean.log2foldchange) %>%
+  mutate(figure = "Figure_5B")
+
+
+write.table(fig5b, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig5b.txt", row.names = F)
+
+```
+
+#Plot CCDs with heterochromatin
+```{r, fig.width=4.5, fig.height=2}
+ATM_MDC1_CCD_estim <- PRO_DEF_CCD %>%
+  bind_rows(inhibitor_CCD %>%
+              select(gene = inhibitor, CCD_estim_diff, cell_line, chrom_feature, CCD_synergy_score, global_diff)) %>%
+  distinct() %>% filter(gene %in% c("ATM","ATMi") & chrom_feature %in% c("LMNB1","H3K9me2","H3K9me3","H3K27me3","late_replicating")) 
+
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/figure_5_ATM_MDC1/xv20231130_Fig5CD_CCD_effect_heterochromatin.pdf",width = 4.5, height =  2.5)
+ggplot(ATM_MDC1_CCD_estim) +
+  geom_quasirandom(aes(fct_relevel(cell_line,c("PRO","DEF")), CCD_estim_diff, color = cell_line, shape = chrom_feature), size = 3) + 
+  facet_wrap(~ fct_relevel(gene, c("ATM","MDC1","ATMi")),nrow =1) +
+  geom_hline(yintercept = 0, linetype =2) +
+  scale_color_manual(values = c("#9f86bf","#95c482")) +
+  scale_shape_manual(values = c(15:18,4)) +
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid = element_blank()) + ylab("Heterochromatin ∆CCD") + xlab("Cell line")
+dev.off()
+
+#Test
+ATM_MDC1_CCD_wilcox <- ATM_MDC1_CCD_estim %>% 
+  filter(chrom_feature %in% c("H3K9me2","H3K9me3","LMNB1","late_replicating","H3K27me3")) %>% 
+  dplyr::group_by(gene) %>%
+  rstatix::t_test(CCD_estim_diff ~ cell_line, paired = T,ref.group = "PRO") %>%
+  mutate(fdr = p.adjust(p, method = "BH"))
+
+#p-value is > 0.4 in all cases
+
+# Data source table for ATM KO (fig5c)
+fig5c <- ATM_MDC1_CCD_estim %>%
+  filter(gene == "ATM") %>%
+  select(id_perturbation = gene, x_celltype = cell_line, y_CCD = CCD_estim_diff, symbol_chromatin = chrom_feature) %>%
+  mutate(figure = "Figure_5C")
+
+
+write.table(fig5c, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig5c.txt", row.names = F)
+
+# Data source table for ATM KO (fig5d)
+fig5d <- ATM_MDC1_CCD_estim %>%
+  filter(gene == "ATMi") %>%
+  select(id_perturbation = gene, x_celltype = cell_line, y_CCD = CCD_estim_diff, symbol_chromatin = chrom_feature) %>%
+  mutate(figure = "Figure_5D")
+
+
+write.table(fig5d, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/xv20240417_sourcedata_fig5d.txt", row.names = F)
+
+```
+
+
+

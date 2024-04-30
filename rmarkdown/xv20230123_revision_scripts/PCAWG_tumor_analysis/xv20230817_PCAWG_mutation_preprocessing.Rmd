@@ -1,0 +1,728 @@
+---
+title: "xv20230817_mutations_analysis"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+I will explore the data that I received from Mathijs and proccess it as we did previously for BRCA2mut tumors
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+
+```
+
+## Libraries:
+
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+```
+
+## Import data
+
+## SV data
+```{r pressure, echo=FALSE, message= F, warning=F}
+setwd(in.dir)
+
+#Both data-sets
+sporadic_mutation_dt <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/HNSC/BRASS/summary_shortened.txt")  %>%
+  mutate(driver_mut = "CTR", 
+         sample = `# sample`) %>%
+    select(-`# sample`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) #BRCA2 +/+ HNSCC
+BRCA2_mutation_dt <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/BRCA2/BRASS/summary_shortened.txt") %>%
+  mutate(driver_mut = "BRCA2",
+         sample = `# sample`) %>%
+    select(-`# sample`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) #BRCA2 +/+ HNSCC) #BRCA2 -/- HNSCC
+
+# Generate data table with SV for all driver mutations
+#List of all driver mutations
+driver_mutations <- list.files(path = "/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/SV", full.names = T)
+
+
+#Function to create a data frame for all different genetic backgrounds
+SV_all_proteins <- map_dfr(driver_mutations, function(y) {
+  #Import all data for a single driver mutation
+protein_file_names <- list.files(path = y, full.names = T)
+one_protein_data <-map_dfr(protein_file_names, function(x) {
+  read_delim(file = x) %>% 
+    mutate(f = gsub(paste0("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/SV/"),"",x),
+           chr1 = as.numeric(`# chr1`)) %>%
+    select(-`# chr1`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) %>%
+    separate(f, into = c("driver_mut","sample"), sep = "/") %>%
+    mutate(sample = gsub(".bedpe","", sample))
+})
+})
+
+#Bind all dataframes
+SV_all_tumors <- sporadic_mutation_dt %>% bind_rows(SV_all_proteins, BRCA2_mutation_dt)
+```
+
+#Summary of imported files
+```{r}
+#Summary text
+print(paste("This script imported a total of", 
+            nrow(SV_all_tumors), 
+            "SV from", 
+            length(unique(SV_all_tumors$driver_mut)), 
+            "different genetic backgrounds and",
+            length(unique(SV_all_tumors$sample)),
+            "human tumor genomes."))
+
+#Plot total SV summary of all tumors
+ggplot(SV_all_tumors) + 
+  geom_bar(aes(driver_mut,
+               fill = sample)) + 
+  facet_wrap(~ svclass) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "none")
+```
+
+#Plot number of SV per human genome
+```{r}
+#Plot SV summary per human genome
+SV_relative_to_human_genome <- SV_all_tumors %>%
+  dplyr::group_by(sample, driver_mut, svclass) %>%
+  dplyr::summarise(counts = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(driver_mut, svclass) %>%
+  dplyr::summarise(avg_SV = mean(counts))
+
+#Plot total SV summary of all tumors
+ggplot(SV_relative_to_human_genome) + 
+  geom_col(aes(driver_mut,avg_SV)) + 
+  facet_wrap(~ svclass) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5))
+```
+#CONCLUSION: SV data is properly loaded in a single data frame. We can observe different number of SVs per driver gene.
+
+#Import indel data
+```{r, warning=F, message=F}
+setwd(in.dir)
+#Import data for indels classified by state
+#BRCA2 mut
+BRCA2_indel_files <- list.files(path = "import/xv20220915_INDEL_data_mathijs/xv20220920_CLASS_mathijs_data/BRCA2",full.names = T)
+BRCA2_indel_data <- map_dfr(BRCA2_indel_files, function(x) {
+  read.delim(x, header = T) %>% 
+    mutate(sample = gsub(".class","",gsub("import/xv20220915_INDEL_data_mathijs/xv20220920_CLASS_mathijs_data/BRCA2/","",x)),
+           driver_mut = "BRCA2")
+})
+#HNSCC mut
+HNSCC_indel_files <- list.files(path = "import/xv20220915_INDEL_data_mathijs/xv20220920_CLASS_mathijs_data/HNSC",full.names = T)
+HNSCC_indel_data <- map_dfr(HNSCC_indel_files, function(x) {
+  read.delim(x, header = T) %>% 
+    mutate(sample = gsub(".class","",gsub("import/xv20220915_INDEL_data_mathijs/xv20220920_CLASS_mathijs_data/HNSC/","",x)),
+           driver_mut = "CTR")
+})
+
+#Function to import all the data
+#List of all driver mutations
+driver_mutations_indels <- list.files(path = "/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INDEL/CLASSIFIED", full.names = T)
+
+indel_all_proteins <- map_dfr(driver_mutations_indels, function(y) {
+  #Import all data for a single driver mutation
+protein_file_names <- list.files(path = y, full.names = T, pattern = ".type")
+one_protein_data <-map_dfr(protein_file_names, function(x) {
+  read_delim(file = x) %>% 
+    mutate(f = gsub(paste0("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INDEL/CLASSIFIED/"),"",x)) %>%
+    separate(f, into = c("driver_mut","sample"), sep = "/") %>%
+    mutate(sample = gsub(".somatic.indel.type","", sample))
+})
+})
+
+#Bind all three data frames
+indell_all_tumor_data <- bind_rows(BRCA2_indel_data, HNSCC_indel_data, indel_all_proteins)
+
+```
+
+#Summary of imported indel files
+```{r}
+#Summary text
+print(paste("This script imported a total of", 
+            nrow(indell_all_tumor_data), 
+            "indels from", 
+            length(unique(indell_all_tumor_data$driver_mut)), 
+            "different genetic backgrounds and",
+            length(unique(indell_all_tumor_data$sample)),
+            "human tumor genomes."))
+
+#Plot total SV summary of all tumors
+ggplot(indell_all_tumor_data) + 
+  geom_bar(aes(driver_mut,
+               fill = sample)) + 
+  facet_wrap(~ indelClass) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "none")
+```
+#CONCLUSION: Indel data can also be imported and merged with BRCA2 and CTR datasets
+
+#Plot number of indels per human genome
+```{r}
+#Plot indel summary per human genome
+indels_relative_to_human_genome <- indell_all_tumor_data %>%
+  dplyr::group_by(sample, driver_mut, indelClass) %>%
+  dplyr::summarise(counts = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(driver_mut, indelClass) %>%
+  dplyr::summarise(avg_indel = mean(counts))
+
+#Plot total SV summary of all tumors
+ggplot(indels_relative_to_human_genome) + 
+  geom_col(aes(driver_mut,avg_indel)) + 
+  facet_wrap(~ indelClass) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5))
+```
+
+#Import qualitative data
+```{r}
+pcaw_TCGA_donor <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/pcawg_TCGA_to_donorID.txt")
+selection <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/selection.txt")
+
+#Combine them
+tumor_info <- left_join(pcaw_TCGA_donor,selection, c("TCGA_ID" = "sample_id"))
+```
+#CONCLUSION: Tumor info is combined in a single data table
+
+#Add tumor data to indel and SV data
+```{r}
+#SV data
+SV_tumor_data <- left_join(SV_all_tumors, tumor_info, c("sample"="TCGA_ID"))
+
+#Indel data
+indel_tumors_info <- left_join(indell_all_tumor_data, tumor_info, c("sample"="TCGA_ID"))
+```
+
+#Select only the mutations used in the paper
+```{r}
+# Selected deletion classes
+deletion_classification <- BRCA2_indel_data %>% 
+  select(indelClass,indelSubClass,indelRepeats,CLASS) %>% 
+  distinct() %>% 
+  mutate(CLASS = case_when(indelClass == ">1bp deletion at repeats" & indelSubClass == "5+" & indelRepeats == "1" ~ "cNHEJ",
+                           T ~ CLASS))
+
+#Cross this data frame with all indels
+deletion_classified <- indel_tumors_info %>% select(-CLASS) %>% left_join(deletion_classification)
+```
+
+#Plot differences in mutations per tumor (small deletion)
+```{r}
+# plot total number
+ggplot(deletion_classified %>% filter(!is.na(CLASS))) + 
+  geom_bar(aes(CLASS)) + 
+  facet_wrap(~ driver_mut, scales = "free")
+```
+
+```{r}
+#Calculate the number of sample per driver mut
+number_sample_driver <- deletion_classified %>% 
+  select(driver_mut, sample) %>%
+  distinct() %>%
+  dplyr::group_by(driver_mut) %>%
+  dplyr::summarise(sample_n = n())
+
+
+# Plot fold change to control
+simple_dt <- deletion_classified %>% 
+  dplyr::group_by(driver_mut,CLASS) %>%
+  dplyr::summarise(count = n()) %>% 
+  left_join(number_sample_driver) %>%
+  na.omit() %>%
+  mutate(rel_mut = count/sample_n) %>%
+  ungroup()
+
+control_dt <- simple_dt %>%
+  filter(driver_mut == "CTR") %>%
+  select(CLASS,ctr_count = rel_mut)
+
+log2fc_indel_class <- simple_dt %>%
+  left_join(control_dt) %>%
+  mutate(log2fc = log2(rel_mut/ctr_count))
+
+#Plot
+ggplot(log2fc_indel_class %>% filter(driver_mut != "CTR")) + 
+  geom_col(aes(CLASS,log2fc)) + 
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(sample_n)) + sample_n, ncol = 7) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5))
+```
+#Calculate MMEJ/NHEJ ratio
+```{r}
+ratio_dcast <- simple_dt %>% 
+  reshape2::dcast(driver_mut ~ CLASS, value.var = "rel_mut") %>%
+  mutate(ratio = log2(MMEJ/cNHEJ))  %>%
+  left_join(number_sample_driver)
+
+ggplot(ratio_dcast) +
+  geom_col(aes(reorder(driver_mut,dplyr::desc(sample_n)), ratio)) +
+  geom_hline(yintercept = 1.17,
+             linetype = 2) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust =1,
+                                   vjust = 0.5))
+```
+
+#Calculate ratio per tumor, see how noisy the data is
+```{r}
+ratio_per_sample <- deletion_classified %>% 
+  dplyr::group_by(driver_mut,CLASS,sample) %>%
+  dplyr::summarise(count = n()) %>% 
+  na.omit() %>%
+  ungroup()
+
+sample_ratio_dcast <- ratio_per_sample %>% 
+  reshape2::dcast(driver_mut+sample ~ CLASS, value.var = "count") %>%
+  mutate(ratio = log2(MMEJ/cNHEJ))  %>%
+  left_join(number_sample_driver)
+
+#Calculate mean CTR (HNSCC cohort)
+mean_mutation <- sample_ratio_dcast %>% filter(driver_mut == "CTR") %>% pull(ratio) %>% mean()
+
+ggplot(sample_ratio_dcast, aes(reorder(driver_mut,dplyr::desc(sample_n)), ratio)) +
+  stat_summary(geom = "bar") +
+  geom_quasirandom() +
+  geom_hline(yintercept = 1.32,
+             linetype = 2) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust =1,
+                                   vjust = 0.5)) +
+  ylab("log2 MMEJ:NHEJ deletion ratio")
+
+```
+
+#Filter SV data used in the screen and plot total number
+```{r}
+#Filter deletions with MH
+MH_deletion_data <- SV_tumor_data %>%
+    filter(svclass == "deletion" & length(`micro-homology`) > 1 & `micro-homology` != "." & `non-template` == "." & `Brass Notation` != "_")
+
+MH_sample_n_driver <- SV_tumor_data %>%
+  select(driver_mut, sample) %>%
+  distinct() %>%
+  dplyr::group_by(driver_mut) %>%
+  dplyr::summarise(count = n())
+
+#Calculate number of total deletions per tumors
+relative_deletion_data <- MH_deletion_data %>%
+  dplyr::group_by(driver_mut) %>%
+  dplyr::summarise(MH_count = n()) %>%
+  left_join(MH_sample_n_driver) %>%
+  mutate(rel_counts = MH_count/count)
+
+#Plot total amount
+ggplot(relative_deletion_data) + geom_col(aes(driver_mut, rel_counts))
+
+```
+
+#Filter SV data used in the screen and plot number per tumor
+```{r}
+#Add empty values
+all_samples <- SV_tumor_data %>% select(driver_mut, sample) %>% unique()
+
+
+MH_sample_n_driver <- SV_tumor_data %>%
+  select(driver_mut, sample) %>%
+  distinct() %>%
+  dplyr::group_by(driver_mut) %>%
+  dplyr::summarise(count = n())
+
+#Calculate mean CTR (HNSCC cohort)
+mean_mutation_CTR <- relative_deletion_data %>% filter(driver_mut == "CTR") %>% pull(MH_count) %>% mean()
+
+#Calculate number of total deletions per tumors
+relative_deletion_data <- MH_deletion_data %>%
+  dplyr::group_by(driver_mut, sample) %>%
+  dplyr::summarise(MH_count = n()) %>%
+  right_join(all_samples) %>%
+    mutate_if(is.numeric,coalesce,0) %>%
+  left_join(MH_sample_n_driver)
+
+#Plot total amount
+ggplot(relative_deletion_data, aes(reorder(driver_mut,dplyr::desc(count)), MH_count)) + 
+  stat_summary(geom = "bar") +
+  geom_hline(yintercept = 18.18,
+             linetype = 2) +
+  geom_quasirandom() +
+  theme_bw()
+
+```
+
+
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+
+```
+
+#Curate indel patterns: What are the features that I am interested (only select deletions)
+```{r, warning = F}
+#Select only deletions (in all four files)
+sporadic_indel_dt <- HNSCC_indel_data %>% 
+  left_join(sample_conversion, by = c('sample' ='TCGA ID')) %>% #Bind HPV data
+  filter(!sample %in% c("de8ef60b-4dbe-4aa8-adef-6f58cdfada29","e52ffa79-557a-4024-81f3-f3826c227ec5","d25a4c65-9cb4-4611-909e-e68f93408d84") &grepl("Neg", `Name Supp. Table`)) #sample with mutation in putative FA proteins
+
+#Total mutations per tumor
+summary_n_tumour_spo_indel <- sporadic_indel_dt %>% dplyr::group_by(sample) %>% dplyr::summarise(mut_total = n())
+
+#BRCA2 mutant data
+BRCA2_indel_dt <- BRCA2_indel_data
+
+#Number of total MH flanked mutation per tumor
+summary_n_tumour_BRCA2_indel <- BRCA2_indel_dt %>% dplyr::group_by(sample) %>% dplyr::summarise(mut_total = n())
+
+print(paste("We detect a total of", sum(summary_n_tumour_spo_indel$mut_total), "MH mediated deletions in", nrow(summary_n_tumour_spo_indel), "sporadic HNSCC and ", sum(summary_n_tumour_BRCA2_indel$mut_total), "MH mediated deletions in",nrow(summary_n_tumour_BRCA2_indel),"BRCA2 mutant tumor"))
+
+```
+
+#Map indel data for BRCA2 and sporadic tumors
+```{r}
+#Create function to call unique LADs
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T) #Make LADs into GR ranges
+
+#Function to map mutations in unique LADs or iLADs
+LADs_status_call_indel <- function(x) {
+  print(dim(x))
+  mutations_GR <- makeGRangesFromDataFrame(x, keep.extra.columns = T) #Make a GR object with the coordinated of the deletion
+  LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutations_GR) #Find overlaps between deletions and LAD states
+  LAD_overlaps_dt <- tibble(x[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6]) #Extract the LAD_status of the mapped deletion
+  LAD_counts <- LAD_overlaps_dt %>% dplyr::group_by(tumor_id, mutation_id, LAD_status) %>% dplyr::summarize(count = n()) #How many different overlaps a deletions has. count = 1 -> single map, if bigger means goes over border
+  single_LADs_iLADs <-LAD_counts %>% reshape2::dcast(tumor_id + mutation_id ~ LAD_status, fill = 0) #Filter these that are called only once
+  #LAD_overlaps_dt %>% right_join(single_LADs_iLADs) #Keep only uniquely called
+}
+
+#Prepare the data table for mapping
+mutation_location_export_spo_indel <- sporadic_indel_dt %>% #Sporadic HNSCC
+    mutate(chr = CHR, start = POSITION, end = POSITION + 1,mutation_id = 1:nrow(.)) %>% #change chr format
+  select(chr, start, end, tumor_id = sample, mutation_id, indelClass, indelSubClass, indelRepeats, CLASS) #select needed columns
+
+mutation_location_export_BRCA2_indel<- BRCA2_indel_dt %>%  #BRCA2 mutant HNSCC
+  mutate(chr = CHR, start = POSITION, end = POSITION + 1,mutation_id = 1:nrow(.)) %>% #change chr format
+  select(chr, start, end, tumor_id = sample, mutation_id, indelClass, indelSubClass, indelRepeats, CLASS) #select needed columns
+
+#Run function (table A)
+spo_indel_LAD_maps <- LADs_status_call_indel(mutation_location_export_spo_indel) %>% mutate(tumor_type = "HHNSC_indel") #14560 uniquely mapped MH del in HNSCC tumors
+BRCA2_indel_LAD_maps <- LADs_status_call_indel(mutation_location_export_BRCA2_indel) %>% mutate(tumor_type = "BRCA2mut_indel") #47460 uniquely mapped MH del in BRCA2mut tumors
+
+#Build df for export
+HPVneg_HNSCC_export_indel <- mutation_location_export_spo_indel %>% 
+  left_join(spo_indel_LAD_maps, by = c("tumor_id", "mutation_id")) %>% 
+  mutate(CLASS = case_when(indelClass == ">1bp deletion at repeats" & indelSubClass == "5+" & indelRepeats == "1" ~ "cNHEJ",
+                           T ~ CLASS))
+
+BRCA2_HNSCC_export_indel <- mutation_location_export_BRCA2_indel %>% left_join(BRCA2_indel_LAD_maps, by = c("tumor_id", "mutation_id"))  %>% 
+  mutate(CLASS = case_when(indelClass == ">1bp deletion at repeats" & indelSubClass == "5+" & indelRepeats == "1" ~ "cNHEJ",
+                           T ~ CLASS))
+
+print(paste("CONCLUSION: We detect a total of", nrow(HPVneg_HNSCC_export_indel), "SV in 23 sporadic HNSCC and ", nrow(BRCA2_HNSCC_export_indel), "SV in 40 BRCA2 mutant tumor"))
+```
+#Plot total number of mutations
+```{r}
+total_mutations <- HPVneg_HNSCC_export_indel %>% na.omit() %>% dplyr::group_by(CLASS) %>% dplyr::summarise(count = n(), mean_counts = n()/22, tumor_type = "HNSC_HPVneg") %>% 
+  bind_rows(BRCA2_HNSCC_export_indel %>% na.omit() %>% dplyr::group_by(CLASS) %>% dplyr::summarise(count = n(), mean_counts = n()/41, tumor_type = "BRCA2_mut"))
+
+#Log2 fold change
+fold_change_total_mut <- total_mutations %>% reshape2::dcast(CLASS ~ tumor_type, value.var = "mean_counts") %>% mutate(fold_change_mutation = log2(BRCA2_mut/HNSC_HPVneg))
+
+#Plot fold change increase and decrease
+ggplot(fold_change_total_mut) + 
+  geom_col(aes(CLASS, fold_change_mutation)) + 
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5))
+
+```
+
+
+#Quick check of mutation accumulation
+```{r}
+#Check indels and see how they look quickly (HNSC)
+summary_table_HNSCC <- HPVneg_HNSCC_export_indel %>% dplyr::group_by(CLASS) %>% dplyr::summarise(tot_cLAD = sum(cLAD, na.rm = T),
+                                                                                     tot_ciLAD = sum(ciLAD, na.rm = T),
+                                                                                     tot_fLAD = sum(fLAD, na.rm = T),
+                                                                                     tot_fiLAD = sum(fiLAD, na.rm = T), 
+                                                                                     tumortype = "HNSC")
+
+#Check indels and see how they look quickly (HNSC)
+summary_table_BRCA2 <- BRCA2_HNSCC_export_indel %>% dplyr::group_by(CLASS) %>% dplyr::summarise(tot_cLAD = sum(cLAD, na.rm = T),
+                                                                                     tot_ciLAD = sum(ciLAD, na.rm = T),
+                                                                                     tot_fLAD = sum(fLAD, na.rm = T),
+                                                                                     tot_fiLAD = sum(fiLAD, na.rm = T), 
+                                                                                     tumortype = "BRCA2")
+
+#Plot all mutation
+plot_mutation_chromatin_state <- summary_table_HNSCC %>% na.omit() %>% select(CLASS, cLAD  = tot_cLAD, ciLAD = tot_ciLAD, tumor_type = tumortype) %>% reshape2::melt() %>% mutate(mean_counts = value/22) %>% bind_rows(summary_table_BRCA2 %>% na.omit() %>% select(CLASS, cLAD  = tot_cLAD, ciLAD = tot_ciLAD, tumor_type = tumortype) %>% reshape2::melt() %>% mutate(mean_counts = value/41))
+
+summary_per_tumor <- HPVneg_HNSCC_export_indel %>% mutate(tumor_type = "HNSC") %>% bind_rows(BRCA2_HNSCC_export_indel %>% mutate(tumor_type = "BRCA2")) %>% dplyr::group_by(CLASS, tumor_type, tumor_id) %>% dplyr::summarise(tot_cLAD = sum(cLAD, na.rm = T),
+                                                                                     tot_ciLAD = sum(ciLAD, na.rm = T),
+                                                                                     tot_fLAD = sum(fLAD, na.rm = T),
+                                                                                     tot_fiLAD = sum(fiLAD, na.rm = T))
+plot_mutation_chromatin_state_tumor <- summary_per_tumor %>% na.omit() %>% select(CLASS,tumor_id, cLAD  = tot_cLAD, ciLAD = tot_ciLAD, tumor_type) %>% reshape2::melt()
+
+## Merge
+summary_table <- bind_rows(summary_table_BRCA2, summary_table_HNSCC) %>% 
+  rowwise() %>% 
+  mutate(total_indel = sum(tot_cLAD, tot_ciLAD, tot_fLAD, tot_fiLAD)) %>%
+  mutate_at(c("tot_cLAD","tot_ciLAD","tot_fLAD","tot_fiLAD"), ~ . / total_indel) %>%
+  reshape2::melt() %>% filter(variable != "total_indel") %>%
+  reshape2::dcast(CLASS ~ tumortype + variable) %>% 
+  select(CLASS, HNSC_tot_ciLAD, BRCA2_tot_ciLAD, HNSC_tot_cLAD, BRCA2_tot_cLAD)
+
+colnames(summary_table) <- gsub("_tot","", colnames(summary_table))
+
+#Print summary table 
+print(summary_table)
+```
+
+#Prepare dataframe for export
+```{r}
+#
+indel_dataset_BRCA2_HNSC_supplementary <- HPVneg_HNSCC_export_indel %>% bind_rows(BRCA2_HNSCC_export_indel) 
+
+indel_dataset_BRCA2_HNSC <- indel_dataset_BRCA2_HNSC_supplementary %>%
+  filter(CLASS %in% c("cNHEJ","MMEJ"))
+
+total_mutation_class <- indel_dataset_BRCA2_HNSC %>% dplyr::group_by(tumor_id, CLASS, tumor_type) %>% dplyr::summarise(total_mutation = n())
+
+indel_dataset_BRCA2_HNSC_figure <- left_join(indel_dataset_BRCA2_HNSC,total_mutation_class)
+
+```
+
+
+#Curate data tables: What are the features that I am interested (only select deletions)
+```{r, warning = F}
+#Select only deletions (in all four files)
+sporadic_mutation_del_dt <- sporadic_mutation_dt %>% 
+  separate(`# sample`, into = c("sample","other_TCGA_sample"), sep = ",") %>% #Remove from sample column the second TCGA id
+  left_join(sample_conversion, by = c('sample' ='TCGA ID')) %>% #Bind HPV data
+  filter(!sample %in% c("de8ef60b-4dbe-4aa8-adef-6f58cdfada29","e52ffa79-557a-4024-81f3-f3826c227ec5","d25a4c65-9cb4-4611-909e-e68f93408d84") &grepl("Neg", `Name Supp. Table`)) #sample with mutation in putative FA proteins
+
+#Total mutations per tumor
+summary_n_tumour_spo <- sporadic_mutation_del_dt %>% dplyr::group_by(sample) %>% dplyr::summarise(mut_total = n())
+
+#Numeric brass score (quality call)
+sporadic_brass_score <- sporadic_mutation_del_dt$`Brass Notation` %>% 
+  str_extract("(?<=score ).*(?=\\))") %>% as.numeric()
+
+#BRCA2 mutant data
+BRCA2_mutation_del_dt <- BRCA2_mutation_dt %>% 
+  separate(`# sample`, into = c("sample","other_TCGA_sample"), sep = ",")
+
+
+#Number of total MH flanked mutation per tumor
+summary_n_tumour_BRCA2 <- BRCA2_mutation_del_dt %>% dplyr::group_by(sample) %>% dplyr::summarise(mut_total = n())
+
+#numeric brass score (Quality call)
+print(paste("CONCLUSION: We detect a total of", length(sporadic_brass_score), "SV in 23 sporadic HNSCC and ", length(BRCA2_brass_score), "SV in 40 BRCA2 mutant tumor"))
+
+```
+
+#Map SV for BRCA2 and sporadic tumors
+```{r}
+#Create function to call unique LADs
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T) #Make LADs into GR ranges
+
+#Function to map mutations in unique LADs or iLADs
+LADs_status_call <- function(x) {
+  print(dim(x))
+  same_chr_SV <- filter(x, as.numeric(chr_end) == as.numeric(chr_start))
+  print(dim(same_chr_SV))
+  mutations_GR <- makeGRangesFromDataFrame(same_chr_SV, keep.extra.columns = T) #Make a GR object with the coordinated of the deletion
+  LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutations_GR) #Find overlaps between deletions and LAD states
+  LAD_overlaps_dt <- tibble(same_chr_SV[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6]) #Extract the LAD_status of the mapped deletion
+  LAD_counts <- LAD_overlaps_dt %>% dplyr::group_by(tumor_id, mutation_id, LAD_status) %>% dplyr::summarize(count = n()) #How many different overlaps a deletions has. count = 1 -> single map, if bigger means goes over border
+  single_LADs_iLADs <-LAD_counts %>% reshape2::dcast(tumor_id + mutation_id ~ LAD_status, fill = 0) #Filter these that are called only once
+  #LAD_overlaps_dt %>% right_join(single_LADs_iLADs) #Keep only uniquely called
+}
+
+#Prepare the data table for mapping
+mutation_location_export_spo_SV <- sporadic_mutation_del_dt %>% #Sporadic HNSCC
+    mutate(chr = paste0("chr", `chr1`)) %>% #change chr format
+  select(chr, start = "start1", end = "start2", tumor_id = sample, mutation_id = `id/name`, svclass,chr_end = "chr2", chr_start = "chr1") #select needed columns
+
+mutation_location_export_BRCA2_SV <- BRCA2_mutation_del_dt %>%  #BRCA2 mutant HNSCC
+  mutate(chr = paste0("chr", `chr1`)) %>% #change chr format
+  select(chr, start = "start1", end = "start2", tumor_id = sample, mutation_id = `id/name`, svclass,chr_end = "chr2", chr_start = "chr1") #select needed columns
+
+#Run function (table A)
+spo_SV_LAD_maps <- LADs_status_call(mutation_location_export_spo_SV) %>% mutate(tumor_type = "HPVneg_HNSCC") #689 uniquely mapped MH del in HNSCC tumors
+BRCA2_SV_LAD_maps <- LADs_status_call(mutation_location_export_BRCA2_SV) %>% mutate(tumor_type = "BRCA2mut_HNSCC")#2281 uniquely mapped MH del in BRCA2mut tumors
+
+#Table b
+sv_type_spo <- sporadic_mutation_del_dt %>% select(tumor_id = sample, mutation_id= `id/name`, svclass,`micro-homology`,`non-template`,`Brass Notation`)
+sv_type_BRCA2 <- BRCA2_mutation_del_dt %>% select(tumor_id = sample, mutation_id = `id/name`, svclass,`micro-homology`,`non-template`,`Brass Notation`)
+
+#Table C
+BRASS_else_spo <- sporadic_mutation_del_dt %>% select(-svclass,-`micro-homology`,-`non-template`, - `readpair names`, -`Brass Notation`)
+BRASS_else_BRCA2 <- BRCA2_mutation_del_dt %>% select(-svclass,-`micro-homology`,-`non-template`, -`readpair names`, -`Brass Notation`)
+
+
+#Build df for export
+HPVneg_HNSCC_export <- spo_SV_LAD_maps %>% left_join(sv_type_spo) %>% left_join(BRASS_else_spo, by = c("tumor_id" = "sample","mutation_id" = "id/name")) %>% select(-`Overlap SV`, - `Name Supp. Table`)
+
+BRCA2_HNSCC_export <- BRCA2_SV_LAD_maps %>% left_join(sv_type_BRCA2) %>% left_join(BRASS_else_BRCA2, by = c("tumor_id" = "sample","mutation_id" = "id/name"))
+
+```
+
+```{r}
+#Filter for HPVneg and constitutive LADs or iLADs
+spo_HPVneg_c_maps <- HPVneg_HNSCC_export %>% #Sporadic HNSCC
+  filter(svclass == "deletion" & length(`micro-homology`) > 1 & `micro-homology` != "." & `non-template` == "." & `Brass Notation` != "_") %>% #Filter MH mediated deletions
+  filter((ciLAD == 1 | cLAD == 1 | fiLAD == 1 | fLAD == 1) & ciLAD + cLAD + fiLAD + fLAD == 1) %>% 
+  mutate(type = "sporadic_HPVneg") #420 total
+
+mutation_per_tumor_spo <- spo_HPVneg_c_maps %>% dplyr::group_by(tumor_id) %>% dplyr::summarise(total_MH_del = n())
+
+final_spo_HPVneg_c_mutations <- left_join(spo_HPVneg_c_maps,mutation_per_tumor_spo, by = "tumor_id")
+
+BRCA2_SV_c_maps <- BRCA2_HNSCC_export  %>% #Sporadic HNSCC
+  filter(svclass == "deletion" & length(`micro-homology`) > 1 & `micro-homology` != "." & `non-template` == "." & `Brass Notation` != "_") %>% #Filter MH mediated deletions
+  filter((ciLAD == 1 | cLAD == 1 | fiLAD == 1 | fLAD == 1) & ciLAD + cLAD + fiLAD + fLAD == 1) %>% 
+  mutate(type = "BRCA2mut") #747 total
+
+mutation_per_tumor_BRCA <- BRCA2_SV_c_maps %>% dplyr::group_by(tumor_id) %>% dplyr::summarise(total_MH_del = n())
+
+final_BRCA2_c_mutations <- left_join(BRCA2_SV_c_maps,mutation_per_tumor_BRCA, by = "tumor_id")
+
+#numeric brass score (Quality call)
+print(paste("CONCLUSION: We detect a total of",nrow(spo_HPVneg_c_maps), "MH uniquely mapped in 23 sporadic HNSCC and ", nrow(BRCA2_SV_c_maps), "MH uniquely mapped in 40 BRCA2 mutant tumor"))
+
+```
+
+#Summary table with all the number in here
+```{r, warnings = F}
+#Bind all data
+mutation_BRCA2_dataset <- bind_rows(final_spo_HPVneg_c_mutations,final_BRCA2_c_mutations) %>% mutate(del_length = start2 - start1)
+
+#Summarise number of tumors sequenced per genetic background
+sample_n <- mutation_BRCA2_dataset %>% 
+  select(type, tumor_id) %>% 
+  distinct() %>% 
+  dplyr::group_by(type) %>% dplyr::summarise(samp_n = n())
+# Length distribution 95CI
+length_summary <- mutation_BRCA2_dataset %>% 
+  dplyr::group_by(type,cLAD, ciLAD, fiLAD, fLAD) %>% 
+  dplyr::summarise(perc_5_length = quantile(del_length, c(0.05)), #5% percentile
+                   perc_95_lenght = quantile(del_length, c(0.95))) #95% percentile
+
+#mean number of mutations per tumor and chromatin context
+mut_summary <-  mutation_BRCA2_dataset %>% 
+  dplyr::group_by(tumor_id, cLAD, ciLAD,fiLAD, fLAD,type) %>% dplyr::summarise(mut_n = n()) %>% #Number of mutations per tumor and chromatin context
+  ungroup() %>% 
+  dplyr::group_by(type,cLAD, ciLAD, fiLAD, fLAD) %>% dplyr::summarise(sum_mut = sum(mut_n)) %>% 
+  left_join(sample_n, by = "type") %>% mutate(mean_mut = sum_mut/samp_n) %>% #Calculate mean including 0 values
+  dplyr::select(cLAD, ciLAD, fiLAD, fLAD,type,mean_mut) #Select important variables
+
+# table summarizing mean for each run
+summary_mutation_BRCA2_mut <- length_summary %>% left_join(mut_summary,by = c("type", "cLAD", "ciLAD", "fiLAD", "fLAD"))
+
+#Total 95CI 
+total_length_summary_5 <- quantile(mutation_BRCA2_dataset$del_length, c(0.05,0.95))
+
+
+print(summary_mutation_BRCA2_mut)
+```
+
+#Conclusion: BRCA2 mediated MH deletions accumulate in a CCD manner.
+#Export data
+```{r}
+setwd(in.dir)
+
+#Export files for plotting
+#SV 
+export_HNSCC_mutations <- mutation_BRCA2_dataset %>% select(chr = "chr1", start = "start1", end = "start2", tumor_id,total_MH_del, mutation_id, ciLAD, cLAD, fiLAD, fLAD, type, del_length, `Brass Notation`)
+#Indels
+saveRDS_proof(indel_dataset_BRCA2_HNSC_figure, file = "data/processed_data/xv20220922_SCC_indel_MMEJ_NHEJ_deletions.rds")
+
+#Export file for supplementary figures with the BRASS notation
+write.xlsx(HPVneg_HNSCC_export, file = "data/supplementary_tables/xv20220922_Table_S9a_SV_mutations_tumors_BRASS.xlsx")
+write.xlsx(BRCA2_HNSCC_export, file = "data/supplementary_tables/xv20220922_Table_S9b_SV_mutations_tumors_BRASS.xlsx")
+#Export indel calls
+write.xlsx(HPVneg_HNSCC_export_indel, file = "data/supplementary_tables/xv20220922_Table_S10a_indel_mutations_tumors_COSMIC.xlsx")
+write.xlsx(BRCA2_HNSCC_export_indel, file = "data/supplementary_tables/xv20220922_Table_S10b_indel_mutations_tumors_COSMIC.xlsx")
+
+```

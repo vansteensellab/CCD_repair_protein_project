@@ -1,0 +1,48 @@
+---
+title: "xv20230123_RPE_clone_IPR"
+author: "Xabier Vergara"
+date: "2023-01-23"
+output: html_document
+---
+
+Info: This file aims to create a metadata file to run the pipeline
+
+Example of how it should look
+ID	Read_numb	file	PCR_type
+E1664_PARPi_clone5_B1	131538	6588_13_B1_AACAACCA_E1664_PARPi_clone5_B1.fq.gz	indelPCR
+E1664_PARPi_clone5_B2	338881	6588_14_B2_AACCGAGA_E1664_PARPi_clone5_B2.fq.gz	indelPCR
+E1664_PARPi_clone5_B3	115518	6588_15_B3_AACGCTTA_E1664_PARPi_clone5_B3.fq.gz	indelPCR
+
+#Because these samples are created in RPE-1 cells. I had to adjust the backbone lengths to add the SceI site that was added extra. I modified the .yaml file accordingly
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Script to analyse the IPRs in RPE clones
+
+```{r library}
+library(tidyverse)
+```
+
+#Load all samples and tweak the name to create a tsv file
+```{r}
+#List files
+dir="/DATA/projects/DSBrepair/data/raw/7142_RPE_clones_targetted_DamID/"
+setwd(dir) 
+sample_files <- list.files(pattern= "7142", full.names = F)
+
+# Create a tibble with all the info
+tsv_file <- tibble(ID = gsub("_R1_001.fastq.gz","",sample_files),
+                   file = sample_files,
+                   PCR_type = case_when(grepl("clone", sample_files) ~ "indelPCR",
+                                        grepl("E2125", sample_files) ~ "bcPCR"),
+                   plasmid = "LBR2_RPE1") %>%
+  separate(ID, into = c("seq_run","sample_n","exp"), remove = F)
+
+#Save as tsv
+write.table(tsv_file, file = "/DATA/projects/DSBrepair/data/xv20230123_RPE_clones_targetted_pA_DamID/xv20230123_7142_sample_list.tsv", quote = F, sep="\t", row.names = F)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

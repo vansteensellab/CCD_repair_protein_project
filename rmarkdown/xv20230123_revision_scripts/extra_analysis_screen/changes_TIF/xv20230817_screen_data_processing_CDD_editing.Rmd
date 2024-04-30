@@ -1,0 +1,689 @@
+---
+title: "xv20230816_CCD_TIF_preprocessing"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+#IMPORTANT!!!!! - This is a temporary file, where I ask if TIF can be used to explain changes in pathway balance. In this file, TIF is calculated as log2(edited/non-edited)
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  log_path <- paste0(in.dir,"log")
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    #print(mode(log_path))
+    #base::write(c("test", as.character(sys_time),"Output", object), file = log_path, ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+# Libraries
+```{r libraries, warning = FALSE}
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(dendextend)
+library(pls)
+library(broom)
+library(stats)
+library(MASS)
+library(rstatix)
+library(parallel)
+library(data.table)
+library(readxl)
+library(ggbeeswarm)
+library(scales)
+```
+
+
+# Import raw indel counts from snakemake pipeline from C. Leemans
+```{r import}
+# Set directory to the mutation output folder of the CRISPR-TRIP snakemake script
+setwd("/DATA/projects/DSBrepair/data/xv20210525_ddr_screen_complete/indelPCR_counts")
+# Import files in list and make individual tables
+# I use this if all the samples are good. Here however I do not use all the samples. 
+file.list <- list.files("/DATA/projects/DSBrepair/data/xv20210525_ddr_screen_complete/indelPCR_counts/",
+    pattern='*[.]co', full.names=T)
+
+#Filter only samples with data for the experiment
+file.list.filtered <- file.list[c(grep("R1_B5", file.list),grep("R2_B4", file.list), grep("R2_B5", file.list))]
+
+# import the data
+df.list.indel <- mclapply(file.list.filtered, read.table, col.names=c('barcode', 'call', 'indel', 'count'), mc.cores = 20, stringsAsFactors = FALSE, header=T)
+
+# rename the lists
+names(df.list.indel) <- str_extract(file.list.filtered,"P[:digit:].*(?=.co)")
+
+# count the sample number
+n.samples.indel <- length(df.list.indel)
+
+#Import other data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Library KO position
+DR_library_info <- read_xlsx("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/Info_well_plate_gene.xlsx") %>% dplyr::select(well, plate = "Plate", gene)
+
+```
+
+### Process indel calling and filter for real data
+Set everything in a dataframe that contains barcodes, indel TIFs, and efficiencies.
+```{r indeldataframe}
+# Generate a datatable with the number of indelreads per mutations, sample and barcode (For this script I will modify this function, to sum replicates with the same ID)
+mut.list = mclapply(names(df.list.indel), function(exp){
+    dt = data.table(df.list.indel[[exp]])
+    dt[, indel:=as.character(indel)]
+    dt[call=='wt' & indel=='2', indel:='ssODN']
+    sum_count = data.table(exp=exp,
+                           dt[, list(count=sum(count)),by=c('barcode', 'indel')])
+    count_cast = data.table::dcast(sum_count[!is.na(indel),], exp + barcode ~ indel,
+                      value.var='count')
+    return(count_cast)
+}, mc.cores=10)
+
+#Bind all data frames (one per sample) together
+
+indels.dt = do.call(rbind, c(mut.list, fill=T))
+indels.dt[is.na(indels.dt)] = 0
+
+#Change colnames in indels.dt
+
+indel_cols <- names(indels.dt)[grep("[0-9]|ssODN|Inf", names(indels.dt))]
+indel_cols <- gsub("-", "del_", indel_cols)
+indel_cols[grep("^[0-9].*", indel_cols)] <- gsub("^", "ins_", indel_cols[grep("^[0-9].*", indel_cols)])
+indel_cols[grep("ins_0", indel_cols)] <- "wt"
+names(indels.dt) <- c("exp", "barcode", indel_cols)
+
+
+# List of barcodes that are in the clone #5 
+
+barcodes.list <- c("AGGGCGTAAAATATTT", "TATGGCTGTCGGGTAG", "TGTCCCTTAGTACTTT", "AGAAAATAATATGACG", "CGGCCTGAAGGTCAGG", "TTGAACGCGGGCTCGG", "GCTAACATCACGAATC", "GCGCACCCTTTAATTG", "ACTGTCGAGTTGTCCG", "CCGGGGACGTATGCAC", "TCTTTTGAGGAGCTGA", "ATATCGTTGCTGGAGA", "CATCCACCACACTTCA", "ACCCCTAAAGGCGCTG", "ATACTATATTTAACGG", "GAGCGCGTCACCGGGT", "GTACCTCTCGATAGTG", "TGGCCAATATTTGTCT", "CATTTCTGATCAATAA")
+
+# Filter both indels and counts dt for the barcodes in the clone
+
+indels.dt <- indels.dt %>% filter(barcode %in% barcodes.list)
+
+# Generate indel frequency data table
+
+indels.frequencies.dt = data.frame(indels.dt[,c('exp', 'barcode')],
+                                  indels.dt[, -c(1:2)] /
+                                    rowSums(indels.dt[, -c(1:2)]))
+
+# Rename indels.frequencies.dt
+indel_pct_cols <- gsub("^", "pct_", indel_cols)
+names(indels.frequencies.dt)[3:length(names(indels.frequencies.dt))] <- indel_pct_cols
+
+# Dimensions check
+
+dim(indels.dt)
+dim(indels.frequencies.dt)
+
+# Save all three data frames as a single tibble
+indels.tib <- as_tibble(indels.dt)
+indels.frequencies.tib <- as_tibble(indels.frequencies.dt)
+
+# Join indels & descr.variables
+
+indels.tib$exp <- gsub("indel_","", indels.tib$exp)
+indels.frequencies.tib$exp <- gsub("indel_","", indels.frequencies.tib$exp)
+
+screen.tib <- left_join(indels.tib,indels.frequencies.tib, by = c("exp","barcode"))
+
+dim(screen.tib)
+
+#Distribution per sample (number of reads per IPR)
+summary_read_number <- indels.dt %>% filter(grepl("R2_B4", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+distribution_total_reads_sample <- summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_reads <- quantile(summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_indels <- quantile(summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_del_7 <- quantile(summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_ins_1 <- quantile(summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_wt <- quantile(summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R1_distribution_table <- tibble(quantile = names(distribution_del_7), 
+                                   processed_reads_sample = distribution_total_reads_sample,
+                                   processed_reads_IPR = distribution_reads,
+                                   insertion_1nt = distribution_ins_1,
+                                   deletion_7nt = distribution_del_7,
+                                   intact = distribution_wt)
+
+
+#Distribution per sample (number of reads per IPR) R2
+R2_summary_read_number <- indels.dt %>% filter(grepl("R1_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R2_distribution_reads <- quantile(R2_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_total_reads_sample <- R2_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_indels <- quantile(R2_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_del_7 <- quantile(R2_summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_ins_1 <- quantile(R2_summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_wt <- quantile(R2_summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R2_distribution_table <- tibble(quantile = names(R2_distribution_del_7), 
+                                   processed_reads_sample = R2_distribution_total_reads_sample,
+                                   processed_reads_IPR = R2_distribution_reads,
+                                   insertion_1nt = R2_distribution_ins_1,
+                                   deletion_7nt = R2_distribution_del_7,
+                                   intact = R2_distribution_wt)
+
+#Distribution per sample (number of reads per IPR) R2
+R3_summary_read_number <- indels.dt %>% filter(grepl("R2_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R3_distribution_total_reads_sample <- R3_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_reads <- quantile(R3_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_indels <- quantile(R3_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_del_7 <- quantile(R3_summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_ins_1 <- quantile(R3_summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_wt <- quantile(R3_summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R3_distribution_table <- tibble(quantile = names(R3_distribution_del_7), 
+                                   processed_reads_sample = R3_distribution_total_reads_sample,
+                                   processed_reads_IPR = R3_distribution_reads,
+                                   insertion_1nt = R3_distribution_ins_1,
+                                   deletion_7nt = R3_distribution_del_7,
+                                   intact = R3_distribution_wt)
+
+
+```
+
+#Step 3: Calculation of changes in MMEJ:NHEJ balance and annotations
+
+### Repair metric calculations (Formulas #1 & #2), filtering and annotation of samples
+```{r}
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.ddr <- screen.tib %>% 
+  separate(exp, into = c("plate","replicate","batch","well"), remove = F) %>% #Separate sample tag into different elements
+  filter(del_7 + ins_1 > 30) %>% #Apply the read number filtering step
+  mutate(indelreads = rowSums(.[, indel_cols]),
+         editedreads = rowSums(.[,indel_cols[grepl("del",indel_cols) | grepl("ins",indel_cols)]]),
+         freqCut = 1 - pct_wt, #Compute two needed parameters
+         log2MMEJNHEJratio = log2(del_7 / ins_1),
+         log2TIF = log2(editedreads/wt)) %>% 
+  mutate(sample = case_when(well %in% c("D6","E6","F6","G6") ~ "WT", #Include type of KO: mock/WT, POLQ, KO or other controls (pipetting or CRISPR eff.)
+                            plate == "P6" & well %in% c("H3","H4","H5","H7","H8","H9","H10","H11","H12") ~ "WT",
+                            well == "C6" ~ "POLQ",
+                            well %in% c("A6","B6","H6") ~ "other_controls",
+                            TRUE ~ "KO")) %>%
+  mutate(rep = case_when(replicate == "R2" & batch == "B4" ~ "R1", #Final replicate names
+                         replicate == "R1" & batch == "B5" ~ "R2",
+                         replicate == "R2" & batch == "B5" ~ "R3"))
+
+#QC keep what is filter out
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.ddr.out <- screen.tib %>% 
+  separate(exp, into = c("plate","replicate","batch","well"), remove = F) %>% #Separate sample tag into different elements
+  filter(del_7 + ins_1 < 30) %>% #Apply the read number filtering step
+  mutate(indelreads = rowSums(.[, indel_cols]),
+         freqCut = 1 - pct_wt, #Compute two needed parameters
+         log2MMEJNHEJratio = log2(del_7 / ins_1)) %>% 
+  mutate(sample = case_when(well %in% c("D6","E6","F6","G6") ~ "WT", #Include type of KO: mock/WT, POLQ, KO or other controls (pipetting or CRISPR eff.)
+                            plate == "P6" & well %in% c("H3","H4","H5","H7","H8","H9","H10","H11","H12") ~ "WT",
+                            well == "C6" ~ "POLQ",
+                            well %in% c("A6","B6","H6") ~ "other_controls",
+                            TRUE ~ "KO")) %>%
+  mutate(rep = case_when(replicate == "R2" & batch == "B4" ~ "R1", #Final replicate names
+                         replicate == "R1" & batch == "B5" ~ "R2",
+                         replicate == "R2" & batch == "B5" ~ "R3"))
+
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- screen.data.ddr %>% 
+  dplyr::group_by(well,plate,rep) %>%
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>%
+  filter(mean.cut < 0.25) %>% 
+  dplyr::select(well,plate,rep)
+
+#Filter based on cutting efficiency
+filtered.screen.dr <- screen.data.ddr %>% 
+  anti_join(filter.out.wells, by = c("plate", "well", "rep"))
+
+#Select variables that will be used downstream
+screen.data.tib <- filtered.screen.dr %>%
+  dplyr::select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN","exp"),indelreads, -replicate, -batch, -indelreads) %>% 
+  distinct() %>% filter(sample != "other_controls")
+
+#Add DR library info
+screen.data.names.tib <- screen.data.tib %>% left_join(DR_library_info, by = c("well","plate")) %>% mutate(log2_TIF = log2(freqCut))
+
+#Summary numbers
+samples_per_replicate <- screen.data.names.tib %>% dplyr::select(plate,well,rep) %>% distinct() %>% dplyr::group_by(rep) %>% dplyr::summarise(counts = n(), percentage = round(((n()/558)*100), digits = 2))
+replicates_per_sample <- screen.data.names.tib %>% dplyr::select(plate,well,rep) %>% distinct() %>% dplyr::group_by(plate,well) %>% dplyr::summarise(counts = n()) %>% pull(counts) %>% mean() %>% round(digits = 2)
+IPR_per_sample <- screen.data.names.tib %>% dplyr::select(barcode,plate,well,rep) %>% distinct() %>% dplyr::group_by(plate,well,rep) %>% dplyr::summarise(counts = n()) %>% pull(counts) %>% mean() %>% round(digits = 2)
+
+#Print
+print(samples_per_replicate)
+print(replicates_per_sample)
+print(IPR_per_sample)
+
+```
+### Check reproducibility of editing efficiency (on average)
+```{r}
+# Dcast table
+dcast_TIF <- screen.data.names.tib  %>% reshape2::dcast(plate+well+barcode+gene ~ rep, value.var = "log2TIF")
+
+ggplot(dcast_TIF) + geom_point(aes(R1,R2)) + theme_bw()
+ggplot(dcast_TIF) + geom_point(aes(R2,R3)) + theme_bw()
+ggplot(dcast_TIF) + geom_point(aes(R1,R3)) + theme_bw()
+
+#Reproducibility per well
+dcast_well <- screen.data.names.tib %>% dplyr::group_by(plate,well,gene,rep) %>% dplyr::summarise(m = mean(log2_TIF, na.rm = T)) %>% reshape2::dcast(plate+well+gene ~ rep, value.var = "m")
+
+```
+
+
+### Calculation of differentials of log2 MMEJ:NHEJ (Formula #3)
+```{r}
+#Extract non-targetting samples from this dataset
+wt.set.editing <- filter(screen.data.names.tib , sample == "WT") %>% dplyr::group_by(barcode, rep) %>% dplyr::summarise(wt.TIF = mean(log2TIF, na.rm = T))
+
+# Compute log2 fold changes in different set ups for all the KO samples
+log2.distance.TIF <- screen.data.names.tib %>% 
+  na.omit() %>% #Remove NA
+  left_join(wt.set.editing, by = c("rep", "barcode")) %>% #Join mock KOs
+  mutate(log2.foldchange = log2TIF - wt.TIF) %>% #Calculate differential of log2MMEJ:NHEJ 
+  dplyr::group_by(gene,well,plate,barcode,sample) %>% #Group by sample
+  dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T), n_rep = n()) %>% #Compute differential of log2MMEJ:NHEJ
+  ungroup()
+
+#Import results from screen
+data_DR_screen <- read_xlsx("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/supplementary_tables/xv20220819_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx")
+effect_types <- data_DR_screen %>%
+  mutate(pathway_involved = case_when(!is.na(DR_effect_type) & global_diff > 0 ~ "NHEJ",
+                                      !is.na(DR_effect_type) & global_diff < 0 ~ "MMEJ")) %>%
+           select(gene,DR_effect_type,pathway_involved) %>% distinct()
+
+
+```
+  
+  
+#Step 4: Identification of DR proteins with global effects on TIF
+```{r}
+#Compute mean MMEJ:NHEJ differential over all IPRs
+mean.diff.TIF <- log2.distance.TIF %>% 
+#  filter(sample == "KO") %>%
+  group_by(gene) %>% 
+  dplyr::summarise(mean.fc = mean(mean.log2foldchange, na.rm = T), sd = sd(mean.log2foldchange, na.rm = T))
+
+#Join with TIF
+log2TIF <- left_join(mean.diff.TIF, effect_types) %>% mutate(no_effect = is.na(DR_effect_type))
+TIF_test <- t_test(log2TIF, mean.fc ~ no_effect)
+
+
+#Run t.test with all the data
+test.mean.diff.TIF <- log2.distance.TIF %>% 
+#  filter(sample == "KO") %>%
+  dplyr::group_by(gene, well,plate) %>% 
+  t_test(mean.log2foldchange ~ 0) %>% 
+  mutate(p.adj = stats::p.adjust(p, method = "BH")) %>% 
+  left_join(mean.diff.TIF, by = "gene")
+
+#Prepare data frame for export
+mean.diff.TIF.export <- test.mean.diff.TIF %>%
+  dplyr::select(gene,p,p.adj,mean.diff.TIF = mean.fc) %>% left_join(effect_types) %>% mutate(no_effect = is.na(DR_effect_type))
+
+#Significant MMEJ
+mean_significant_decrease<- filter(mean.diff.TIF.export, p.adj < 0.001 & mean.diff.TIF < 0) %>% nrow()
+mean_significant_increase <- filter(mean.diff.TIF.export, p.adj < 0.001 & mean.diff.TIF > 0) %>% nrow()
+
+#Print
+print(paste("A total of", mean_significant_increase, "DR proteins increase TIF globally with an FDR < 0.001"))
+print(paste("A total of", mean_significant_decrease, "DR proteins decrease TIF globally with an FDR < 0.001"))
+
+#PLOT
+ggplot(test.mean.diff.TIF) + geom_point(aes(mean.fc,-log10(p.adj))) + theme_bw()
+
+# Plot TIF differences by effect
+ggplot(mean.diff.TIF.export, aes(DR_effect_type,mean.diff.TIF)) + 
+  geom_quasirandom() + 
+  theme_bw()
+
+# Plot TIF differences by effect
+ggplot(mean.diff.TIF.export, aes(pathway_involved,mean.diff.TIF)) + 
+  geom_quasirandom() + 
+  theme_bw()
+
+# Plot TIF differences by effect
+ggplot(mean.diff.TIF.export %>% filter(DR_effect_type %in% c("both","CCD")), aes(pathway_involved,mean.diff.TIF)) + 
+  geom_quasirandom(aes(color = p.adj < 0.001)) + 
+  ggpubr::stat_compare_means() +
+  theme_bw()
+
+```
+#CONCLUSION: Proteins that have any type of effect tend to have lower editing efficiency. But, there is no bias between cell favoring NHEJ or MMEJ.
+
+# Reviewer question should be addressed here!
+
+# Check if CCDs of proteins can be explained by changes in TIF
+
+## Sub-step A: Selection of DR proteins with Effects on MMEJ:NHEJ balance
+```{r}
+#Filter mock transfected samples
+WT.values <- filter(screen.data.names.tib , sample == "WT")
+
+#Create empty table to store mean and sd
+mean_sd_fits <- tibble(term = NA, estimate = NA, std.error = NA, barcode = NA, rep = NA)
+
+#Function to fit normal distribution through data
+for (i in unique(WT.values$rep)) {
+  for (x in unique(WT.values$barcode)) {
+    single_wt_TIF <- filter(WT.values, rep == i & barcode == x) %>% pull(log2TIF)
+    mean_sd_fits_row <- fitdistr(single_wt_TIF, "normal") %>% tidy()
+    mean_sd_fits <- mean_sd_fits %>% add_row(mean_sd_fits_row %>% mutate(barcode = x, rep = i))
+  }
+}
+
+#Transform the fitted values 
+fit.null.distribtution.log2TIF <- mean_sd_fits %>% 
+  reshape2::dcast(barcode + rep ~ term, value.var = "estimate") %>% 
+  dplyr::select(barcode, rep, wt.log2TIF = mean, sd.wt.log2TIF = sd)
+
+# Calculate z-scores per IPR-KO combinations with the mean and sd calculated previously
+fit.z.scores.TIF.IPR <- screen.data.names.tib %>% 
+  filter(sample %in% c("KO","WT")) %>%
+  left_join(fit.null.distribtution.log2TIF, by = c("barcode", "rep")) %>% #Join null distribution mean and sd
+  na.omit() %>% #remove NA
+  mutate(z.score.log2TIF = (log2TIF - wt.log2TIF)/sd.wt.log2TIF) %>% #calculate z-score value
+  dplyr::select(rep, gene, barcode,z.score.log2TIF,sample, well,plate) # select important variables
+
+
+#Combine replicates
+fit.z.scores.TIF.mean <- fit.z.scores.TIF.IPR %>% 
+  dplyr::group_by(gene,barcode,sample,well,plate) %>% 
+  dplyr::summarise(mean.z.score.IPR = sum(z.score.log2TIF, na.rm = T)/sqrt(n()), count = n()) #combine replicates and check how many values we have for each
+
+#Summary table how many computations were selected
+summary_z_score_TIF <- filter(fit.z.scores.TIF.mean, abs(mean.z.score.IPR) > 1.96) %>%
+  dplyr::group_by(sample) %>%
+  dplyr::summarise(count = n())
+
+
+# Filter z-scores with two significant IPRs in at least 2 replicates
+fit.z.scores.TIF.IPR.filtered <- filter(fit.z.scores.TIF.mean, abs(mean.z.score.IPR) > 1.96 & count > 1) %>% #Filter barcodes that meet criteria
+  dplyr::group_by(gene, sample,well,plate) %>% 
+  dplyr::summarise(lowTIF_signif = sum(mean.z.score.IPR < -1.96), #Summarise number of significant barcodes per gene and either they favor NHEJ or MMEJ
+                   highTIF_signif = sum(mean.z.score.IPR > 1.96)) %>% 
+  filter(lowTIF_signif > 1 | highTIF_signif > 1) %>% #Filter that significantly perturbs more than one IPR
+  mutate(pathway_signif = case_when(lowTIF_signif <= 1 & highTIF_signif > 1 ~ "high_TIF", #Annotate if a protein favors NHEJ, MMEJ or both
+                                    highTIF_signif <= 1 & lowTIF_signif > 1 ~ "low_TIF", 
+                                    T ~ "both"))
+
+#Summary values
+summary_IPR_values <- fit.z.scores.TIF.IPR.filtered %>% dplyr::group_by(pathway_signif, sample) %>% dplyr::summarise(counts = n())
+total_IPR <- fit.z.scores.TIF.IPR.filtered %>% dplyr::group_by(sample) %>% dplyr::summarise(counts = n()) %>% mutate(pathway_signif = "total")
+IPR_values <- bind_rows(summary_IPR_values,total_IPR) %>% reshape2::dcast(pathway_signif ~ sample, fill = 0) %>% dplyr::select("Pathway_favored" = pathway_signif, KO, "mock_KO" = WT)
+
+#Print summary
+print(IPR_values)
+
+```
+
+# Substep B: Principal component regression to identify repair proteins with CCDs
+```{r}
+#Filter genes that do not significantly perturb balance and add chromatin info
+DDR.KO.CCD.dt <- log2.distance.TIF %>%
+  filter(sample == "KO") %>%
+  left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% #Join chromatin info
+  left_join(fit.z.scores.TIF.IPR.filtered, by = c("gene", "well", "plate","sample")) %>% na.omit() #Filter genes that do not perturb MMEJ:NHEJ balance
+
+#Create an empty dt with CCDs of DDR proteins
+DDR_KO_CCDs_dt <- tibble(gene = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(DDR.KO.CCD.dt$gene)){
+gene.library.dt <- filter(DDR.KO.CCD.dt, gene == i)
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV") #Run principal component regression
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+DDR_KO_CCDs_dt <- DDR_KO_CCDs_dt %>% add_row(gene = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+}
+
+```
+
+#Quality control. Empirical false discovery rate. Run the model for mock KO samples
+```{r}
+#Select WT
+WT.z.score.filter <- fit.z.scores.TIF.IPR.filtered %>% filter(sample == "WT")
+
+#Average all replicates and prepare data to compute CCDs and global effects
+DDR.NT.CCD.dt <- log2.distance.TIF %>% 
+  filter(sample == "WT") %>%
+  right_join(WT.z.score.filter) %>%
+  dplyr::group_by(gene,well,plate,barcode) %>% 
+  mutate(coordinate = paste0(plate,"_",well)) %>% 
+  left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID"))
+
+
+#DDR library non-targetting controls (n = 33)
+DDR_NT_CCDs_model <- tibble(gene = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(DDR.NT.CCD.dt$coordinate)){
+gene.library.dt <- filter(DDR.NT.CCD.dt, coordinate == i)
+# Run a model per gene
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV") #Run PCR with several components
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Predict the values using three components
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred))
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Run a linear model predicted vs. measured and extract p-value
+DDR_NT_CCDs_model <- DDR_NT_CCDs_model %>% add_row(gene = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value))
+}
+```
+
+
+#Bind both and correct p-value
+```{r}
+#non-targeting (2 non-targeting values are selected with this value)
+adj_p.value_model <- DDR_NT_CCDs_model %>% mutate(sample = "WT") %>% 
+  bind_rows(DDR_KO_CCDs_dt %>%
+              mutate(sample = "KO")) %>% 
+  na.omit() %>%
+  dplyr::select(p.value, gene,sample)  %>% 
+  mutate(p.adj = p.adjust(p.value, method = "BH")) %>% 
+  dplyr::select(gene,p.value,p.adj, sample)
+
+#Check the number of significant hits per WT and KO
+samples_significant_CCDs <- adj_p.value_model %>% 
+  filter(p.adj < 0.05) %>% #5% FDR
+  dplyr::group_by(sample) %>%
+  dplyr::summarise(counts = n())#3 mock values have significant CCDs (9% of total proteins) & 158 KO proteins
+
+#Do these proteins favor MMEJ or NHEJ
+summary_genes <- adj_p.value_model %>% 
+  filter(p.adj < 0.05 & sample == "KO") %>% #5% FDR
+  left_join(fit.z.scores.TIF.IPR.filtered) %>%
+  dplyr::group_by(pathway_signif) %>%
+  dplyr::summarise(count = n())
+
+#Print
+print(paste("We identified a total of",samples_significant_CCDs[1,"counts"], "DR proteins with significant CCD with a estimated FDR 5%"))
+print(paste("We empirically tested the FDR and found that ",samples_significant_CCDs[2,"counts"], " out of 33 mock KO samples (9%) were called significant which is a bit higher than expected"))
+```
+
+#Sub-step C: Linear modeling to identify individual DR proteins - chromatin feature links
+```{r}
+#Create empty dataframe to calculate synergy scores
+DR_KO_CCD_slopes <- tibble(gene = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+#Loop to run linear models on the values
+for (h in unique(DDR.KO.CCD.dt$gene)) {
+  for (j in colnames(DDR.KO.CCD.dt)[10:34]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- DDR.KO.CCD.dt %>% filter(gene == h) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   DR_KO_CCD_slopes <- DR_KO_CCD_slopes %>% add_row(gene = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+}
+
+#Retain slopes that 
+DR_KO_CCD_all_values <- DR_KO_CCD_slopes %>% 
+  reshape2::dcast(gene + feature ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(gene ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  left_join(adj_p.value_model %>% 
+              dplyr::select(gene, model_p.value = p.value, model_p.adj = p.adj), by = "gene") %>% #Join with CCDs p_value data table and change some names
+  left_join(fit.z.scores.TIF.IPR.filtered, by = "gene") %>% #Join with individual IPR significance calls (z-test)
+  mutate(CCD_value = case_when(pathway_signif == "low_TIF" & slope < 0 ~ slope, pathway_signif == "low_TIF" & slope > 0 ~ 0, pathway_signif == "high_TIF" & slope > 0 ~ slope, pathway_signif == "high_TIF" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+
+#How many M-, N- and no synergies
+synergy_summaries <- DR_KO_CCD_all_values %>% filter(model_p.adj < 0.05) %>% dplyr::group_by(gene) %>% dplyr::summarise(lowTIF_synergy = sum(CCD_value < 0), highTIF_synergy = sum(CCD_value > 0)) %>% distinct() %>% mutate(synergy_class = case_when(highTIF_synergy == 0 ~ "lowTIF_synergy", lowTIF_synergy == 0 ~ "highTIF_synergy", T ~ "both")) %>% dplyr::group_by(synergy_class) %>% dplyr::summarise(c = n())
+```
+# Conclusion: Several proteins show differences in pathway balance, but empiric FDR is also quite high.
+
+
+
+# Conclusion: Not so many proteins with CCDs have show a chromatin context dependent TIF change (28/98 = 30%) and among them not all of them are concordant with the pathway balance CCDs.
+
+#Examples the reviewer brings up: BRCA2 and CHAF1A
+```{r}
+# Plot CHAF1A and BRCA2 global change in TIF
+# Plot TIF differences by effect
+ggplot(mean.diff.TIF.export %>% filter(DR_effect_type %in% c("both","CCD")), aes(pathway_involved,mean.diff.TIF)) + 
+  geom_quasirandom(aes(color = gene %in% c("BRCA2","CHAF1A"))) + 
+  ggpubr::stat_compare_means() +
+  theme_bw()
+```
+#CONCLUSION: They both have a drop of 10%, so it could be linked to heterochromatinization of chromatin
+
+#Do these effects have chromatin context dependent biases?
+```{r}
+print(DR_KO_CCD_all_values %>% filter(gene %in% c("BRCA2","CHAF1A")) %>% select(gene,model_p.adj) %>% distinct()) 
+
+```
+#CONCLUSION: BRCA2 doesn't have a significant chromatin context dependent behaviour (p-value is close to significance though) and CHAF1A does have a chromatin context dependency.
+
+# Are these concordant with their N-synergies?
+```{r}
+# heatmap chromatin order
+chromatin_features <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+#Create dataframe that combines TIF and MMEJ differences
+combination_all <- DR_KO_CCD_all_values%>% select(gene, "chrom_feature"=feature,"TIF_CCD_value" = CCD_value) %>% left_join(data_DR_screen) %>% filter(DR_effect_type %in% c("CCD","both"))
+
+#TIF CCDs
+ggplot(combination_all %>% filter(gene %in% c("BRCA2","CHAF1A"))) + 
+  geom_tile(aes(gene, fct_relevel(chrom_feature,chromatin_features), fill = TIF_CCD_value)) + 
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.1,0.1), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+#N-synergies
+ggplot(combination_all %>% filter(gene %in% c("BRCA2","CHAF1A"))) + 
+  geom_tile(aes(gene, fct_relevel(chrom_feature,chromatin_features), fill = CCD_synergy_score)) + 
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-0.1,0, 0.1), limits = c(-0.1,0.1), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+```
+
+#Conclusion: They look like complementary images almost. It seems as the higher loss in editing frequency anticorrelates with biggest pathway balance changes. So, a change in chromatin structure is not very likely driving the phenotype.
+
+#We can look at this in a general and unbiased manner and see if any proteins has such oppposed effects on MMEJfreq and TIF.
+```{r}
+#If changes in chromatin would be the reason for changes in pathway balance, you would expect and cosine distance value of -1. More MMEJ (N-synergy) linked to lower TIF (more heterochromatin) and less MMEJ (M-synergy) linked to higher TIF (more euchromatin).
+
+#Are the values similar?: rough test
+
+cosine_distance_dt <- DR_KO_CCD_all_values %>% select(gene, "chrom_feature"=feature,"TIF_CCD_value" = CCD_value) %>% left_join(data_DR_screen) %>% select(gene, chrom_feature,TIF_CCD_value,CCD_synergy_score) %>% na.omit()
+
+#Cosine distance calculation
+cosine_distance_TIF_ratio <- map_dfr(unique(cosine_distance_dt$gene), function(x) {
+  TIF_CCD <-  cosine_distance_dt %>% filter(gene == x) %>% pull(TIF_CCD_value)
+  ratio_CCD <- cosine_distance_dt %>% filter(gene == x) %>% pull(CCD_synergy_score)
+  
+  tibble(gene = x, cosine_sim = as.numeric(lsa::cosine(TIF_CCD,ratio_CCD)))
+})
+
+#Calculate significance
+significant_TIF_ratio <- DR_KO_CCD_all_values %>% 
+  select(gene, "chrom_feature"=feature,"TIF_CCD_value" = CCD_value, "TIF_p_adj" = model_p.adj) %>% left_join(data_DR_screen) %>% filter(chrom_feature != "TTseq") %>%
+  mutate(CCD_significance = case_when(TIF_p_adj < 0.05 & CCD_model_p_adj < 0.05 ~ "both_signif",
+                                      TIF_p_adj < 0.05 & CCD_model_p_adj > 0.05 ~ "TIF_signif",
+                                      TIF_p_adj > 0.05 & CCD_model_p_adj < 0.05 ~ "ratio_signif",
+                                      T ~ "none_signif")) %>% select(gene, CCD_significance) %>% distinct()
+
+#
+clas_cosine_distance <- cosine_distance_TIF_ratio %>% left_join(significant_TIF_ratio)
+```
+
+#Plot cosine similarities without any filtering
+```{r}
+#Plot
+ggplot(clas_cosine_distance) + 
+  geom_col(aes(reorder(gene, cosine_sim), cosine_sim)) +
+  coord_cartesian(ylim = c(-1,1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90))
+
+#By significance level: Both significant, only balance or only TIF
+ggplot(clas_cosine_distance) + 
+  geom_col(aes(reorder(gene, cosine_sim), cosine_sim)) +
+  coord_cartesian(ylim = c(-1,1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  facet_wrap(~CCD_significance, scales = "free")
+
+```
+
+#CONCLUSION: There is no evidence that support the idea of a change in chromatin being the driver of the M- or N- synergies. The only protein that could fit with this hypothesis is POLL, which is hard to believe that is only acting through chromatin changes.
+
+

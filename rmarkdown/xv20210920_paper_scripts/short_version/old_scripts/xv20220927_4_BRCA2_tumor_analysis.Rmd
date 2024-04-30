@@ -1,0 +1,146 @@
+---
+title: "xv20220927_4_BRCA2_tumors"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+#Intro: This figure corresponds to figure #4 in the main text.
+
+Fig. 4. BRCA2 +/+ and BRCA2 -/- tumor analysis
+
+Fig. 4. Impact on mutation distribution in cancer genomes. (A) Total MMEJ and NHEJ signature in-del log2 ratio in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.) of BRCA2-positive (BRCA2+/+, n = 22) and BRCA2 deficient tumors (BRCA2-/-, n = 41). p-values are calculated by Fisher’s count test on total deletion signatures per tumor type (Fig. S8B-C). (B) Cartoon illustrating BRCA2 N-synergy.
+
+#Script set-up
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    base::readRDS(file = correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  base::readRDS(file = correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# setwd
+setwd(in.dir)
+
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(umap)
+library(igraph)
+library(lsa)
+library(tibble)
+library(utils)
+library(base)
+library(scales)
+```
+
+# Input files for this script: Data needed for figure 4 and come from the processed_data directory
+```{r input files, warning=F}
+# setwd
+setwd(in.dir)
+
+#Print note:
+print(paste("The following datasets will be loaded for this script:"))
+
+#Tumor analysis
+indel_data_tumors <- readRDS_proof("data/processed_data/","SCC_indel_MMEJ_NHEJ")
+
+```
+
+(A) Total MMEJ and NHEJ signature in-del log2 ratio in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.) of BRCA2-positive (BRCA2+/+, n = 22) and BRCA2 deficient tumors (BRCA2-/-, n = 41). p-values are calculated by Fisher’s count test on total deletion signatures per tumor type (Fig. S8B-C).
+
+#Preparatory chunk: Prepare BRCA2-/- data for plotting and compute statistics
+```{r, warning=F}
+distribution_tumor_indel_pathway <- indel_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(tumor_type, tumor_id, LAD_status, total_mutation, CLASS) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(tumor_type + tumor_id + total_mutation + LAD_status ~ CLASS, value.var = "mut_count", fill = 0) %>%
+dplyr::group_by(tumor_type, LAD_status) %>%
+  dplyr::summarise(log2_ratio = log2(sum(MMEJ, na.rm = T)/sum(cNHEJ, na.rm = T)))
+
+distribution_tumor_indel <- indel_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(tumor_type, LAD_status, CLASS) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(tumor_type + CLASS ~ LAD_status, value.var = "mut_count", fill = 0)
+
+```
+
+#Figure 4A: Mutation accumulation in BRCA2mut and sporadic HNSCC (Option A)
+```{r}
+#Plot A in figure 4 (pathway perspective)
+ggplot(distribution_tumor_indel_pathway) + geom_col(aes(LAD_status,log2_ratio, fill = LAD_status)) + facet_wrap(~ fct_relevel(tumor_type, c("HHNSC_indel","BRCA2mut_indel"))) + theme_bw() + theme(legend.position = "top") + xlab("Tumor genetic background") + ylab("log2 MMEJ:NHEJ ratio") + coord_cartesian(ylim = c(0,3.25))
+
+#chi squared test for all these cases
+#cNHEJ
+BRCA2_fisher <- distribution_tumor_indel %>% ungroup() %>% filter(tumor_type == "BRCA2mut_indel") %>% dplyr::select(-tumor_type) %>% column_to_rownames(var = "CLASS") %>% fisher.test() %>% tidy()
+#MMEJ
+HNSC_fisher <- distribution_tumor_indel %>% ungroup() %>% filter(tumor_type == "HHNSC_indel") %>% dplyr::select(-tumor_type) %>% column_to_rownames(var = "CLASS") %>% fisher.test() %>% tidy()
+
+```
+(B) Cartoon illustrating BRCA2 N-synergy

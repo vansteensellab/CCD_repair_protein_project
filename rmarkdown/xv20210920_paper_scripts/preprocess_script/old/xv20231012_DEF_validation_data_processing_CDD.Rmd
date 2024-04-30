@@ -1,0 +1,515 @@
+---
+title: "xv20220623_CCD_preprocessing"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will go over different calculations of CCDs with the validation RPE1 DSB TRIP cell line:
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  log_path <- paste0(in.dir,"log")
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    #print(mode(log_path))
+    #base::write(c("test", as.character(sys_time),"Output", object), file = log_path, ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+# Libraries
+```{r libraries, warning = FALSE}
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(dendextend)
+library(pls)
+library(broom)
+library(stats)
+library(MASS)
+library(rstatix)
+library(parallel)
+library(data.table)
+library(readxl)
+```
+
+
+# Import raw indel counts from snakemake pipeline from C. Leemans
+```{r import}
+# Set directory to the mutation output folder of the CRISPR-TRIP snakemake script
+setwd("/DATA/projects/DSBrepair/data/xv20230825_DSB_TRIP_revision/indelPCR_counts")
+# Import files in list and make individual tables
+# I use this if all the samples are good. Here however I do not use all the samples. 
+file.list <- list.files("/DATA/projects/DSBrepair/data/xv20230825_DSB_TRIP_revision/indelPCR_counts",
+    pattern='*[.]co', full.names=T)
+
+#Filter only samples with data for the experiment
+file.list.filtered <- file.list[grep("DEF", file.list)]
+
+# import the data
+df.list.indel <- mclapply(file.list.filtered, read.table, col.names=c('barcode', 'call', 'indel', 'count'), mc.cores = 20, stringsAsFactors = FALSE, header=T)
+
+# rename the lists
+names(df.list.indel) <- str_extract(file.list.filtered,"R[:digit:].*(?=.co)")
+
+# count the sample number
+n.samples.indel <- length(df.list.indel)
+
+#Import other data
+RPE1_data_chrom_tib <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","chromatin_data_RPE1") %>%
+  filter(cell_line == "DEF" & binsize == 2000  & barcode != "CTTGCATTAACAACCA") #Chromatin
+RPE1_data_chrom_tib$late_replicating <- as.numeric(RPE1_data_chrom_tib$late_replicating)
+dna_quantification <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","dna_quantification") #DNA viability
+proteins_gRNA <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","gRNA_gene") #gRNA gene conversion
+RPE1_genomewide_dynamic_range <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance", "RPE1_genomewide_ranges")
+
+```
+
+### Process indel calling and filter for real data
+Set everything in a dataframe that contains barcodes, indel ratios, and efficiencies.
+```{r indeldataframe}
+# Generate a datatable with the number of indelreads per mutations, sample and barcode (For this script I will modify this function, to sum replicates with the same ID)
+mut.list = mclapply(names(df.list.indel), function(exp){
+    dt = data.table(df.list.indel[[exp]])
+    dt[, indel:=as.character(indel)]
+    dt[call=='wt' & indel=='2', indel:='ssODN']
+    sum_count = data.table(exp=exp,
+                           dt[, list(count=sum(count)),by=c('barcode', 'indel')])
+    count_cast = data.table::dcast(sum_count[!is.na(indel),], exp + barcode ~ indel,
+                      value.var='count')
+    return(count_cast)
+}, mc.cores=10)
+
+#Bind all data frames (one per sample) together
+indels.dt = do.call(rbind, c(mut.list, fill=T))
+indels.dt[is.na(indels.dt)] = 0
+
+#Filter only mapped barcodes
+indels.dt <- filter(indels.dt, barcode %in% RPE1_data_chrom_tib$barcode)
+
+#Change colnames in indels.dt
+indel_cols <- names(indels.dt)[grep("[0-9]|ssODN|Inf", names(indels.dt))]
+indel_cols <- gsub("-", "del_", indel_cols)
+indel_cols[grep("^[0-9].*", indel_cols)] <- gsub("^", "ins_", indel_cols[grep("^[0-9].*", indel_cols)])
+indel_cols[grep("ins_0", indel_cols)] <- "wt"
+names(indels.dt) <- c("exp", "barcode", indel_cols)
+
+# Generate indel frequency data table
+indels.frequencies.dt = data.frame(indels.dt[,c('exp', 'barcode')],
+                                  indels.dt[, -c(1:2)] /
+                                    rowSums(indels.dt[, -c(1:2)]))
+
+# Rename indels.frequencies.dt
+indel_pct_cols <- gsub("^", "pct_", indel_cols)
+names(indels.frequencies.dt)[3:length(names(indels.frequencies.dt))] <- indel_pct_cols
+
+# Dimensions check
+dim(indels.dt)
+dim(indels.frequencies.dt)
+
+# Save all three data frames as a single tibble
+indels.tib <- as_tibble(indels.dt)
+indels.frequencies.tib <- as_tibble(indels.frequencies.dt)
+
+
+# Join indels & descr.variables
+indels.tib$exp <- gsub("indel_","", indels.tib$exp)
+indels.frequencies.tib$exp <- gsub("indel_","", indels.frequencies.tib$exp)
+
+screen.tib <- left_join(indels.tib,indels.frequencies.tib, by = c("exp","barcode")) %>%
+    separate(exp, into = c("replicate","cell_line","gRNA"), remove = F) 
+
+dim(screen.tib)
+```
+
+
+#Plot control (supplementary figures)
+```{r}
+#Data table for control plots
+control_plots_dt <- indels.dt %>% 
+  mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% 
+  dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+
+#Data table for control plots
+reads_sample <- control_plots_dt %>% 
+  dplyr::group_by(exp) %>%
+  dplyr::summarise(total_reads_sample = sum(proccessed_read))
+
+#Left join number of total reads
+summary_table_control_plots <- control_plots_dt %>% 
+  left_join(reads_sample) %>%
+  mutate(IPR_frequency = proccessed_read/total_reads_sample) %>%
+  separate(exp, into = c("rep","cell_line","gRNA")) %>% left_join(proteins_gRNA) %>%
+  dplyr::group_by(cell_line, gRNA, barcode) %>%
+  mutate(mean_IPR_freq = mean(IPR_frequency))
+```
+
+#Plot barcode distribution
+```{r, fig.width=2.5,fig.height=3}
+#Plot IPR_frequency across replicates
+ggplot(summary_table_control_plots %>% filter(gRNA == "empty"),aes(rep, IPR_frequency)) + 
+  geom_point() +
+  geom_line(aes(group = barcode)) +
+  theme_bw() +
+  theme(axis.title.x = element_blank())
+```
+
+```{r, fig.width=4, fig.height=3}
+#Plot IPR_frequency vs. balance
+ggplot() + 
+  geom_point(data = summary_table_control_plots,aes(IPR_frequency, log2((del_7 + 1) / (ins_1 + 1)), color = mean_IPR_freq > 0.0075)) +
+  theme_bw() +
+  theme(axis.title.x = element_blank()) + 
+  ylab("log2MMEJ:NHEJ") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("grey20","#9f86bf"))
+```
+#Filter for IPRs for further analysis
+```{r}
+filtered_screen_data <- screen.tib %>%
+  separate(exp, into = c("replicate","cell_line","gRNA"), remove = F) %>%
+  left_join(summary_table_control_plots) %>%
+  filter(IPR_frequency > 0.0075)
+
+```
+
+
+#Step 3: Calculation of changes in MMEJ:NHEJ balance and annotations
+
+### Repair metric calculations (Formulas #1 & #2), filtering and annotation of samples
+```{r}
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.ddr <- filtered_screen_data %>% 
+  separate(exp, into = c("replicate","cell_line","gRNA"), remove = F) %>% #Separate sample tag into different elements
+  left_join(summary_table_control_plots) %>%
+  mutate(freqCut = 1 - pct_wt,
+         log2MMEJNHEJratio = log2(del_7 / ins_1)) 
+
+
+#Select variables that will be used downstream
+screen.data.tib <- screen.data.ddr %>%
+  dplyr::select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN","exp"),-rep) %>% 
+  distinct()
+
+#Filter by toxicity
+toxic_genes <-dna_quantification %>%
+  filter(dna_score < 0.33 & cell_line == "DEF") %>%
+  left_join(proteins_gRNA) %>%
+  ungroup() %>%
+  select(gene, cell_line) %>%
+  distinct() %>% mutate(toxicity = "toxic")
+
+#Add DR library info
+screen.data.names.tib <- screen.data.tib %>%
+  mutate(toxicity = case_when(gRNA %in% toxic_genes$gRNA ~ "toxic",
+         T ~ "non_toxic")) %>%
+  filter(is.finite(log2MMEJNHEJratio))
+
+#Summary numbers
+samples_per_replicate <- screen.data.names.tib %>% ungroup() %>% dplyr::select(gRNA,replicate) %>% distinct() %>% dplyr::group_by(replicate) %>% dplyr::summarise(counts = n(), percentage = round(((n()/24)*100), digits = 2))
+IPR_per_sample <- screen.data.names.tib %>% dplyr::select(barcode,gRNA,replicate) %>% distinct() %>% dplyr::group_by(gRNA,replicate) %>% dplyr::summarise(counts = n()) %>% pull(counts) %>% median() %>% round(digits = 2)
+
+#Print
+print(samples_per_replicate)
+print(IPR_per_sample)
+
+```
+
+
+
+### Calculation of differentials of log2 MMEJ:NHEJ (Formula #3)
+```{r}
+#Extract non-targetting samples from this dataset
+wt.set.ratio <- filter(screen.data.names.tib , gRNA == "NTC") %>% dplyr::group_by(barcode, replicate) %>% dplyr::summarise(wt.log2ratio = mean(log2MMEJNHEJratio, na.rm = T))
+
+# Compute log2 fold changes in different set ups for all the KO samples
+log2.distance.ratio <- screen.data.names.tib %>% 
+  na.omit() %>% #Remove NA
+  left_join(wt.set.ratio, by = c("replicate", "barcode")) %>% #Join mock KOs
+  mutate(log2.foldchange = log2MMEJNHEJratio - wt.log2ratio) %>% #Calculate differential of log2MMEJ:NHEJ 
+  na.omit() %>%
+  dplyr::group_by(gene,barcode,gRNA, cell_line) %>% #Group by sample
+  dplyr::summarise(mean.log2foldchange = mean(log2.foldchange), n_rep = n()) %>% #Compute differential of log2MMEJ:NHEJ
+  ungroup() %>% filter(n_rep == 3)
+```
+  
+  
+#Step 4: Identification of DR proteins with global effects on MMEJ:NHEJ balance
+```{r}
+#Compute mean MMEJ:NHEJ differential over all IPRs
+mean.diff.balance <- log2.distance.ratio %>% 
+  filter(!gRNA %in% c("NTC","empty","LBR2","halfLBR2")) %>%
+  group_by(gene,cell_line) %>% 
+  dplyr::summarise(mean.fc = mean(mean.log2foldchange, na.rm = T))
+
+#Run t.test with all the data
+test.mean.diff.balance <- log2.distance.ratio %>% 
+  filter(!gRNA %in% c("NTC","empty","LBR2","halfLBR2")) %>%
+  dplyr::group_by(gene, cell_line) %>%
+  rstatix::t_test(mean.log2foldchange ~ 1, mu = 0) %>% 
+  mutate(p.adj = p.adjust(p, method = "BH")) %>% 
+  left_join(mean.diff.balance, by = "gene")
+
+#Prepare data frame for export
+mean.diff.balance.export <- test.mean.diff.balance %>%
+  dplyr::select(gene,p,p.adj,mean.balance.diff = mean.fc, n)
+
+#Significant MMEJ
+mean_significant_MMEJ <- filter(mean.diff.balance.export, p.adj < 0.05 & mean.balance.diff < 0) %>% nrow() #149 proteins favor MMEJ
+mean_significant_NHEJ <- filter(mean.diff.balance.export, p.adj < 0.05 & mean.balance.diff > 0) %>% nrow() #16 proteins favor NHEJ
+
+#Print
+print(paste("A total of", mean_significant_MMEJ, "DR proteins favor MMEJ globally with an FDR < 0.05"))
+print(paste("A total of", mean_significant_NHEJ, "DR proteins favor NHEJ globally with an FDR < 0.05"))
+```
+
+
+
+# Step5: Identification of repair proteisn with CCDs: three-step linear modeling
+
+#Plot number of barcodes
+```{r}
+#Number of barcodes
+ggplot(test.mean.diff.balance) + 
+  geom_col(aes(gene,n)) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  geom_hline(yintercept = 8, linetype = 2)
+
+
+#Positive controls
+
+```
+
+## Sub-step A: Selection of DR proteins with Effects on MMEJ:NHEJ balance
+#This selection is not as easy as before, I can't calculate a z-score because I don't have enough controls. 
+I will select based on two criteria (either the mean is different than 0 or has at least two IPRs on one side with an FDR of 0.25)
+
+```{r}
+#Compute t-test per IPR
+IPR_test <- screen.data.names.tib %>% 
+  filter(!gRNA %in% c("NTC","empty","LBR2","halfLBR2")) %>%
+  na.omit() %>% #Remove NA
+  left_join(wt.set.ratio, by = c("replicate", "barcode")) %>% 
+  mutate(log2.foldchange = log2MMEJNHEJratio - wt.log2ratio) %>%
+  ungroup() %>%
+  na.omit() %>%
+  dplyr::group_by(barcode, gene) %>%
+  mutate(n_rep = n()) %>%
+  filter(n_rep == 3) %>% 
+  t_test(log2.foldchange ~ 1, mu = 0)
+
+#Per gene get IPRs that have fdr < 0.25
+IPR_test_summary <- IPR_test %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(fdr = p.adjust(p, method = "BH")) %>%
+  ungroup() %>%
+  dplyr::group_by(gene) %>%
+  filter(fdr < 0.25) %>%
+  dplyr::summarise(IPR_NHEJ = sum(statistic > 0),
+                   IPR_MMEJ = sum(statistic < 0))
+
+#Summary table with effect sizes
+summary_table_mean <- test.mean.diff.balance %>%
+  filter(p.adj < 0.05) %>%
+  mutate(pathway_global = case_when(statistic < 0 ~ "MMEJ",
+                             statistic > 0 ~ "NHEJ")) %>%
+  select(gene, pathway_global)
+
+summary_table_IPR <- IPR_test_summary %>%
+  mutate(pathway_IPR = case_when(IPR_MMEJ > 1 ~ "MMEJ",
+                                 IPR_NHEJ > 1 ~ "NHEJ",
+                                 IPR_NHEJ > 1 & IPR_MMEJ > 1 ~ "both")) %>%
+  select(gene, pathway_IPR)
+
+#Filter based on this data
+pathway_summary <- summary_table_mean %>%
+  full_join(summary_table_IPR) %>%
+  mutate(pathway_signif = case_when(pathway_global == pathway_IPR ~ pathway_global,
+                             is.na(pathway_global) & is.na(pathway_IPR) ~ "none",
+                             is.na(pathway_global) ~ pathway_IPR,
+                             is.na(pathway_IPR) ~ pathway_global)) %>%
+  select(gene, pathway_signif)
+```
+
+# Substep B: Principal component regression to identify repair proteins with CCDs
+```{r}
+#Filter genes that do not significantly perturb balance and add chromatin info
+DDR.KO.CCD.dt <- log2.distance.ratio %>%
+  left_join(pathway_summary) %>%
+  filter(pathway_signif %in% c("NHEJ", "MMEJ")) %>%
+  left_join(RPE1_data_chrom_tib, by = c("barcode", "cell_line"))#Join chromatin info
+
+#Create an empty dt with CCDs of DDR proteins
+CCDs_dt_RPE1 <- tibble(cell_line = NA, gene = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+
+  for (i in unique(DDR.KO.CCD.dt$gene)){
+    gene.library.dt <- filter(DDR.KO.CCD.dt, gene == i)
+    if (nrow(gene.library.dt) < 10 ){
+      next
+    }
+    set.seed(1)
+    PCR_model_DDR_test <- pls::pcr(mean.log2foldchange~ dam_H3K27me3+chip_H3K4me1+chip_H3K36me3+dam_LMNB1+chip_H3K4me2+chip_H3K4me3+chip_H3K27ac+dam_H3K9me2+dam_H3K9me3+late_replicating, data=gene.library.dt, validation = "CV") #Run principal component regression
+    pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+    combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+    pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% broom::glance() #Predicted vs. measured correlation plot
+    CCDs_dt_RPE1 <- CCDs_dt_RPE1 %>% add_row(cell_line = "DEF", gene = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+  }
+
+#Adjust per cell line
+CCDs_dt_RPE1_adjs <- CCDs_dt_RPE1%>% mutate(fdr = p.adjust(p.value, method = "BH")) %>% right_join(test.mean.diff.balance %>% select(gene,n))
+
+```
+
+#Sub-step C: Linear modeling to identify individual DR proteins - chromatin feature links
+```{r}
+#Create empty dataframe to calculate synergy scores
+RPE1_KO_CCD_slopes <- tibble(gene = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+#Loop to run linear models on the values
+for (h in unique(DDR.KO.CCD.dt$gene)) {
+  for (j in colnames(DDR.KO.CCD.dt)[c(8:16,18)]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- DDR.KO.CCD.dt %>% filter(gene == h) # And For each gene
+   if (nrow(model.dt) < 9) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   RPE1_KO_CCD_slopes <- RPE1_KO_CCD_slopes %>% add_row(gene = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+}
+
+#Retain slopes that 
+DR_KO_CCD_all_values <- RPE1_KO_CCD_slopes %>% 
+  reshape2::dcast(gene + feature ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(gene ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  left_join(CCDs_dt_RPE1_adjs %>% 
+              dplyr::select(cell_line,gene, model_p.value = p.value, model_p.adj = fdr), by = "gene") %>% #Join with CCDs p_value data table and change some names
+  left_join(pathway_summary, by = "gene") %>% #Join with individual IPR significance calls (z-test)
+  mutate(CCD_value = case_when(pathway_signif == "MMEJ" & slope < 0 ~ slope, pathway_signif == "MMEJ" & slope > 0 ~ 0, pathway_signif == "NHEJ" & slope > 0 ~ slope, pathway_signif == "NHEJ" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+
+#How many M-, N- and no synergies
+synergy_summaries <- DR_KO_CCD_all_values %>% filter(model_p.adj < 0.25) %>% dplyr::group_by(gene) %>% dplyr::summarise(M_synergy = sum(CCD_value < 0), N_synergy = sum(CCD_value > 0)) %>% distinct() %>% mutate(synergy_class = case_when(N_synergy == 0 ~ "M_synergy", M_synergy == 0 ~ "N_synergy", T ~ "both")) %>% dplyr::group_by(synergy_class) %>% dplyr::summarise(c = n())
+```
+
+#Step 6: Compute estimated ∆log2MMEJ:NHEJ scores for CCD effects and compared to global ∆log2MMEJ:NHEJ
+##Pre-processing chunk: load all ChIP track z-scores
+```{r}
+##Compute estimated CCD ∆log2MMEJ:NHEJ score
+estimated_FC_CCD <- DR_KO_CCD_all_values %>% 
+  left_join(RPE1_genomewide_dynamic_range, by = c("feature" ="file")) %>% #Join 99% CI for chromatin
+  mutate(estim_fc_CCD = range*CCD_value)
+```
+
+#Step 7: Data visualization
+This step will be performed with the output files in separate scripts 
+
+#Create table S7: Data to export all major features
+```{r}
+export_screen_result_TS7 <- estimated_FC_CCD %>% 
+  full_join(mean.diff.balance.export, by = "gene") %>%
+  mutate(chrom_feature = str_extract(feature, "(H3|l|L).*")) %>%
+  full_join(pathway_summary) %>%
+  mutate(toxicity = case_when(gene %in% toxic_genes$gene ~ "toxic",
+         T ~ "non_toxic")) %>%
+  dplyr::select(gene, cell_line, CCD_model_p_adj = "model_p.adj",chrom_feature, CCD_synergy_score = "CCD_value",CCD_estim_diff = "estim_fc_CCD", global_diff = "mean.balance.diff", global_p_adj = "p.adj", n, pathway_signif,toxicity)
+
+```
+
+
+#Output files: Export all files needed for making figures
+```{r, eval = FALSE, echo = FALSE}
+setwd(in.dir)
+
+#Step 1: Raw freqCut & log2MMEJNHEJ values
+saveRDS_proof(screen.data.names.tib, file = "data/processed_data/CCD_validation_RPE1/xv20231012_DEF_screening_raw_data_repair_metrics.rds")
+
+#Step 2: dcast data table for 
+saveRDS_proof(log2.distance.ratio, file = "data/processed_data/CCD_validation_RPE1/xv20231012_DEF_differentials_log2_MMEJ_NHEJ_balance.rds")
+
+#Step 4: diff log2 MMEJ:NHEJ values for DR proteins with chromatin scores
+saveRDS_proof(DDR.KO.CCD.dt, file = "data/processed_data/CCD_validation_RPE1/xv20231012_DEF_log2_MMEJNHEJ_differentials_chromatin_KO.rds")
+
+#Step 5: save global changes for all proteins
+saveRDS_proof(mean.diff.balance.export, file = "data/processed_data/CCD_validation_RPE1/xv20231012_DEF_global_diff_MMEJNHEJ.rds")
+
+#Save final results as rds
+saveRDS_proof(export_screen_result_TS7, file = "data/processed_data/xv20231012_DEF_CCD_summary.rds")
+
+```
+
+#Export supplementary tables in the paper
+```{r, eval = FALSE, echo = FALSE}
+#setwd(in.dir)
+#Export for supplementary files (.xlsx file)
+
+#Table S4: ∆log2MMEJ:NHEJ scores for 519 proteins and 19 IPRs.
+#write.xlsx(export_screen_result_TS4, file = "data/supplementary_tables/xv20220819_Table_S4a_delta_log2_MMEJ_NHEJ.xlsx")
+
+#Table S6: Genomic coordinates, chromatin feature scores and barcodes of 19 IPRs in K562 clone 5
+#write.xlsx(export_screen_result_TS6, file = "data/supplementary_tables/xv20220819_Table_S6_clone_5_chromatin_features.xlsx")
+
+#Table S7: Chromatin context dependent effects of proteins in the screen.
+#write.xlsx(export_screen_result_TS7, file = "data/supplementary_tables/xv20220927_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx")
+
+```

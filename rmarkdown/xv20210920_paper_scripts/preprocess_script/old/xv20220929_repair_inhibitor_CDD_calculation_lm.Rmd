@@ -1,0 +1,498 @@
+---
+title: "xv20220926_PIKK_Inhibitor_experiment"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+In this document, I will analyse the CCDs of PIKK inhibitors. Based on, global effects and CCDs.
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(dendextend)
+library(pls)
+library(broom)
+library(stats)
+library(utils)
+library(parallel)
+library(data.table)
+library(rstatix)
+library(openxlsx)
+```
+
+# Import raw indel counts from snakemake pipeline from C. Leemans 
+```{r import}
+#Import clone 5 data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+# Set directory to the mutation output folder of the CRISPR-TRIP snakemake script
+setwd("/DATA/projects/DSBrepair/data/xv20210716_E1627_ATRi/indelPCR_counts/")
+
+# Import files in list and make individual tables
+# I use this if all the samples are good. Here however I do not use all the samples. 
+file.list <- list.files("/DATA/projects/DSBrepair/data/xv20210716_E1627_ATRi/indelPCR_counts",
+    pattern='*[.]co', full.names=T)
+
+#Filter only samples with data for the experiment
+file.list.filtered <- file.list[grep("15\\.|16\\.|17\\.|21\\.|36\\.|37\\.|38\\.|42\\.|57\\.|58\\.|59\\.|63\\.", file.list)]
+
+# import the data
+df.list.indel <- mclapply(file.list.filtered, read.table, col.names=c('barcode', 'call', 'indel', 'count'), mc.cores = 20, stringsAsFactors = FALSE, header=T)
+
+# rename the lists
+names(df.list.indel) <- str_extract(file.list.filtered,"(?<=counts/)[:digit:].*(?=.co)")
+
+# count the sample number
+n.samples.indel <- length(df.list.indel)
+
+#Inhibitor table
+inhibitor.table <- tibble(exp = as.character(c(15:17,21,36:38,42,57:59,63)), drug = rep(c("DMSO","DNAPKi","ATMi","GFP"),3),replicate = rep(c("R1","R2","R3"), each = 4))
+
+```
+
+### Process indel calling and filter for real data
+Set everything in a dataframe that contains barcodes, indel ratios, and efficiencies.
+```{r indeldataframe}
+# Generate a datatable with the number of indelreads per mutations, sample and barcode (For this script I will modify this function, to sum replicates with the same ID)
+mut.list = mclapply(names(df.list.indel), function(exp){
+    dt = data.table(df.list.indel[[as.character(exp)]])
+    dt[, indel:=as.character(indel)]
+    dt[call=='wt' & indel=='2', indel:='ssODN']
+    sum_count = data.table(exp=exp,
+                           dt[, list(count=sum(count)),by=c('barcode', 'indel')])
+    count_cast = data.table::dcast(sum_count[!is.na(indel),], exp + barcode ~ indel,
+                     value.var='count')
+    return(count_cast)
+}, mc.cores=10)
+
+#Bind all data frames (one per sample) together
+
+indels.dt = do.call(rbind, c(mut.list, fill=T))
+indels.dt[is.na(indels.dt)] = 0
+
+#Change colnames in indels.dt
+
+indel_cols <- names(indels.dt)[grep("[0-9]|ssODN|Inf", names(indels.dt))]
+indel_cols <- gsub("-", "del_", indel_cols)
+indel_cols[grep("^[0-9].*", indel_cols)] <- gsub("^", "ins_", indel_cols[grep("^[0-9].*", indel_cols)])
+indel_cols[grep("ins_0", indel_cols)] <- "wt"
+names(indels.dt) <- c("exp", "barcode", indel_cols)
+
+
+# List of barcodes that are in the clone #5 
+
+barcodes.list <- c("AGGGCGTAAAATATTT", "TATGGCTGTCGGGTAG", "TGTCCCTTAGTACTTT", "AGAAAATAATATGACG", "CGGCCTGAAGGTCAGG", "TTGAACGCGGGCTCGG", "GCTAACATCACGAATC", "GCGCACCCTTTAATTG", "ACTGTCGAGTTGTCCG", "CCGGGGACGTATGCAC", "TCTTTTGAGGAGCTGA", "ATATCGTTGCTGGAGA", "CATCCACCACACTTCA", "ACCCCTAAAGGCGCTG", "ATACTATATTTAACGG", "GAGCGCGTCACCGGGT", "GTACCTCTCGATAGTG", "TGGCCAATATTTGTCT", "CATTTCTGATCAATAA")
+
+# Filter both indels and counts dt for the barcodes in the clone
+
+indels.dt <- indels.dt %>% dplyr::filter(barcode %in% barcodes.list)
+
+# Generate indel frequency data table
+
+indels.frequencies.dt = data.frame(indels.dt[,c('exp', 'barcode')],
+                                  indels.dt[, -c(1:2)] /
+                                    rowSums(indels.dt[, -c(1:2)]))
+
+# Rename indels.frequencies.dt
+indel_pct_cols <- gsub("^", "pct_", indel_cols)
+names(indels.frequencies.dt)[3:length(names(indels.frequencies.dt))] <- indel_pct_cols
+
+# Dimensions check
+
+dim(indels.dt)
+dim(indels.frequencies.dt)
+
+# Save all three data frames as a single tibble
+indels.tib <- as_tibble(indels.dt)
+indels.frequencies.tib <- as_tibble(indels.frequencies.dt)
+
+# Join indels & descr.variables
+
+indels.tib$exp <- gsub("indel_","", indels.tib$exp)
+indels.frequencies.tib$exp <- gsub("indel_","", indels.frequencies.tib$exp)
+
+inhibitor.tib <- left_join(indels.tib,indels.frequencies.tib, by = c("exp","barcode"))
+
+dim(inhibitor.tib)
+
+#Distribution per sample (number of reads per IPR)
+summary_read_number <- indels.dt %>% filter(grepl("15|16|17|21", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+distribution_total_reads_sample <- summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_reads <- quantile(summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_indels <- quantile(summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_del_7 <- quantile(summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_ins_1 <- quantile(summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+distribution_wt <- quantile(summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R1_distribution_table <- tibble(quantile = names(distribution_del_7), 
+                                   processed_reads_sample = distribution_total_reads_sample,
+                                   processed_reads_IPR = distribution_reads,
+                                   insertion_1nt = distribution_ins_1,
+                                   deletion_7nt = distribution_del_7,
+                                   intact = distribution_wt)
+
+
+#Distribution per sample (number of reads per IPR) R2
+R2_summary_read_number <- indels.dt %>% filter(grepl("36|37|38|42", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R2_distribution_reads <- quantile(R2_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_total_reads_sample <- R2_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_indels <- quantile(R2_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_del_7 <- quantile(R2_summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_ins_1 <- quantile(R2_summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R2_distribution_wt <- quantile(R2_summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R2_distribution_table <- tibble(quantile = names(R2_distribution_del_7), 
+                                   processed_reads_sample = R2_distribution_total_reads_sample,
+                                   processed_reads_IPR = R2_distribution_reads,
+                                   insertion_1nt = R2_distribution_ins_1,
+                                   deletion_7nt = R2_distribution_del_7,
+                                   intact = R2_distribution_wt)
+
+#Distribution per sample (number of reads per IPR) R2
+R3_summary_read_number <- indels.dt %>% filter(grepl("57|58|59|63", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R3_distribution_total_reads_sample <- R3_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_reads <- quantile(R3_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_indels <- quantile(R3_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_del_7 <- quantile(R3_summary_read_number$del_7, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_ins_1 <- quantile(R3_summary_read_number$ins_1, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+R3_distribution_wt <- quantile(R3_summary_read_number$wt, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
+
+R3_distribution_table <- tibble(quantile = names(R3_distribution_del_7), 
+                                   processed_reads_sample = R3_distribution_total_reads_sample,
+                                   processed_reads_IPR = R3_distribution_reads,
+                                   insertion_1nt = R3_distribution_ins_1,
+                                   deletion_7nt = R3_distribution_del_7,
+                                   intact = R3_distribution_wt)
+
+
+#Print summaries
+print("Read number summary tables")
+print("Replicate 1")
+print(R1_distribution_table)
+print("Replicate 2")
+print(R2_distribution_table)
+print("replicate 3")
+print(R3_distribution_table)
+
+```
+
+#Data processing (E1627: DNA repair inhibitors)
+```{r}
+#Join with inhibitor table
+inhibitor.data <- inhibitor.tib %>% left_join(inhibitor.table)
+
+# Process kinase inhibitor data
+inhibitor.data.processed <- inhibitor.data %>% 
+  filter(del_7 + ins_1 > 30) %>% #Apply the read number filtering step
+  mutate(freqCut = 1 - pct_wt,
+         log2MMEJNHEJratio = log2(del_7 / ins_1)) %>%
+  dplyr::select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf")) %>% distinct()
+
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- inhibitor.data.processed %>% 
+  dplyr::group_by(exp, replicate) %>%
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>%
+  filter(mean.cut < 0.25) %>% 
+  dplyr::select(exp,replicate)
+
+#Filter based on cutting efficiency
+filtered.inhibitor.tib <- inhibitor.data.processed %>% 
+  anti_join(filter.out.wells, by = c("exp", "replicate"))
+
+sel.inhibitor.data <- inhibitor.data.processed %>% dplyr::select(replicate, drug, barcode, freqCut,log2MMEJNHEJratio)
+
+#Summary numbers
+samples_per_replicate <- sel.inhibitor.data %>% dplyr::select(drug, replicate) %>% distinct() %>% dplyr::group_by(replicate) %>% dplyr::summarise(counts = n(), percentage = round(((n()/4)*100), digits = 2))
+replicates_per_sample <- sel.inhibitor.data %>% dplyr::select(drug, replicate) %>% distinct() %>% dplyr::group_by(replicate) %>% dplyr::summarise(counts = n()) %>% pull(counts) %>% mean() %>% round(digits = 2)
+
+#Print
+print(samples_per_replicate)
+print(replicates_per_sample)
+```
+
+### Calculation of differentials of log2 MMEJ:NHEJ (Formula #3)
+```{r}
+#Extract non-targetting samples from this dataset
+DMSO.set.ratio <- filter(sel.inhibitor.data , drug == "DMSO") %>% dplyr::group_by(barcode, replicate) %>% dplyr::summarise(DMSO.log2ratio = mean(log2MMEJNHEJratio, na.rm = T))
+
+# Compute log2 fold changes in different set ups for all the KO samples
+log2.distance.ratio <- sel.inhibitor.data %>% 
+  na.omit() %>% #Remove NA
+  left_join(DMSO.set.ratio, by = c("replicate", "barcode")) %>% #Join mock KOs
+  mutate(log2.foldchange = log2MMEJNHEJratio - DMSO.log2ratio) %>% #Calculate differential of log2MMEJ:NHEJ 
+  dplyr::group_by(drug,barcode) %>% #Group by sample
+  dplyr::summarise(mean.log2foldchange = mean(log2.foldchange,na.rm = T), n_rep = n()) %>% #Compute differential of log2MMEJ:NHEJ
+  ungroup()
+```
+
+#Step 4: Identification of DR proteins with global effects on MMEJ:NHEJ balance
+```{r}
+#Compute mean MMEJ:NHEJ differential over all IPRs
+mean.diff.balance <- log2.distance.ratio %>% 
+  filter(drug != "DMSO") %>%
+  group_by(drug) %>% 
+  dplyr::summarise(mean.fc = mean(mean.log2foldchange, na.rm = T))
+
+#Run t.test with all the data
+test.mean.diff.balance <- log2.distance.ratio %>% 
+  filter(drug != "DMSO") %>%
+  dplyr::group_by(drug) %>% 
+  t_test(mean.log2foldchange ~ 0) %>% 
+  mutate(p.adj = p.adjust(p, method = "BH")) %>% 
+  left_join(mean.diff.balance, by = "drug")
+
+#Prepare data frame for export
+mean.diff.balance.export <- test.mean.diff.balance %>%
+  dplyr::select(drug,p,p.adj,mean.balance.diff = mean.fc)
+
+#Significant MMEJ
+mean_significant_MMEJ <- filter(mean.diff.balance.export, p.adj < 0.001 & mean.balance.diff < 0) %>% nrow() #149 proteins favor MMEJ
+mean_significant_NHEJ <- filter(mean.diff.balance.export, p.adj < 0.001 & mean.balance.diff > 0) %>% nrow() #16 proteins favor NHEJ
+
+#Print
+print(paste("A total of", mean_significant_MMEJ, "drug favor MMEJ globally with an FDR < 0.001"))
+print(paste("A total of", mean_significant_NHEJ, "drug favor NHEJ globally with an FDR < 0.001"))
+```
+
+
+#Step 5A: Test values are different than 0
+```{r}
+
+inh.t.test <- tibble(drug = NA, barcode = NA, p.val = NA, mean = NA)
+
+# Test if we have enough power to test wilcox test per IPR
+for( i in unique(sel.inhibitor.data$drug)) {
+  for(j in unique(sel.inhibitor.data$barcode)) {
+    IPR.drug <- sel.inhibitor.data %>% filter(drug == i & barcode == j) %>% pull(log2MMEJNHEJratio)
+   if (length(IPR.drug) < 3) {
+next
+}
+    IPR.DMSO <- sel.inhibitor.data %>% filter(drug == "DMSO" & barcode == j) %>% pull(log2MMEJNHEJratio)
+    t_test_drug <- t.test(IPR.drug,IPR.DMSO) %>% tidy()
+    inh.t.test <- inh.t.test %>% add_row(drug = i, barcode = j, p.val = t_test_drug %>% pull(p.value), mean = mean(IPR.drug, na.rm = T))
+    }
+  }
+
+
+significant.inh.t.test <- inh.t.test %>% filter(drug %in% c("ATMi","DNAPKi")) %>% mutate(p.adj = p.adjust(p.val, method = "BH")) %>% dplyr::select(drug,barcode,p.val,p.adj, mean)
+
+#what experiment have at least one IPR significant
+significant.perturbations.IPR <- significant.inh.t.test %>% dplyr::group_by(drug) %>% dplyr::summarise(MMEJ_signif = sum(mean < 0 & p.adj < 0.05), NHEJ_signif = sum(mean > 0 & p.adj < 0.05)) %>% mutate(pathway_signif = case_when(MMEJ_signif == 0 & NHEJ_signif != 0 ~ "NHEJ", MMEJ_signif != 0 & NHEJ_signif == 0 ~ "MMEJ", MMEJ_signif != 0 & NHEJ_signif != 0 ~ "both", T ~ "none"))
+
+```
+
+# Substep B: Principal component regression to identify repair proteins with CCDs
+
+```{r}
+#Filter genes that do not significantly perturb balance and add chromatin info
+drug.CCD.dt <- log2.distance.ratio %>%
+  filter(drug != "DMSO") %>%
+  left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% #Join chromatin info
+  left_join(significant.perturbations.IPR, by = c("drug")) %>% na.omit() #Filter genes that do not perturb MMEJ:NHEJ balance
+
+#Create an empty dt with CCDs of DDR proteins
+drug_CCDs_dt <- tibble(drug = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(drug.CCD.dt$drug)){
+gene.library.dt <- filter(drug.CCD.dt, drug == i)
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV") #Run principal component regression
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+drug_CCDs_dt <- drug_CCDs_dt %>% add_row(drug = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+}
+
+```
+
+#Bind both and correct p-value
+```{r}
+#non-targeting (2 non-targeting values are selected with this value)
+adj_p.value_model <- drug_CCDs_dt %>%
+  na.omit() %>%
+  dplyr::select(p.value, drug)  %>% 
+  mutate(p.adj = p.adjust(p.value, method = "BH")) %>% 
+  dplyr::select(drug,p.value,p.adj)
+
+#Do these proteins favor MMEJ or NHEJ
+summary_genes <- adj_p.value_model %>% 
+  filter(p.adj < 0.05) %>% #5% FDR
+  left_join(significant.perturbations.IPR) %>%
+  dplyr::group_by(pathway_signif) %>%
+  dplyr::summarise(count = n())
+
+```
+
+#Sub-step C: Linear modeling to identify individual DR proteins - chromatin feature links
+```{r}
+#Create empty dataframe to calculate synergy scores
+drug_CCD_slopes <- tibble(drug = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+#Loop to run linear models on the values
+for (h in unique(drug.CCD.dt$drug)) {
+  for (j in colnames(drug.CCD.dt)[7:31]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- drug.CCD.dt %>% filter(drug == h) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean.log2foldchange ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   drug_CCD_slopes <- drug_CCD_slopes %>% add_row(drug = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+}
+
+#Retain slopes that 
+drug_CCD_all_values <- drug_CCD_slopes %>% 
+  reshape2::dcast(drug + feature ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(drug ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  left_join(adj_p.value_model %>% 
+              dplyr::select(drug, model_p.value = p.value, model_p.adj = p.adj), by = "drug") %>% #Join with CCDs p_value data table and change some names
+  left_join(significant.perturbations.IPR, by = "drug") %>% #Join with individual IPR significance calls (z-test)
+  mutate(CCD_value = case_when(pathway_signif == "MMEJ" & slope < 0 ~ slope, pathway_signif == "MMEJ" & slope > 0 ~ 0, pathway_signif == "NHEJ" & slope > 0 ~ slope, pathway_signif == "NHEJ" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+
+#How many M-, N- and no synergies
+synergy_summaries <- drug_CCD_all_values %>% filter(model_p.adj < 0.05) %>% dplyr::group_by(drug) %>% dplyr::summarise(M_synergy = sum(CCD_value < 0), N_synergy = sum(CCD_value > 0)) %>% distinct() %>% mutate(synergy_class = case_when(N_synergy == 0 ~ "M_synergy", M_synergy == 0 ~ "N_synergy", T ~ "both")) %>% dplyr::group_by(synergy_class) %>% dplyr::summarise(c = n())
+```
+
+#Step 6: Compute estimated ∆log2MMEJ:NHEJ scores for CCD effects and compared to global ∆log2MMEJ:NHEJ
+```{r}
+chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
+
+##99% CI for each feature
+CI99_chromatin_features <- chromatin_features_plot %>% dplyr::group_by(variable) %>% dplyr::summarise(CI0.5 = quantile(value, 0.005), CI99.5 = quantile(value, 0.995), range = CI99.5 - CI0.5, mean = mean(value))
+
+##DNA repair protein class (CCD, global, both)
+global_effect_proteins <- mean.diff.balance.export %>% filter(p.adj < 0.001) %>% pull(drug) %>% unique() #Filter genes with significant global ∆log2MMEJ:NHEJ scores
+CCD_proteins <- drug_CCD_all_values %>% filter(model_p.adj < 0.05) %>% pull(drug) %>% unique() #Filter genes with significand CCD ∆log2MMEJ:NHEJ scores
+#All classes
+both_CCD_global_proteins <- intersect(global_effect_proteins, CCD_proteins) #Check for overlap
+only_global <- setdiff(global_effect_proteins, both_CCD_global_proteins) #Only global effects
+only_CCD <- setdiff(CCD_proteins, both_CCD_global_proteins) #Only CCDs
+
+# Create a summary table with three protein classes
+classes_summary <- tibble(drug = c(both_CCD_global_proteins,only_global,only_CCD), 
+                          class = c(rep("both", length(both_CCD_global_proteins)),rep("global",length(only_global)), rep("CCD", length(only_CCD))))
+
+##Compute estimated CCD ∆log2MMEJ:NHEJ score
+estimated_FC_CCD <- drug_CCD_all_values %>% 
+  left_join(CI99_chromatin_features, by = c("feature" ="variable")) %>% #Join 99% CI for chromatin
+  mutate(estim_fc_CCD = range*CCD_value) %>% #Calculate range
+  full_join(classes_summary, by = "drug") #Join class they belong
+
+##Select the maximum estimated effect for each gene
+max_estimated_FC_CCD_gene <- estimated_FC_CCD %>% 
+  dplyr::group_by(drug) %>% 
+  dplyr::summarise(m_CCD_FC_nhej = max(estim_fc_CCD), 
+                   m_CCD_FC_mmej = min(estim_fc_CCD)) %>% 
+  reshape2::melt(value.name = "m_CCD_FC", id.vars = "drug") %>% 
+  filter(m_CCD_FC != 0)
+
+## Filter max(CCDs)
+max_estimated_CCD_FC <- estimated_FC_CCD %>% 
+  mutate(m_CCD_FC = estim_fc_CCD) %>% 
+  right_join(max_estimated_FC_CCD_gene) %>% 
+  dplyr::select(-m_CCD_FC) %>%
+  full_join(classes_summary)
+
+#Left_join mean.fc
+estimated_CCD_global <- max_estimated_CCD_FC %>% 
+  full_join(mean.diff.balance.export, by = "drug")
+
+#Summary table class of DR proteins
+summary_drug_class <- estimated_CCD_global %>% dplyr::select(class,drug) %>% distinct() %>% dplyr::group_by(class) %>% dplyr::summarise(count = n())
+
+#Print output of the chunk
+print(paste("We find",summary_drug_class$count[1], "DR proteins with CCD. Among these,", summary_drug_class$count[1],"have global effects as well and", summary_drug_class$count[2], "have exclusively CCD effect. Additionally, we find", summary_drug_class$count[3], "DR proteins that have global effect only"))
+
+```
+
+#Step 7: Data visualization
+This step will be performed with the output files in separate scripts 
+
+#Create table S4: Mean ∆log2MMEJ:NHEJ balance of each well.
+```{r}
+export_screen_result_TS4 <- log2.distance.ratio %>% 
+  dplyr::select(drug, IPR_barcode = "barcode", delta_log2_MMEJ_NHEJ = "mean.log2foldchange", number_replicates = "n_rep")
+```
+
+#Create table S7: Data to export all major features
+```{r}
+export_screen_result_TS7 <- estimated_FC_CCD %>% 
+  left_join(mean.diff.balance.export, by = "drug") %>%
+  dplyr::select(drug, CCD_model_p_adj = "model_p.adj",chrom_feature = "feature", CCD_synergy_score = "CCD_value",CCD_estim_diff = "estim_fc_CCD", global_diff = "mean.balance.diff", global_p_adj = "p.adj", DR_effect_type = "class")
+
+```
+
+
+#Output files: Export all files needed for making figures
+```{r, echo=FALSE, eval=FALSE}
+setwd(in.dir)
+
+#Step 1: Raw freqCut & log2MMEJNHEJ values
+saveRDS_proof(sel.inhibitor.data, file = "data/processed_data/CCD_inhibitors/xv20220929_inhibitors_repair_metrics.rds")
+
+#Step 2: dcast data table for 
+saveRDS_proof(log2.distance.ratio, file = "data/processed_data/CCD_inhibitors/xv20220929_drug_differentials_log2_MMEJ_NHEJ_balance.rds")
+
+#Step 3: Student's t-test p-value
+saveRDS_proof(significant.inh.t.test, file = "data/processed_data/CCD_inhibitors/xv20220929_drug_t_test_final_values.rds") #T-test values
+
+#Step 4: diff log2 MMEJ:NHEJ values for DR proteins with chromatin scores
+saveRDS_proof(drug.CCD.dt, file = "data/processed_data/CCD_inhibitors/xv20220929_drug_log2_MMEJNHEJ_differentials_chromatin_KO.rds")
+
+#Step 5: save global changes for all proteins
+saveRDS_proof(mean.diff.balance.export, file = "data/processed_data/CCD_inhibitors/xv20220929_drug_global_diff_MMEJNHEJ.rds")
+
+#Final data table: Table S3
+saveRDS_proof(export_screen_result_TS7, file = "data/processed_data/xv20220929_drug_CCD_results.rds")
+
+```
+
+```{r, echo=FALSE, eval=FALSE}
+setwd(in.dir)
+#Export for supplementary files (.xlsx file)
+
+#Table S4
+write.xlsx(export_screen_result_TS4, file = "data/supplementary_tables/xv20220927_Table_S4b_delta_log2_MMEJ_NHEJ.xlsx")
+
+#Table S7
+
+write.xlsx(export_screen_result_TS7, file = "data/supplementary_tables/xv20220927_Table_S7b_global_CCD_MMEJ_NHEJ_results.xlsx")
+
+```

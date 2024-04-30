@@ -1,0 +1,85 @@
+	class	subclass	repeats	counts	type
+1	1bp deletion	C:G	1	19	1bp deletion_C:G
+2	1bp deletion	C:G	2	8	1bp deletion_C:G
+3	1bp deletion	C:G	3	5	1bp deletion_C:G
+4	1bp deletion	C:G	4	2	1bp deletion_C:G
+5	1bp deletion	C:G	5	4	1bp deletion_C:G
+6	1bp deletion	C:G	6+	5	1bp deletion_C:G
+7	1bp deletion	T:A	1	8	1bp deletion_T:A
+8	1bp deletion	T:A	2	5	1bp deletion_T:A
+9	1bp deletion	T:A	3	6	1bp deletion_T:A
+10	1bp deletion	T:A	4	9	1bp deletion_T:A
+11	1bp deletion	T:A	5	8	1bp deletion_T:A
+12	1bp deletion	T:A	6+	29	1bp deletion_T:A
+13	1bp insertion	C:G	0	4	1bp insertion_C:G
+14	1bp insertion	C:G	1	2	1bp insertion_C:G
+15	1bp insertion	C:G	2	2	1bp insertion_C:G
+16	1bp insertion	C:G	3	1	1bp insertion_C:G
+17	1bp insertion	C:G	4	1	1bp insertion_C:G
+18	1bp insertion	C:G	5+	12	1bp insertion_C:G
+19	1bp insertion	T:A	0	3	1bp insertion_T:A
+20	1bp insertion	T:A	1	8	1bp insertion_T:A
+21	1bp insertion	T:A	2	5	1bp insertion_T:A
+22	1bp insertion	T:A	3	4	1bp insertion_T:A
+23	1bp insertion	T:A	4	7	1bp insertion_T:A
+24	1bp insertion	T:A	5+	275	1bp insertion_T:A
+25	>1bp deletion at repeats	2	1	5	>1bp deletion at repeats_2
+26	>1bp deletion at repeats	2	2	13	>1bp deletion at repeats_2
+27	>1bp deletion at repeats	2	3	4	>1bp deletion at repeats_2
+28	>1bp deletion at repeats	2	4	1	>1bp deletion at repeats_2
+29	>1bp deletion at repeats	2	5	1	>1bp deletion at repeats_2
+30	>1bp deletion at repeats	2	6+	5	>1bp deletion at repeats_2
+31	>1bp deletion at repeats	3	1	3	>1bp deletion at repeats_3
+32	>1bp deletion at repeats	3	2	5	>1bp deletion at repeats_3
+33	>1bp deletion at repeats	3	3	0	>1bp deletion at repeats_3
+34	>1bp deletion at repeats	3	4	0	>1bp deletion at repeats_3
+35	>1bp deletion at repeats	3	5	1	>1bp deletion at repeats_3
+36	>1bp deletion at repeats	3	6+	1	>1bp deletion at repeats_3
+37	>1bp deletion at repeats	4	1	0	>1bp deletion at repeats_4
+38	>1bp deletion at repeats	4	2	5	>1bp deletion at repeats_4
+39	>1bp deletion at repeats	4	3	0	>1bp deletion at repeats_4
+40	>1bp deletion at repeats	4	4	0	>1bp deletion at repeats_4
+41	>1bp deletion at repeats	4	5	0	>1bp deletion at repeats_4
+42	>1bp deletion at repeats	4	6+	0	>1bp deletion at repeats_4
+43	>1bp deletion at repeats	5+	1	8	>1bp deletion at repeats_5+
+44	>1bp deletion at repeats	5+	2	1	>1bp deletion at repeats_5+
+45	>1bp deletion at repeats	5+	3	0	>1bp deletion at repeats_5+
+46	>1bp deletion at repeats	5+	4	0	>1bp deletion at repeats_5+
+47	>1bp deletion at repeats	5+	5	0	>1bp deletion at repeats_5+
+48	>1bp deletion at repeats	5+	6+	0	>1bp deletion at repeats_5+
+49	>1bp insertion at repeats	2	0	1	>1bp insertion at repeats_2
+50	>1bp insertion at repeats	2	1	3	>1bp insertion at repeats_2
+51	>1bp insertion at repeats	2	2	0	>1bp insertion at repeats_2
+52	>1bp insertion at repeats	2	3	0	>1bp insertion at repeats_2
+53	>1bp insertion at repeats	2	4	1	>1bp insertion at repeats_2
+54	>1bp insertion at repeats	2	5+	9	>1bp insertion at repeats_2
+55	>1bp insertion at repeats	3	0	1	>1bp insertion at repeats_3
+56	>1bp insertion at repeats	3	1	2	>1bp insertion at repeats_3
+57	>1bp insertion at repeats	3	2	1	>1bp insertion at repeats_3
+58	>1bp insertion at repeats	3	3	0	>1bp insertion at repeats_3
+59	>1bp insertion at repeats	3	4	0	>1bp insertion at repeats_3
+60	>1bp insertion at repeats	3	5+	1	>1bp insertion at repeats_3
+61	>1bp insertion at repeats	4	0	0	>1bp insertion at repeats_4
+62	>1bp insertion at repeats	4	1	3	>1bp insertion at repeats_4
+63	>1bp insertion at repeats	4	2	0	>1bp insertion at repeats_4
+64	>1bp insertion at repeats	4	3	0	>1bp insertion at repeats_4
+65	>1bp insertion at repeats	4	4	0	>1bp insertion at repeats_4
+66	>1bp insertion at repeats	4	5+	0	>1bp insertion at repeats_4
+67	>1bp insertion at repeats	5+	0	2	>1bp insertion at repeats_5+
+68	>1bp insertion at repeats	5+	1	13	>1bp insertion at repeats_5+
+69	>1bp insertion at repeats	5+	2	1	>1bp insertion at repeats_5+
+70	>1bp insertion at repeats	5+	3	0	>1bp insertion at repeats_5+
+71	>1bp insertion at repeats	5+	4	1	>1bp insertion at repeats_5+
+72	>1bp insertion at repeats	5+	5+	0	>1bp insertion at repeats_5+
+73	deletion with microhomology	2	1	6	deletion with microhomology_2
+74	deletion with microhomology	3	1	1	deletion with microhomology_3
+75	deletion with microhomology	3	2	5	deletion with microhomology_3
+76	deletion with microhomology	4	1	0	deletion with microhomology_4
+77	deletion with microhomology	4	2	1	deletion with microhomology_4
+78	deletion with microhomology	4	3	3	deletion with microhomology_4
+79	deletion with microhomology	5+	1	8	deletion with microhomology_5+
+80	deletion with microhomology	5+	2	5	deletion with microhomology_5+
+81	deletion with microhomology	5+	3	5	deletion with microhomology_5+
+82	deletion with microhomology	5+	4	2	deletion with microhomology_5+
+83	deletion with microhomology	5+	5+	0	deletion with microhomology_5+
+84	complex indel	.	.	1	complex indel_.

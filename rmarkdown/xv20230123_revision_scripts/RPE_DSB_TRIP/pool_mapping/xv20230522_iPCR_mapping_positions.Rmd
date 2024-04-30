@@ -1,0 +1,375 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+```
+
+# Import coordinates: from iPCR and Tagmap
+```{r, eval=T, warning=F, message=F}
+#iPCR data
+iPCR_dir="/DATA/projects/DSBrepair/data/xv20230515_iPCR_DSB_TRIP_pools/table/"
+setwd(iPCR_dir)
+iPCR_files <- list.files(full.names=F)
+
+clone_integrations_iPCR <- map_dfr(iPCR_files, function(x){
+  read_delim(x, show_col_types = F) %>%
+    mutate(filename = x) %>%
+    separate(filename, into = c("a", "exp","cell","complexity","transfection","pool","read")) %>%
+    mutate(method = "iPCR") %>%
+    arrange(-total_mapped)
+})
+
+#control number of mapped reporter pool
+summary_table <- clone_integrations_iPCR %>% dplyr::group_by(cell, complexity,transfection, pool, read) %>% dplyr::summarise(counts = n())
+
+```
+
+# Check number of reads
+```{r, eval=T, warning=F, message=F}
+#Prepare dataframe
+IPR_iPCR <- clone_integrations_iPCR %>%
+  select("read_count"= total_mapped, "read_count_1" = reads1, "read_count_2" = reads2, cell, complexity,transfection, pool, read, barcode)
+
+
+
+#Plot total number of reads
+ggplot(IPR_iPCR) +
+  geom_quasirandom(aes(fct_relevel(complexity, c("100","250","1000")),log10(read_count))) +
+  facet_wrap(~cell + transfection) + 
+  geom_hline(yintercept = 1, linetype = 2) +
+  theme_bw()
+
+ggplot(IPR_iPCR) +
+  geom_density(aes(log10(read_count), color = fct_relevel(complexity, c("100","250","1000")))) +
+  facet_wrap(~cell + transfection) + 
+  geom_vline(xintercept = 1, linetype = 2) +
+  theme_bw() + theme(legend.position = "top")
+
+
+
+```
+# Conclusion: I will take reporters with more than 10 total_reads
+
+# Check coordinates
+```{r}
+#Tagmap
+IPR_filter_iPCR <- clone_integrations_iPCR %>% filter(total_mapped > 10)
+
+# Do files 1 and 2 from iPCR pipeline match?
+melt_iPCR <- IPR_filter_iPCR %>% select(barcode, start_pos, cell, complexity,transfection,pool, read) %>% reshape2::dcast(cell+barcode+complexity+transfection ~ read, value.var = "start_pos")
+
+ggplot(melt_iPCR) +
+  geom_point(aes(`1`, `2`, IPR = barcode, color = cell)) +
+  theme_bw() + xlab("Coordinate_file_1") + ylab("Coordinate_file_2") + facet_wrap(~ cell)
+
+
+
+```
+# CONCLUSION: for most IPRs both coordinates match. I will keep these!
+
+# Filter IPRs with both coordinates matching
+```{r}
+# Get IPRs with high confidence
+iPCR_barcodes <- melt_iPCR %>% 
+  mutate(mapping_dist = abs(`2`-`1`)) %>% 
+  filter(mapping_dist < 5000) %>%
+  distinct()
+
+# Filter barcodes
+IPR_high_confidence_1 <- IPR_filter_iPCR %>% 
+  right_join(iPCR_barcodes) %>% 
+  filter(read == 1) %>%
+  select(barcode, cell, seqname, "start" = start_pos, "reads_iPCR_1" = total_mapped, method, complexity, transfection,pool)
+
+#number of reporters in IPR_high_confidence
+summary_pools <- IPR_high_confidence_1 %>% 
+  dplyr::group_by(cell, complexity, transfection) %>%
+  dplyr::summarise(pool_IPR_match = n())
+
+#Plot number if IPR
+ggplot(summary_pools) + 
+  geom_col(aes(fct_relevel(transfection, c("Low","High")),
+               pool_IPR_match,
+               fill = fct_relevel(complexity,c("100","250","1000"))),
+           position = "dodge") + 
+  facet_wrap(~ cell, nrow = 1) +
+  geom_hline(yintercept = 200, linetype = 2) +
+  theme_bw() + theme(legend.position = "top") + labs(fill= "Pool complexity") + xlab("Amount of plasmid in transfection") + ylab("Number of mapped IPR per pool")
+```
+#CONCLUSION: the number of mapped IPRs is correct, with many of these having around 200 mapped IPRs.
+
+
+#Do these barcodes correlate with the ones found in the bcPCR?
+```{r}
+#List all pool files
+pool_bc_files <- list.files(path="/DATA/projects/DSBrepair/data/xv20230426_E2255_bcPCR_TRIP_pools/counts/", pattern = "star", full.names = T)
+
+# Create a data table 
+table_IPR_pools <- map_dfr(pool_bc_files, function(x){
+  read.delim(x, header = F) %>% 
+    mutate(filename = str_extract(x, "(?<=NoIndex_).*(?=.starcode.count)"),
+           exp = "E2255",
+           cell = str_extract(filename, "(?<=E2255_).*(?=_[:digit:])"),
+           pool = str_extract(filename, "(?<=nr)[:digit:]"),
+           complexity = str_extract(filename, "(?<=_)[:digit:]{3,4}(?=_)"),
+           transfection = case_when(grepl("High", filename) ~ "High",
+                                    grepl("Low", filename) ~ "Low",
+                                    T ~ "High")) %>%
+    select(barcode = V1, bc_count = V2, filename, exp, cell, pool, complexity,transfection)})
+
+table_IPR_pools$cell <- gsub("RPE1_HR_P","RPE1Proff", table_IPR_pools$cell)
+table_IPR_pools$cell <- gsub("RPE1_HR_D","RPE1Deff", table_IPR_pools$cell)
+table_IPR_pools$pool[is.na(table_IPR_pools$pool)] <- "0"
+
+#Join with iPCR data
+common_IPRs <- IPR_high_confidence_1 %>% left_join(table_IPR_pools)
+
+#
+summary_overlap <- common_IPRs %>% 
+  dplyr::group_by(cell,complexity, transfection) %>% 
+  dplyr::summarise(iPCR_IPR = n()) %>% 
+  left_join(common_IPRs %>% 
+              na.omit() %>% 
+              dplyr::group_by(cell,complexity, transfection) %>%
+              dplyr::summarise(bcPCR_IPR = n())) %>%
+  mutate(percentage_overlap = 100*(bcPCR_IPR/iPCR_IPR))
+
+# How often I can find the IPRs in the bcPCR
+ggplot(summary_overlap) + 
+  geom_col(aes(fct_relevel(transfection, c("Low","High")),
+               percentage_overlap,
+               fill = fct_relevel(complexity,c("100","250","1000"))),
+           position = "dodge") + 
+  facet_wrap(~ cell, nrow = 1) +
+  theme_bw() + theme(legend.position = "top") + labs(fill= "Pool complexity") + xlab("Amount of plasmid in transfection") + ylab("Percentage of reporters present in bcPCR & iPCR")
+
+```
+#CONCLUSION: Overall the overlap is very high almost 100%, with not so many reads in the iPCR
+
+#How often do I find this reporters in the data?
+```{r}
+ggplot(common_IPRs %>% na.omit()) +
+  geom_density(aes(log10(bc_count), color = complexity)) +
+  facet_wrap(~ cell + transfection, ncol = 4) +
+  theme_bw()
+```
+#Conclusion: Distributions look normal. The IPRs I mapped are not very rare on average.
+
+# Map iPCR locations with chip coverage pipeline
+```{r}
+#prepare data table (chr start end name)
+total_reads_map <- IPR_high_confidence_1 %>% inner_join(table_IPR_pools)
+export_data <- total_reads_map %>% 
+  mutate(name = paste(barcode, cell, transfection, complexity, sep = "_")) %>%
+  select(name, "chr"= seqname, start)
+
+#All RPE1 barcodes
+#write_tsv(export_data %>% filter(grepl("RPE1",name)), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv")
+
+#All U2OS barcodes
+#write_tsv(export_data %>% filter(grepl("U2OS",name)), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv")
+
+#mESC
+#write_tsv(export_data %>% filter(grepl("mESC",name)), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_mESC_pools_mapping.tsv")
+```
+#CONCLUSION: I run TRIP_location_info.snakemake with this file and RPE1 data
+
+#Load chromatin info of the IPRs in RPE cells
+```{r}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(repliseq = (ratio_r1 + ratio_r2)/2) %>%
+    select("ID" = barcode, repliseq)
+})
+
+#Bind both
+chromatin_features_pools <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","cell","transfection","complexity"), remove = F)
+```
+
+#Are there different chromatin distributions dependending on the cell line?
+```{r}
+#Melt the dataframe
+plot_densities <- chromatin_features_pools %>% reshape2::melt()
+
+#How many per density
+number_IPRs <- plot_densities %>%
+  select(barcode,cell,transfection,complexity) %>% 
+  distinct() %>%
+  dplyr::group_by(cell) %>% dplyr::summarise(count = n())
+
+#Plot
+ggplot(plot_densities) + 
+  geom_density(aes(value, color = cell)) + 
+  theme_bw() + facet_wrap(~ variable, ncol = 5, scales = "free") +
+  theme(legend.position = "top")
+```
+
+#Distribution in selected pools
+```{r}
+#Selected_pools
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250")
+
+#Melt the dataframe
+plot_densities_filtered <- map_dfr(selected_pools, function(x) {
+  plot_densities %>% filter(grepl(x, ID))
+})
+
+number_IPRs_selected <- plot_densities_filtered %>%
+  select(barcode,cell,transfection,complexity) %>% 
+  distinct() %>%
+  dplyr::group_by(cell) %>% dplyr::summarise(count = n())
+
+
+#Plot
+ggplot(plot_densities_filtered) + 
+  geom_density(data = plot_densities, aes(value), fill = "grey90", alpha = 0.75) +
+  geom_density(aes(value, color = cell)) + 
+  theme_bw() + facet_wrap(~ variable, ncol = 5, scales = "free") +
+  theme(legend.position = "top") + ggtitle("Distributions in selected pools")
+
+```
+#Conclusion: I think selected pools look good
+
+#Check how does the PCR run on this data
+```{r}
+#Select pools
+selected_pools_chrom <- map_dfr(selected_pools, function(x) {
+  chromatin_features_pools %>% filter(grepl(x, ID))
+})
+
+#Run PCR and calculate all the components and plot each element separately
+PCA_chromatin_pools <- map(selected_pools, function(x) {
+  sep_pools <- selected_pools_chrom %>% filter(grepl(x, ID))
+  
+  #PCA
+  PCA_pools <- princomp(sep_pools[6:15])
+  
+  #Plot
+PC1_3_projections <- PCA_pools$loadings[,c(1:3)] %>% as.data.frame() %>% 
+  rownames_to_column(var = "feature") %>%
+  reshape2::melt()
+
+#Plot
+ggplot(PC1_3_projections) +
+  geom_col(aes(feature,value)) +
+  facet_wrap(~ variable, ncol = 1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ggtitle(paste("Orientation of differen chromatin marks in",x,"pool"))
+  
+})#Run principal
+
+print(PCA_chromatin_pools)
+
+```
+
+#Make nice ideograms
+```{r}
+#function
+levels <- c(paste0("chr",c(01:22)),"chrX")
+
+#Only selected pools
+selected_locations <- map_dfr(selected_pools, function(x) {
+  export_data %>% filter(grepl(x, name)) %>% separate(name, into = c("barcode","cell","transfection","complexity"))
+})
+
+#chromsizes
+chromsizes<-read.table("/DATA/scratch/usr/t.v.schaik/data/genomes/GRCh38/hg38.chrom.sizes",header=F, stringsAsFactors = F)
+names(chromsizes)<-c("chr_r","pos_r")
+chromsizes <- chromsizes[!is.na(chromsizes$chr_r), ]
+chromsizes$pos_r <- as.numeric(chromsizes$pos_r)
+
+#plot ideogram
+ggplot() +
+  geom_segment(data = chromsizes %>% filter(chr_r %in% levels) %>% mutate(chr = fct_reorder(chr_r,levels)),
+              aes(x = chr, xend = chr, y = 0, yend = pos_r),
+               lineend = "round", color = "lightgrey", size = 2) +
+  geom_point(data = selected_locations,
+               aes(x = fct_relevel(chr, levels),
+                   y = start),
+             size = .8) +
+  theme_bw(base_size = 16) +
+  xlab("Chromosome") + ylab("Position") + facet_wrap(~cell) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        panel.grid = element_blank())
+
+```
+
+
+
+# CONCLUSION: I got pools with nice lamina association distribution
+
+#Chromatin features heatmaps of pools I will use
+```{r, warning=F}
+
+heatmap_IPR_pools <- map(selected_pools, function(x){
+  
+  #Make dataframe for heatmap
+  heatmap_matrix <-  chromatin_features_pools %>% 
+    filter(nchar(barcode) == 16 & grepl(x,ID)) %>% 
+    select(-cell, -transfection, - complexity, - barcode) %>% 
+    column_to_rownames(var = "ID") 
+  
+    #Plot heatmap
+    #pheatmap
+    pools_heatmap <- pheatmap(heatmap_matrix, silent = T)
+
+#Cluster IPRs by features
+pools_bc_cluster <- rownames(heatmap_matrix[pools_heatmap$tree_row[["order"]],])
+chromatin_cluster <- c("repliseq","dam_LMNB1","dam_H3K27me3","dam_H3K9me2","dam_H3K9me3","chip_H3K36me3","chip_H3K4me3","chip_H3K4me2","chip_H3K4me1","chip_H3K27ac")
+
+#dt for plotting
+pools_IPR_melt <- heatmap_matrix %>% rownames_to_column(var = "barcode") %>% melt(value.name = "z_score", var.name = "feature")
+  
+
+ggplot(pools_IPR_melt) + 
+  geom_tile(aes(fct_relevel(barcode, pools_bc_cluster),fct_relevel(variable,chromatin_cluster), fill = z_score)) +
+  scale_fill_gradient2(low = "#009B9E",mid = "#F1F1F1", high = "#C75DAB", limits = c(-2,2), oob =scales::squish)  + 
+  theme_bw() + 
+  theme(axis.text.x = element_blank(),
+        axis.title = element_blank(), 
+        legend.position = "top") +
+  ggtitle(x)
+  
+})
+
+print(heatmap_IPR_pools)
+```
+# Patwhay balance in clone 32: After mapping

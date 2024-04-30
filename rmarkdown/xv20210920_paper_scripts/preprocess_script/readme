@@ -3,19 +3,26 @@
 
 High-throughput sequencing data was pre-processed with two different pipelines depending on the type of data:
   Sequencing based repair pathway assay data deposited in SRA - Indel scoring pipeline (Step 2 in analysis diagram) {Schep, 2022, 35173762}
-  TCGA HNSCC tumour data analysis - BRASS pipeline with modification (by Mathijs Sanders).
+  TCGA HNSCC tumour data analysis - BRASS and indelClassification pipeline with modification (by Mathijs Sanders).
+  The rest of the tumor data analysis was mapped by Mathijs.
 
-After preprocessing, all the data for this manuscript is processed in these three scripts:
+After preprocessing, all the data for this manuscript is processed in these seven scripts:
   1: xvDT_screen_data_processing_CCD.Rmd (screen data)
-  2: xvDT_repair_inhibitor_CCD_calculation_lm.Rm (validation inhibitors)
-  3: xvDT_FA_SCC_mutations.Rmd (TCGA tumor analysis)
+  2: xvDT_siRNA_data_processing_CCD.Rmd (re-analysis of Ruben's data)
+  3: xvDT_PRO_valindation_data_processing_CCD.Rm (RPE-1 p53KO validation experiments)
+  4: xvDT_DEF_valindation_data_processing_CCD.Rm (RPE-1 p53/BRCA1dKO validation experiments)
+  5: xvDT_repair_inhibitor_CCD_calculation_lm.Rm (validation inhibitors)
+  6: xvDT_ATM_inhibitor_data_processing.Rm (ATM inhibitor in RPE-1 data)
+  7: xvDT_FA_SCC_mutations.Rmd (Processing of BRCA2 data from Mathijs paper)
   
 DT = datetag, different version of the same file will be found if this scripts are rerun.
 This datetag fits with the day, I run the script and created that version
 
 The data tables needed to create the figures were exported into data/processed_data in .rds format
 The intermediate data tables were exported into:
-  "data/processed_data/CCD_analysis" in the case of screening and 
+  "data/processed_data/CCD_analysis" in the case of screening,
+  "data/processed_data/CCD_siRNA" in the case of the re-analysis of Ruben's data,
+  "data/processed_data/CCD_validation_RPE1" in the case of the validation experiments in RPE-1 data (p53KO, p53/BRCA1dKO and ATM inhibitor data) and 
   "data/processed_data/CCD_inhibitors" in the case of the validation inhibitors experiment.
 
     

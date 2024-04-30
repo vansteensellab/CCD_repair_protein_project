@@ -1,0 +1,274 @@
+---
+title: "xv20200403_screen_follow_up"
+output: html_document
+---
+
+#In this Rmarkdown file I will add all the variables needed:
+    - Clean data-set: Only keep essential columns (If needed always can go back to "xv20200320_screen_R1_indel_data.rds")
+    - Gene names: Import data from library
+    - Essentiality data: CRISPR screenings & Pickles database
+    
+```{r setup, message=FALSE, warnings=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+StartTime <-Sys.time()
+
+# 6-digit Date tag:
+Date <- substr(gsub("-", "",Sys.time()),1,8) 
+
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(readxl)
+library(grid)
+library(gridExtra)
+library(platetools)
+library(plyr)
+```
+
+# Read RDS file
+```{r}
+#Read RDS files: R1 & R2
+setwd("~/XV_P3_ChromDSBScreen/XV20200221_E962_ChromDSBScreenR1/data/")
+screen.tib.B1 <- readRDS(file = "xv20200320_screen_R1_indel_data.rds")
+
+setwd("~/XV_P3_ChromDSBScreen/XV20200417_ChromDSBScreenR2/data/")
+screen.tib.B2 <- readRDS(file = "xv20200421_screen_R2_indel_data.rds")
+
+#Merge both data sets
+screen.tib <- bind_rows(screen.tib.B1,screen.tib.B2)
+```
+
+# Arrange plate 4
+This plate was problematic in B1, I repeated the PCR in these plates again and added in the second sequencing run. I will need to pool counts of some of them and recalculate percentages. To do so, I will filter them out and
+```{r}
+#Call indel columns
+indel_cols <- colnames(screen.tib)[grep("^del|^ins|^ssODN|^Inf|^wt", colnames(screen.tib))]
+# Filter plate 4 out and arrange it to get two values for each well
+screen.tib.p4 <- screen.tib %>% 
+                  filter(grepl("P4", .$exp) & !grepl("^B1",.$exp)) %>% 
+                  dplyr::select(exp, barcode, indel_cols) %>% 
+                  mutate(rep = str_extract(.$exp,"R."), 
+                         well = case_when(str_length(str_extract(.$exp, "(?<=P._).*$")) == 3 ~ str_extract(.$exp, "(?<=P._).*$"),
+                                          TRUE ~ paste0(str_extract(.$exp, "(?<=P._)."),"0",str_extract(.$exp, ".$")))) %>% 
+                  dplyr::select(-exp) %>%
+                  dplyr::group_by(rep,well,barcode) %>%
+                  dplyr::summarise_at(indel_cols, sum) 
+
+screen.tib.p4.pct <- screen.tib.p4 %>% mutate(total = rowSums(.[,-c(1:3)], na.rm = T)) %>% 
+                  mutate_at(indel_cols, funs(./total)) %>%
+                  rename_at(indel_cols, list(~paste("pct", indel_cols, sep = "_")))
+
+screen.tib.p4.b <- left_join(screen.tib.p4,screen.tib.p4.pct, by = c("rep","well","barcode")) %>% filter(del_7 + ins_1 > 30) %>% dplyr::group_by(well,barcode) %>% dplyr::mutate(cn = n()) %>% ungroup()
+
+p4.null <- screen.tib.p4.b %>% filter(cn < 3) %>% dplyr::select(well,barcode,rep,cn) %>% reshape2::dcast(well + barcode ~ rep, value.var = "cn") %>% mutate(null = case_when(is.na(.$R1) ~ "R1", is.na(.$R2) ~ "R2", TRUE ~ "R3")) %>% dplyr::select(well,barcode,null)
+ 
+p4.arrange <- screen.tib.p4.b %>% filter(cn < 3) %>% left_join(p4.null, by = c("well","barcode")) %>% dplyr::select(-cn) %>% mutate(b.rep = case_when(rep == "R1" ~ "R1",rep == "R2" ~ "R2", rep == "R3" ~ null)) 
+
+screen.tib.p4.c <- screen.tib.p4.b %>% filter(cn == 3 & rep %in% c("R1","R2")) %>% mutate(b.rep = case_when(rep == "R1" ~ "R1",rep == "R2" ~ "R2")) %>% bind_rows(p4.arrange) %>% mutate(exp = paste("B2",b.rep,"P4",well, sep = "_")) %>% dplyr::select(-rep,-b.rep,-well, -total)
+
+
+```
+
+
+# Clean data-set remove unnecessary columns: 
+```{r}
+#Import and modify Library info
+ChromDSB.library <- read.table("~/XV_P3_ChromDSBScreen/xv20200223_ChromDSBLibrary.txt", sep = "\t", header = TRUE)
+colnames(ChromDSB.library) <- c("gene","dest","well")
+ChromDSB.library <- ChromDSB.library %>% 
+                    mutate(plate = paste0("P",ChromDSB.library$dest)) %>% 
+                    dplyr::select(-dest) %>% 
+                    distinct()
+ChromDSB.library$well <- gsub("06","12",ChromDSB.library$well)
+
+#Merge initial screen + plate_4
+screen.tib.wrangled <- screen.tib %>% filter(!grepl("P4", .$exp) | grepl("^B1",.$exp)) %>% bind_rows(screen.tib.p4.c)
+
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.tib <- screen.tib.wrangled %>% 
+                                  mutate(mut.counts =ins_1 + del_7, wt.counts = wt ,MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+                                                  NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+                                                  freqMMEJ = pct_del_7,
+                                                  freqNHEJ = pct_ins_1,
+                                                  freqCut = 1 - pct_wt,
+                                                  NHEJMMEJratio = ins_1 / del_7,
+                                                  b.rep = case_when(str_detect(.$exp, "B1_") ~ "B2",
+                                                                    str_detect(.$exp, "B2") ~ "B1",
+                                                                    TRUE ~ "B1"),
+                                                  t.rep = case_when(str_detect(.$exp, "B1_") ~ "R3",
+                                                                    str_detect(.$exp, "B2") ~ str_extract(.$exp, "R."),
+                                                                    TRUE ~ str_extract(.$exp, "R.")),
+                                                  plate = str_extract(.$exp, "P."), 
+                                                  well = case_when(str_length(str_extract(.$exp, "(?<=P._).*$")) == 3 ~ str_extract(.$exp, "(?<=P._).*$"),
+                                                                   TRUE ~ paste0(str_extract(.$exp, "(?<=P._)."),"0",str_extract(.$exp, ".$")))) %>% 
+                                    mutate(sample = case_when(well %in% c("D06","E06","F06","G06") | (plate == "P7" & (str_detect(.$well, "G")|str_detect(.$well, "H"))) ~ "WT",
+                                                                     well == "C06" ~ "POLQ", 
+                                                                     TRUE ~ "KO")) %>%
+                                left_join(ChromDSB.library, by = c("plate","well")) %>%
+                                dplyr::select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN","exp")) %>% distinct()
+
+
+```
+# Which filter should I add?
+Cutting efficiency filter: Is MMEJscore stable at differnt cutting frequencies? - This is not the case. Cutting frequency > 0.1
+
+# I will add essentiality data to this library (this score will keep being updated if I find more valuable data sets):
+This score includes (20200320): PICKLES database K562 data (DOI: 10.1016/j.cell.2017.01.013 & doi: 10.1126/science.1247005) and Sabatini data (DOI: 10.1126/science.aac7041). 
+
+z-scores are calculated for each dataset and combined as independent samples.
+
+```{r}
+#Best filter for this freqCut
+ggplot() +geom_density(data = screen.data.tib %>% filter(mut.counts > 30),aes(freqCut)) +
+        geom_density(data = screen.data.tib %>% filter(mut.counts > 50),aes(freqCut), color = "red") +
+  geom_density(data = screen.data.tib %>% filter(mut.counts > 1000),aes(freqCut), color = "green") + 
+        geom_density(data = screen.data.tib,aes(freqCut), color = "blue")
+
+#Best filter for this MMEJscore
+ggplot() +geom_density(data = screen.data.tib %>% filter(mut.counts > 30),aes(MMEJscore)) +
+        geom_density(data = screen.data.tib %>% filter(mut.counts > 50),aes(MMEJscore), color = "red") +
+  geom_density(data = screen.data.tib %>% filter(mut.counts > 1000),aes(MMEJscore), color = "green") + 
+        geom_density(data = screen.data.tib,aes(MMEJscore), color = "blue")
+
+# Filter screen data
+screen.data.tib.filtered <- screen.data.tib %>% filter(mut.counts > 30 & freqCut > 0.1)
+```
+
+
+```{r Essentiality data}
+# Load three datasets together
+gecko.dt <- read.table("~/XV_P3_ChromDSBScreen/xv20200312_gecko_data_pickles", header = T) %>% dplyr::select(GENE,K562.gecko = "K562")
+wangAML.dt <- read.table("~/XV_P3_ChromDSBScreen/xv20200312_wangAML_data_pickles", header =  T) %>% dplyr::select(GENE,K562.AML = "K562")
+wang2014.dt <- read_excel("~/XV_P3_ChromDSBScreen/xv20200227_Sabatini_library.xlsx") %>% dplyr::select(GENE = Gene, K562.2014 = 'K562 CS') %>% mutate(K562.2014inv = -K562.2014) %>% dplyr::select(-K562.2014)
+
+# Join three of them and calculate z-score
+p.K562 <- join_all(list(gecko.dt,wangAML.dt), by="GENE", type='left') %>% mutate(K562.ess = apply(p.K562[2:3],1,mean, na.rm = T)) %>% dplyr::select(gene  = GENE,K562.ess)
+
+#Add to screen data
+screen.data.tib.ess <- left_join(screen.data.tib.filtered,p.K562, by = c("gene"))
+
+```
+# QC plots in read nnumber and efficiency
+## Data loading read number
+
+These are data from the crispr-trip.snake script, and a text file that has has been obtained as explained above.  
+
+```{r load and process the data}
+# First I load the statistics data from the mapping.
+setwd("/DATA/projects/DSBrepair/data/xv20200221_CRISPR_Screen/parsed/")
+file.list <- list.files(pattern='statistics.txt', full.names = TRUE)
+getwd()
+indel.statistics.list <- lapply(file.list, 
+                                read.table, 
+                                header = TRUE)
+
+names(indel.statistics.list)<- gsub('mutation.(.*?).statistics.txt', 
+                                    '', 
+                                    file.list)
+# we need to remove the index column for the time being
+indel.statistics.list <- lapply(indel.statistics.list, function(x) { x["index"] <- NULL; x })
+indel.statistics.df <- do.call(rbind.data.frame, 
+                               indel.statistics.list)
+# Extract the information from the sample names
+indel.statistics.df$sample.well <- rownames(indel.statistics.df)
+indel.statistics.df$run <- str_extract(indel.statistics.df$sample.well,"(?<=./)....")
+indel.statistics.df$replicate <- str_extract(indel.statistics.df$sample.well,"(?<=_R).")
+indel.statistics.df$sample <- str_extract(indel.statistics.df$sample.well,"(?<=_)R.*(?=_.*stat)")
+indel.statistics.df$plate <- str_extract(indel.statistics.df$sample.well,"(?<=_P).")
+indel.statistics.df$well <- str_extract(indel.statistics.df$sample.well,"(?<=P._).*(?=.stat)")
+
+```
+
+#Plot reads per well
+```{r plotting the reads per plate}
+setwd("~/XV_P3_ChromDSBScreen/XV20200417_ChromDSBScreenR2/reports/")
+pdf("xv20200421_QCplot.pdf", width = 12, height = 4)
+for (i in unique(indel.statistics.df$sample)) {
+  
+  # dplyr::select the flowjo data set
+  data <- indel.statistics.df %>% filter(sample== i)
+  
+  limits <- c(5000,max(data$reads))
+
+  # Plot this, first the PI staining with a custom color-coded density
+  y <- density(data$reads)
+  plt1 <- ggplot(data.frame(x = y$x, y = y$y),
+                 aes(x = x, y = y)) +
+    geom_line() +
+    geom_segment(aes(xend = x, yend = 0, colour = x)) +
+    xlim(limits) + xlab("reads") + ylab("frequency") +
+    ggtitle(paste("Read counts -",
+                unique(data$sample))) +
+    scale_color_distiller(type = "div", limits = limits, name = "PI_area") +
+    theme_bw() +
+    theme(legend.position="none")
+  
+  # Then the plate with color-coded wells
+  plt2 <- raw_map(data$reads, 
+                 data$well) +
+    ggtitle(unique(data$sample)) +
+    scale_fill_distiller(type = "div", limits = limits, name = "reads")
+  grid.arrange(plt1, plt2, ncol = 2, widths = c(1, 1.3))
+}
+dev.off()
+```
+
+#Plot cutting efficiency
+```{r plotting the reads per plate}
+#Arrange screen.data.tib
+cut.QC.tib <-  screen.data.tib %>% dplyr::select(freqCut, barcode, plate, well, b.rep,t.rep) %>% dplyr::group_by(plate,well,b.rep,t.rep) %>% dplyr::summarize(meancuteff = mean(freqCut)) %>% mutate(sample = paste0(b.rep, "_", t.rep, "_",plate))
+  
+  
+setwd("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/reports/")
+pdf("xv20200421_QCplot_cuteff_postF.pdf", width = 8, height = 6)
+for (i in unique(tmp.t$position)) {
+  
+  # dplyr::select the flowjo data set
+  data <- tmp.t %>% filter(position == i)
+  
+  limits <- c(0,1)
+
+  # Plot this, first the PI staining with a custom color-coded density
+  #y <- density(data$meancuteff)
+  #plt1 <- ggplot(data.frame(x = y$x, y = y$y),
+  #              aes(x = x, y = y)) +
+  #  geom_line() +
+  # geom_segment(aes(xend = x, yend = 0, colour = x)) +
+  # xlim(limits) + xlab("Cutting efficiency") + ylab("frequency") +
+  # ggtitle(paste("Cuting efficiency -",
+  #             unique(data$sample))) +
+  # scale_color_distiller(type = "div", limits = limits, name = "PI_area") +
+  # theme_bw() +
+  # theme(legend.position="none")
+  
+  # Then the plate with color-coded wells
+  plt2 <- raw_map(data$meancuteff, 
+                 data$well) +
+    ggtitle(unique(data$position)) +
+    scale_fill_distiller(type = "div", limits = limits, name = "reads")
+  grid.arrange(plt2)
+}
+dev.off()
+
+#Filter wells with mean cutting efficiency of < 0.25
+non.transfected <- filter(cut.QC.tib, meancuteff < 0.25)
+
+#Plot freqpoly per plate
+ggplot(cut.QC.tib) + geom_density(aes(meancuteff,fill = sample, color = sample), alpha = 0.1) + facet_wrap(~ t.rep) + theme_bw()
+```
+#Add barcode filter: I need to have reads in every barcode to accept sample
+```{r}
+#
+screen.data.tib.ess.filt <- screen.data.tib.ess %>% dplyr::group_by(gene,t.rep) %>% dplyr::mutate(bc.numb = n()) %>% filter(bc.numb >= 19)
+```
+
+
+#Plate #4 in Replicate 1 does not look good enough. I will discard both plate #4 from now on.
+```{r}
+screen.data.export <- screen.data.tib.ess.filt %>% dplyr::select(-cn,-null)
+setwd("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/")
+saveRDS(screen.data.export , file = "xv20200513_screen_data_QC.rds")
+```
+

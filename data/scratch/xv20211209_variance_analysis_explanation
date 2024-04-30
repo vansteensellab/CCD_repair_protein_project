@@ -1,0 +1,30 @@
+#Date: 20211208
+
+#Experimental set up
+
+Step_1 : Cell plating
+Step_2 : Lbrary transfection (KO gRNA transfection), we do not have an estimation of this transfection efficiency or KO efficiency estimation.
+Step_3 : Wait for 5 days (generate KOs)
+Step_4 : LBR2 gRNA transfection, this is the gRNA that will induce the DSB in the 19 reporters (all the measurements we have: gene editing frequency or mutation frequency is on this second transfection)
+Step_5 : Three days later, harvest and collect
+
+#Explanation of each column in the data table "xv20211208_sample_dataset_variance_test"
+
+gene = Either WT or one of the KO genes: POLL (big difference between replicates), FANCM (clear effect) and POLQ (no difference)
+barcode = sequence tag to identify each of the 19 locations in the genome
+chrom.4 = Four chromatin categories created by characterization of the locations where 19 reporters are integrated
+rep = replicate (R1, R4 or R5)
+freqMMEJ = frequency of 7 nt deletion
+freqNHEJ = frequency of 1 nt insertion
+freqCut = frequency of gene editing (1 - freq no indel)
+MMEJscore = Relative frequency of MMEJ over NHEJ (freqMMEJ/(freqMMEJ + freqNHEJ))
+indelreads = absolute number of read counts with a mutation (to get a stable MMEJscore measurements we need enough indelreads)
+plate & well = position identifiers in the plate
+
+#Explanation of each column in the data table "xv20211209_sample_dataset_variance_test_processed"
+
+This data table contains the z-score transformation and z-score value per chromatin category
+
+gene, barcode, chrom.4, rep, plate & well = The same as before
+mmej.z.score = MMEJscore z-transformed per reporter and sample (mean and sd of the WT population in the same replicate)
+mmej.chrom.score = Mean z-score between reporters in the same chromatin category (total of 4)

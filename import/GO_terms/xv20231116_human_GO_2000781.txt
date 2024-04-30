@@ -1,0 +1,125 @@
+nua4_human	ComplexPortal:CPX-978	NuA4 histone acetyltransferase complex		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA			protein_complex		PMID:27153538	20170131
+ube2n-ube2v2_human	ComplexPortal:CPX-530	UBC13-MMS2 ubiquitin-conjugating enzyme E2 complex		GO:2000781		ComplexPortal	NCBITaxon:9606	IDA			protein_complex		PMID:16129784	20160913
+SLF2	UniProtKB:Q8IX21	SMC5-SMC6 complex localization factor protein 2		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR16046	protein		PMID:25931565	20150909
+SLF2	UniProtKB:Q8IX21	SMC5-SMC6 complex localization factor protein 2		GO:2000781		GO_Central	NCBITaxon:9606	IBA	PANTHER:PTN000411568|UniProtKB:Q8IX21	PANTHER:PTHR16046	protein		PMID:21873635	20210122
+SHLD3	UniProtKB:Q6ZNX1	Shieldin complex subunit 3		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR41404	protein		PMID:29656893	20180501
+SHLD3	UniProtKB:Q6ZNX1	Shieldin complex subunit 3		GO:2001034		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR41404	protein		PMID:29656893	20180516
+SHLD3	UniProtKB:Q6ZNX1	Shieldin complex subunit 3		GO:2001034		GO_Central	NCBITaxon:9606	IBA	PANTHER:PTN002447668|UniProtKB:Q6ZNX1	PANTHER:PTHR41404	protein		PMID:21873635	20190226
+ACTR2	UniProtKB:P61160	Actin-related protein 2		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR11937	protein		PMID:29925947	20180904
+PNKP	UniProtKB:Q96T60	Bifunctional polynucleotide phosphatase/kinase		GO:2001034		CACAO	NCBITaxon:9606	IMP		PANTHER:PTHR12083	protein		PMID:12032095	20180413
+ARID2	UniProtKB:Q68CP9	AT-rich interactive domain-containing protein 2		GO:1905168		CACAO	NCBITaxon:9606	IMP		PANTHER:PTHR46691	protein		PMID:28381560	20170408
+ARID2	UniProtKB:Q68CP9	AT-rich interactive domain-containing protein 2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR46691	protein		PMID:25066234	20170831
+MRNIP	UniProtKB:Q6NTE8	MRN complex-interacting protein		GO:1905168		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR15863	protein		PMID:27568553	20161103
+RIF1	UniProtKB:Q5UIP0	Telomere-associated protein RIF1		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR22928	protein		PMID:28241136	20170404
+ACTB	UniProtKB:P60709	Actin, cytoplasmic 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR11937	protein		PMID:27153538	20170131
+ACTB	UniProtKB:P60709	Actin, cytoplasmic 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:16932743	20170831
+ACTB	UniProtKB:P60709	Actin, cytoplasmic 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:25066234	20170831
+SMARCD3	UniProtKB:Q6STE5	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily D member 3		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR13844	protein		PMID:16932743	20170831
+MRGBP	UniProtKB:Q9NV56	MRG/MORF4L-binding protein		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR13581	protein		PMID:27153538	20170131
+PARP1	UniProtKB:P09874	Poly [ADP-ribose] polymerase 1		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR10459	protein		PMID:26344098	20181126
+PARP1	UniProtKB:P09874	Poly [ADP-ribose] polymerase 1		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR10459	protein		PMID:30356214	20181126
+ING3	UniProtKB:Q9NXR8	Inhibitor of growth protein 3		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR10333	protein		PMID:27153538	20170131
+BCL7A	UniProtKB:Q4VC05	B-cell CLL/lymphoma 7 protein family member A		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12767	protein		PMID:25066234	20170831
+WRAP53	UniProtKB:Q9BUR4	Telomerase Cajal body protein 1		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR13211	protein		PMID:25512560	20180710
+WRAP53	UniProtKB:Q9BUR4	Telomerase Cajal body protein 1		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR13211	protein		PMID:27715493	20180710
+WRAP53	UniProtKB:Q9BUR4	Telomerase Cajal body protein 1		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR13211	protein		PMID:25512560	20180710
+UBE2N	UniProtKB:P61088	Ubiquitin-conjugating enzyme E2 N		GO:2000781		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR24068	protein		PMID:16129784	20160913
+RUVBL1	UniProtKB:Q9Y265	RuvB-like 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR11093	protein		PMID:27153538	20170131
+WAS	UniProtKB:P42768	Actin nucleation-promoting factor WAS		GO:1905168		UniProt	NCBITaxon:9606	IDA			protein		PMID:29925947	20180904
+FOXM1	UniProtKB:Q08050	Forkhead box protein M1		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR46878	protein		PMID:17101782	20110928
+KHDC3L	UniProtKB:Q587J8	KH domain-containing protein 3		GO:1905168		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q9CWU5	PANTHER:PTHR19447	protein		GO_REF:0000024	20210416
+KHDC3L	UniProtKB:Q587J8	KH domain-containing protein 3		GO:1905168		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR19447	protein		PMID:31609975	20210416
+KHDC3L	UniProtKB:Q587J8	KH domain-containing protein 3		GO:2000781		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q9CWU5	PANTHER:PTHR19447	protein		GO_REF:0000024	20200731
+EP400	UniProtKB:Q96L91	E1A-binding protein p400		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR46459	protein		PMID:27153538	20170131
+SMARCD1	UniProtKB:Q96GM5	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily D member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR13844	protein		PMID:16932743	20170831
+SMARCD1	UniProtKB:Q96GM5	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily D member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR13844	protein		PMID:25066234	20170831
+RAD51AP1	UniProtKB:Q96B01	RAD51-associated protein 1		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR15361	protein		PMID:17996710	20200917
+RAD51AP1	UniProtKB:Q96B01	RAD51-associated protein 1		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR15361	protein		PMID:17996711	20200917
+ZCWPW1	UniProtKB:Q9H0M4	Zinc finger CW-type PWWP domain protein 1		GO:2000781		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q6IR42	PANTHER:PTHR15999	protein		GO_REF:0000024	20200818
+ZCWPW1	UniProtKB:Q9H0M4	Zinc finger CW-type PWWP domain protein 1		GO:2000781	"{""relationship"": {""relation"": [{""id"": ""BFO:0000066"", ""label"": ""occurs in""}], ""id"": ""CL:0000017"", ""label"": ""spermatocyte""}}|{""relationship"": {""relation"": [{""id"": ""RO:0002092"", ""label"": ""happens during""}], ""id"": ""GO:0007128"", ""label"": ""meiotic prophase I""}}"	ARUK-UCL	NCBITaxon:9606	ISS	UniProtKB:Q6IR42	PANTHER:PTHR15999	protein		GO_REF:0000024	20200901
+BRD8	UniProtKB:Q9H0E9	Bromodomain-containing protein 8		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR15398	protein		PMID:27153538	20170131
+BRD7	UniProtKB:Q9NPI1	Bromodomain-containing protein 7		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR22881	protein		PMID:25066234	20170831
+DMAP1	UniProtKB:Q9NPF5	DNA methyltransferase 1-associated protein 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR12855	protein		PMID:27153538	20170131
+SPIRE2	UniProtKB:Q8WWL2	Protein spire homolog 2		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR21345	protein		PMID:26287480	20180904
+SPIRE1	UniProtKB:Q08AE8	Protein spire homolog 1		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR21345	protein		PMID:26287480	20180904
+SETMAR	UniProtKB:Q53H47	Histone-lysine N-methyltransferase SETMAR		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR46060	protein		PMID:20620605	20111202
+SETMAR	UniProtKB:Q53H47	Histone-lysine N-methyltransferase SETMAR		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR46060	protein		PMID:21491884	20111202
+PARP3	UniProtKB:Q9Y6F1	Protein mono-ADP-ribosyltransferase PARP3		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR10459	protein		PMID:24598253	20181127
+DDX11	UniProtKB:Q96FC9	ATP-dependent DNA helicase DDX11		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR11472	protein		PMID:23797032	20160916
+EPC2	UniProtKB:Q52LR7	Enhancer of polycomb homolog 2		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR14898	protein		PMID:27153538	20170131
+SIRT1	UniProtKB:Q96EB6	NAD-dependent protein deacetylase sirtuin-1		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR47651	protein		PMID:32538779	20220301
+OOEP	UniProtKB:A6NGQ2	Oocyte-expressed protein homolog		GO:1905168		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q9CWE6	PANTHER:PTHR19447	protein		GO_REF:0000024	20200723
+OOEP	UniProtKB:A6NGQ2	Oocyte-expressed protein homolog		GO:2000781		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q9CWE6	PANTHER:PTHR19447	protein		GO_REF:0000024	20200731
+ARID1B	UniProtKB:Q8NFD5	AT-rich interactive domain-containing protein 1B		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12656	protein		PMID:16932743	20220531
+TRRAP	UniProtKB:Q9Y4A5	Transformation/transcription domain-associated protein		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR11139	protein		PMID:27153538	20170131
+MAD2L2	UniProtKB:Q9UI95	Mitotic spindle assembly checkpoint protein MAD2B		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR11842	protein		PMID:29656893	20180501
+MAD2L2	UniProtKB:Q9UI95	Mitotic spindle assembly checkpoint protein MAD2B		GO:2001034		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11842	protein		PMID:29656893	20180516
+EPC1	UniProtKB:Q9H2F5	Enhancer of polycomb homolog 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR14898	protein		PMID:27153538	20170131
+FMN2	UniProtKB:Q9NZ56	Formin-2		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR13037	protein		PMID:26287480	20180904
+KMT5B	UniProtKB:Q4FZB7	Histone-lysine N-methyltransferase KMT5B		GO:2001034		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR12977	protein		PMID:28114273	20190917
+FANCB	UniProtKB:Q8NB91	Fanconi anemia group B protein		GO:1905168		GO_Central	NCBITaxon:9606	IBA	PANTHER:PTN002408105|MGI:MGI:2448558	PANTHER:PTHR28450	protein		PMID:21873635	20171222
+MORF4L1	UniProtKB:Q9UBU8	Mortality factor 4-like protein 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR10880	protein		PMID:27153538	20170131
+RUVBL2	UniProtKB:Q9Y230	RuvB-like 2		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR11093	protein		PMID:27153538	20170131
+BCL7C	UniProtKB:Q8WUZ0	B-cell CLL/lymphoma 7 protein family member C		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12767	protein		PMID:25066234	20170831
+WDR48	UniProtKB:Q8TAF3	WD repeat-containing protein 48		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR19862	protein		PMID:27239033	20200917
+WDR48	UniProtKB:Q8TAF3	WD repeat-containing protein 48		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR19862	protein		PMID:27463890	20200917
+ERCC6	UniProtKB:Q03468	DNA excision repair protein ERCC-6		GO:1905168		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR45629	protein		PMID:25820262	20190813
+PBRM1	UniProtKB:Q86U86	Protein polybromo-1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR16062	protein		PMID:25066234	20170831
+SMARCA4	UniProtKB:P51532	Transcription activator BRG1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10799	protein		PMID:16932743	20170831
+SMARCA4	UniProtKB:P51532	Transcription activator BRG1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10799	protein		PMID:25066234	20170831
+SMARCA2	UniProtKB:P51531	Probable global transcription activator SNF2L2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10799	protein		PMID:16932743	20170831
+MORF4L2	UniProtKB:Q15014	Mortality factor 4-like protein 2		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR10880	protein		PMID:27153538	20170131
+SHLD1	UniProtKB:Q8IYI0	Shieldin complex subunit 1		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR36863	protein		PMID:29656893	20180501
+SHLD1	UniProtKB:Q8IYI0	Shieldin complex subunit 1		GO:2001034		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR36863	protein		PMID:29656893	20180516
+SHLD1	UniProtKB:Q8IYI0	Shieldin complex subunit 1		GO:2001034		GO_Central	NCBITaxon:9606	IBA	PANTHER:PTN002198750|UniProtKB:Q8IYI0	PANTHER:PTHR36863	protein		PMID:21873635	20200131
+ACTL6A	UniProtKB:O96019	Actin-like protein 6A		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR11937	protein		PMID:27153538	20170131
+ACTL6A	UniProtKB:O96019	Actin-like protein 6A		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:16932743	20170831
+ACTL6A	UniProtKB:O96019	Actin-like protein 6A		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:25066234	20170831
+PHF10	UniProtKB:Q8WUB8	PHD finger protein 10		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10615	protein		PMID:16932743	20170831
+PHF10	UniProtKB:Q8WUB8	PHD finger protein 10		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10615	protein		PMID:25066234	20170831
+KAT5	UniProtKB:Q92993	Histone acetyltransferase KAT5		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR10615	protein		PMID:27153538	20170131
+KAT5	UniProtKB:Q92993	Histone acetyltransferase KAT5		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR10615	protein		PMID:32832608	20211105
+SMARCC1	UniProtKB:Q92922	SWI/SNF complex subunit SMARCC1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12802	protein		PMID:16932743	20170831
+SMARCC1	UniProtKB:Q92922	SWI/SNF complex subunit SMARCC1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12802	protein		PMID:25066234	20170831
+HELQ	UniProtKB:Q8TDG4	Helicase POLQ-like		GO:1905168		UniProt	NCBITaxon:9606	ISS	UniProtKB:Q2VPA6	PANTHER:PTHR47961	protein		GO_REF:0000024	20220203
+SMARCC2	UniProtKB:Q8TAQ2	SWI/SNF complex subunit SMARCC2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12802	protein		PMID:16932743	20170831
+SMARCC2	UniProtKB:Q8TAQ2	SWI/SNF complex subunit SMARCC2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12802	protein		PMID:25066234	20170831
+PRKDC	UniProtKB:P78527	DNA-dependent protein kinase catalytic subunit		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR11139	protein		PMID:26237645	20190319
+SHLD2	UniProtKB:Q86V20	Shieldin complex subunit 2		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR14495	protein		PMID:29656893	20180501
+SHLD2	UniProtKB:Q86V20	Shieldin complex subunit 2		GO:2001034		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR14495	protein		PMID:29656893	20180516
+SHLD2	UniProtKB:Q86V20	Shieldin complex subunit 2		GO:2001034		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR14495	protein		PMID:29789392	20180627
+UBE2V2	UniProtKB:Q15819	Ubiquitin-conjugating enzyme E2 variant 2		GO:2000781		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR24068	protein		PMID:16129784	20160913
+PIAS4	UniProtKB:Q8N2W9	E3 SUMO-protein ligase PIAS4		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR10782	protein		PMID:32832608	20211105
+SMARCD2	UniProtKB:Q92925	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily D member 2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR13844	protein		PMID:16932743	20170831
+SMARCD2	UniProtKB:Q92925	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily D member 2		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR13844	protein		PMID:25066234	20170831
+MGMT	UniProtKB:P16455	Methylated-DNA--protein-cysteine methyltransferase		GO:2000781		BHF-UCL	NCBITaxon:9606	IDA		PANTHER:PTHR46460	protein		PMID:24147153	20160318
+HDGFL2	UniProtKB:Q7Z4V5	Hepatoma-derived growth factor-related protein 2		GO:1905168		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR12550	protein		PMID:26721387	20210826
+KMT5C	UniProtKB:Q86Y97	Histone-lysine N-methyltransferase KMT5C		GO:2001034		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR12977	protein		PMID:28114273	20190917
+DPF1	UniProtKB:Q92782	Zinc finger protein neuro-d4		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS			protein		PMID:16932743	20220325
+DPF3	UniProtKB:Q92784	Zinc finger protein DPF3		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS			protein		PMID:16932743	20170831
+DPF2	UniProtKB:Q92785	Zinc finger protein ubi-d4		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR45888	protein		PMID:25066234	20170831
+VPS72	UniProtKB:Q15906	Vacuolar protein sorting-associated protein 72 homolog		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR13275	protein		PMID:27153538	20170131
+BCL7B	UniProtKB:Q9BQE9	B-cell CLL/lymphoma 7 protein family member B		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12767	protein		PMID:25066234	20170831
+SMARCB1	UniProtKB:Q12824	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily B member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10019	protein		PMID:16932743	20170831
+SMARCB1	UniProtKB:Q12824	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily B member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR10019	protein		PMID:25066234	20170831
+SLF1	UniProtKB:Q9BQI6	SMC5-SMC6 complex localization factor protein 1		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR46677	protein		PMID:25931565	20150909
+MBTD1	UniProtKB:Q05BQ5	MBT domain-containing protein 1		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR12247	protein		PMID:27153538	20170131
+SMCHD1	UniProtKB:A6NHR9	Structural maintenance of chromosomes flexible hinge domain-containing protein 1		GO:2001034		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR22640	protein		PMID:25294876	20180710
+ARID1A	UniProtKB:O14497	AT-rich interactive domain-containing protein 1A		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12656	protein		PMID:16932743	20170831
+ARID1A	UniProtKB:O14497	AT-rich interactive domain-containing protein 1A		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR12656	protein		PMID:25066234	20170831
+TOP2B	UniProtKB:Q02880	DNA topoisomerase 2-beta		GO:2001034		Ensembl	NCBITaxon:9606	IEA	UniProtKB:A0A8I5Y7L4|ensembl:ENSRNOP00000077482	PANTHER:PTHR10169	protein		GO_REF:0000107	20230914
+TIMELESS	UniProtKB:Q9UNS1	Protein timeless homolog		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR22940	protein		PMID:26344098	20181126
+TIMELESS	UniProtKB:Q9UNS1	Protein timeless homolog		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR22940	protein		PMID:30356214	20181126
+TIMELESS	UniProtKB:Q9UNS1	Protein timeless homolog		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR22940	protein		PMID:23797032	20160916
+SPIDR	UniProtKB:Q14159	DNA repair-scaffolding protein		GO:2000781		UniProt	NCBITaxon:9606	IMP		PANTHER:PTHR34347	protein		PMID:23509288	20130813
+SMARCE1	UniProtKB:Q969G3	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily E member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR46232	protein		PMID:16932743	20170831
+SMARCE1	UniProtKB:Q969G3	SWI/SNF-related matrix-associated actin-dependent regulator of chromatin subfamily E member 1		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR46232	protein		PMID:25066234	20170831
+ACTL6B	UniProtKB:O94805	Actin-like protein 6B		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:16932743	20220325
+ACTL6B	UniProtKB:O94805	Actin-like protein 6B		GO:2000781		ComplexPortal	NCBITaxon:9606	NAS		PANTHER:PTHR11937	protein		PMID:25066234	20170831
+KDM4D	UniProtKB:Q6B0I6	Lysine-specific demethylase 4D		GO:2001034		MGI	NCBITaxon:9606	IMP		PANTHER:PTHR10694	protein		PMID:24550317	20150819
+SIRT6	UniProtKB:Q8N6T7	NAD-dependent protein deacylase sirtuin-6		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR47651	protein		PMID:23911928	20220301
+SIRT6	UniProtKB:Q8N6T7	NAD-dependent protein deacylase sirtuin-6		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR47651	protein		PMID:31995034	20220301
+SIRT6	UniProtKB:Q8N6T7	NAD-dependent protein deacylase sirtuin-6		GO:2000781		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR47651	protein		PMID:32538779	20220301
+FUS	UniProtKB:P35637	RNA-binding protein FUS		GO:1905168		UniProt	NCBITaxon:9606	IDA		PANTHER:PTHR23238	protein		PMID:10567410	20181108
+MEAF6	UniProtKB:Q9HAF1	Chromatin modification-related protein MEAF6		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR13476	protein		PMID:27153538	20170131
+YEATS4	UniProtKB:O95619	YEATS domain-containing protein 4		GO:1905168		ComplexPortal	NCBITaxon:9606	IDA		PANTHER:PTHR23195	protein		PMID:27153538	20170131

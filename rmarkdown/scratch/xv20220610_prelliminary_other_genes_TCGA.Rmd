@@ -1,0 +1,61 @@
+---
+title: "xv20220524_TCGA_ddr_summary"
+output: html_document
+date: '2022-05-24'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+```
+
+###Import DNA repair genes
+```{r}
+# DDR genes
+ddr_genes <- fromJSON("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/TCGA_data_summary/xv20220524_E_DDR_hits_genes.json")
+ddr_cases_gene <- tibble(gene = ddr_genes$symbol, cases = c(145,564,246,150,523,64,115,679,454,107,659,248,17,52,78))
+ddr_cases <- fromJSON("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/TCGA_data_summary/xv20220524_E_DDR_hits_cases.json")
+```
+## Plot tumour origin and project
+```{r}
+# Create this plots
+# genes
+ggplot(ddr_cases_gene) + geom_col(aes(reorder(gene, cases), cases)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+# primary tissue
+ddr_cases_primary_t <- as_tibble(ddr_cases$primary_site) %>% dplyr::group_by(value) %>% dplyr::summarise(count = n())
+ggplot(ddr_cases_primary_t %>% filter(count > 20)) + geom_col(aes(reorder(value, count), count)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+
+#  TCGA project
+ddr_cases_project <- as_tibble(ddr_cases$project) %>% dplyr::group_by(project_id) %>% dplyr::summarise(count = n())
+ggplot(ddr_cases_project %>% filter(count > 20)) + geom_col(aes(reorder(project_id, count), count)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+```
+
+###Import chromatin genes
+```{r}
+# chromatin genes
+chr_genes <- fromJSON("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/TCGA_data_summary/xv20220524_E_chr_hits_genes.json")
+chr_cases_gene <- tibble(gene = chr_genes$symbol, cases = c(281,1010,399,509,65,150,314,488,243,348,271,519,659,1159,67))
+chr_cases <- fromJSON("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/TCGA_data_summary/xv20220524_E_chr_hits_cases.json")
+```
+## Plot tumour origin and project
+```{r}
+# Create this plots
+# genes
+ggplot(chr_cases_gene) + geom_col(aes(reorder(gene, cases), cases)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+# primary tissue
+chr_cases_primary_t <- as_tibble(chr_cases$primary_site) %>% dplyr::group_by(value) %>% dplyr::summarise(count = n())
+ggplot(chr_cases_primary_t %>% filter(count > 20)) + geom_col(aes(reorder(value, count), count)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+
+#  TCGA project
+chr_cases_project <- as_tibble(chr_cases$project) %>% dplyr::group_by(project_id) %>% dplyr::summarise(count = n())
+ggplot(chr_cases_project %>% filter(count > 20)) + geom_col(aes(reorder(project_id, count), count)) + theme_bw() + theme(axis.title.y = element_blank()) + coord_flip()
+```
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

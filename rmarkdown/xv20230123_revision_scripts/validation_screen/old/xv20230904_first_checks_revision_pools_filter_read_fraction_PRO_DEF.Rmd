@@ -1,0 +1,337 @@
+---
+title: "xv20230329_RPE1_pool_pathway assay"
+author: "Xabier Vergara"
+date: "2023-07-26"
+output:
+  html_document: default
+  pdf_document: default
+---
+#Date: 28th August 2023
+#Author: Xabier Vergara
+
+#Aim: The aim of this file is to start with the first checks on the screening validation data. Answer questions like, do we need more sequencing depth, did all cell lines work, did all replicates work nicely?
+
+#Conclusions: Overall, it looks better than last experiment. But, the conclusions remain very similar to the previous experiment. With the weird result on U2OS cells, that show positive correlation between balance and TIF.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+## Import data
+```{r, warning=F, message=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230825_DSB_TRIP_revision/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Load sample info for the experiment
+experiment_info <- readRDS("/DATA/projects/DSBrepair/data/xv20230825_DSB_TRIP_revision/xv20230825_sample_info.rds")
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+    mutate(ID = str_extract(x,"7444_[:digit:].*(?=.count.table)"),
+           outcome = paste(call, indel, sep = "_")) %>%
+    left_join(experiment_info)
+})
+```
+
+
+#Number of mapped IPRs with indel data (most optimistic)
+```{r}
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Import barcode sequences
+#RPE cells
+RPE_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+U2OS_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+#Bind both
+all_IPRs <- bind_rows(RPE_IPR, U2OS_IPR) %>% mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% filter(pool %in% selected_pools)
+```
+#CONCLUSION: We are recovering the whole complexity for U2OS & PRO (input 400 ng). With DEF & RPE we are not capturing full complexity (input 200 ng).
+
+
+```{r}
+#Filter by replicate
+indel_data <- clone_pools_pathway_assay %>% 
+  filter(cell_line %in% c("PRO","DEF")) %>%
+  dplyr::group_by(barcode,outcome, well, cell_line, gRNA, bio_rep) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F)) %>% left_join(all_IPRs %>% select(barcode, pool)) %>% na.omit()
+```
+
+#Calculate total reads per sample and per barcode
+```{r}
+#Reads per sample
+total_sample_reads <- indel_data %>%
+  dplyr::group_by(well, cell_line, gRNA,bio_rep) %>%
+  dplyr::summarise(total_sample_reads = sum(counts))
+
+#Reads per barcode 
+total_IPR_reads <- indel_data %>%
+  dplyr::group_by(well,cell_line, gRNA, bio_rep, barcode) %>%
+  dplyr::summarise(total_IPR_reads = sum(counts))
+
+#Left_join
+relative_barcode_reads <- left_join(total_sample_reads, total_IPR_reads) %>%
+  mutate(IPR_read_freq = total_IPR_reads/total_sample_reads)
+```
+
+
+#Compute pathway balance in controls
+```{r, fig.width=20}
+#Filter signature indels in control samples
+control_balance_bio <- indel_data %>% 
+  filter( outcome %in% c("ins_1","del_-7","wt_0")) %>%
+  left_join(relative_barcode_reads)
+  
+
+#Look at read numbers
+control_balance_bio_dcast <- control_balance_bio %>% 
+  reshape2::dcast(barcode + cell_line + gRNA + bio_rep + IPR_read_freq ~ outcome, value.var = "counts", fill = 0, fun.aggregate = mean)
+
+#Control_measurements (bio_rep)
+pathway_metric_control_bio <- control_balance_bio_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1),
+         TIF = 1 - (wt_0/(`del_-7`+ins_1+wt_0))) %>%
+  na.omit()
+
+#Filter by read number and plot noise level
+read_count <- c(0,0.00001,0.0001,0.001,0.01,0.1) 
+
+filter_read_count_test <- map_dfr(read_count , function(x) {
+  pathway_metric_control_bio %>%
+    filter(IPR_read_freq > x) %>%
+    mutate(read_filter = x)
+})
+
+#Number of IPRs in each
+IPR_summary <- filter_read_count_test %>% 
+  dplyr::group_by(cell_line, gRNA, read_filter, bio_rep) %>% 
+  dplyr::summarize(IPR_n = n()) 
+
+IPR_summary_dcast <- IPR_summary %>% 
+  reshape2::dcast(cell_line + gRNA + bio_rep ~ read_filter, value.var  = "IPR_n")
+```
+#Conclusion: we always get some barcodes, but these are extremely low in RPE1 cells
+
+
+#Check reproducibility among replicates
+```{r}
+#Calculate co-ocurrence per replicate
+replicates_IPR <- filter_read_count_test %>%
+  dplyr::group_by(barcode,cell_line, read_filter,gRNA) %>%
+  dplyr::summarise(rep_n = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(cell_line, read_filter,rep_n,gRNA) %>%
+  dplyr::summarise(capture_IPR = n())
+
+total_IPR_rep <- filter_read_count_test %>%
+  select(cell_line, barcode, read_filter,gRNA) %>% 
+  distinct() %>%
+  dplyr::group_by(cell_line,read_filter,gRNA) %>%
+  dplyr::summarise(total_IPR = n())
+
+#Calculate frequency
+freq_IPR_capture <- replicates_IPR %>% 
+  left_join(total_IPR_rep) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Absolute_numbers
+IPR_reps <- replicates_IPR %>% reshape2::dcast(cell_line + rep_n ~ read_filter)
+
+#IPRs in multiple reps
+ggplot(replicates_IPR) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = capture_IPR,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_grid(cell_line ~ gRNA, scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+#Frequency
+ggplot(freq_IPR_capture) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_grid(cell_line ~ gRNA , scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+
+```
+
+#Calculate frequency in absolute number of IPRs
+```{r}
+#Total mapped IPR per pool
+summary_mapped <- all_IPRs %>% 
+  dplyr::group_by(iPCR_cell) %>% 
+  dplyr::summarise(total_IPR = n()) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "DEF",
+                               iPCR_cell == "RPE1Proff" ~ "PRO",
+                               T ~ iPCR_cell)) %>%
+  select(cell_line, total_IPR)
+
+#Calculate frequency out of all IPRs mapped
+freq_IPR_capture_total <- replicates_IPR %>% 
+  left_join(summary_mapped) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Frequency
+ggplot(freq_IPR_capture_total) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line) + 
+  theme_bw() + labs(x = "read_filter")
+
+#How many IPRs have at least n=2
+n2_IPRs <- freq_IPR_capture_total %>% 
+  filter(rep_n > 1) %>%
+  dplyr::group_by(cell_line, read_filter,gRNA) %>%
+  dplyr::summarise(IPR_n = sum(capture_IPR)) %>%
+    left_join(summary_mapped) %>%
+  mutate(freq_capture_n2 = IPR_n/total_IPR)
+```
+
+#Plot summary IPR number
+```{r}
+#Frequency
+ggplot(n2_IPRs) + 
+  geom_col(aes(x = gRNA,
+               y = IPR_n,
+               fill = fct_relevel(as.character(read_filter),as.character(read_count))),
+           position = "dodge") +
+  labs(fill = "read_filter") +
+  facet_wrap(~ cell_line) +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+# CONCLUSION: IPRs captured per sample, look better than before! 
+
+
+#Is pathway balance reproducible among replicates?
+```{r}
+read_counts_filter_reprod <- filter_read_count_test %>%
+  reshape2::dcast(barcode + cell_line + gRNA + read_filter ~ bio_rep, value.var = "balance")
+
+#Calculate mean & sd
+read_counts_filter_reprod_summary <- read_counts_filter_reprod %>% 
+  rowwise() %>% 
+  mutate(mean_bal = mean(c(R1,R2,R3),na.rm = T),
+         sd_bal = sd(c(R1,R2,R3), na.rm = T),
+         reps = 3 - sum(is.na(c(R1,R2,R3)))) %>%
+  distinct()
+
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R1,R2)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw()
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R2,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw()
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R1,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw()
+
+```
+
+#Conclusion: To get high reproducibility in the results, we really need to be very stringent with the cut-off. I will try to repeat a similar filtering with total number of read cut-off and see how it looks.
+
+#How does data look in this filter
+```{R}
+#Balance data
+filtered_balance <- read_counts_filter_reprod_summary %>%
+  filter(reps > 1) %>%
+  select(barcode, cell_line, mean_bal, sd_bal, reps, read_filter, gRNA)
+
+filtered_TIF <- read_counts_filter_reprod_summary_TIF %>%
+  filter(reps > 1) %>%
+  select(barcode, cell_line, mean_TIF = mean_bal, sd_TIF = sd_bal, reps, read_filter,gRNA)
+
+filtered_measures <- left_join(filtered_balance, filtered_TIF)
+
+```
+
+#Plot balances and TIF
+```{r}
+#Plot balance
+ggplot(filtered_measures) + 
+  geom_quasirandom(aes(gRNA,mean_bal)) +
+  facet_grid(cell_line ~ read_filter) +
+  theme_bw()
+```
+
+#Balance correlation between different samples
+```{r, fig.width=10,fig.height=10, warning=F, message=F}
+#Prepare data frame
+correlate_samples <- filtered_measures %>%
+  reshape2::dcast(barcode + cell_line + read_filter ~ gRNA, value.var = "mean_bal")
+
+#Plot LBR2 vs. halfLB2
+ggplot(correlate_samples,aes(LBR2, halfLBR2)) +
+  geom_point() +
+  ggpubr::stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_grid(cell_line ~ read_filter) +
+  theme_bw() +
+  coord_fixed()
+
+#Plot LBR2 vs. halfLB2
+ggplot(correlate_samples,aes(LBR2, NTC)) +
+  geom_point() +
+  ggpubr::stat_cor() +
+  geom_smooth(method = "lm") +
+  facet_grid(cell_line ~ read_filter) +
+  theme_bw() +
+  coord_fixed()
+```
+#Conclusion: Averaged data is reproducible! HalfLBR2 and LBR2 data are very similar and NTC (as expected by TIDE data) has lower MMEJ frequency mainly in RPE1 cells. However, we see a good correlation between LBR2 and NTC samples in RPE1 cells. Conclusions are very similar, so I don't know what is the best option, I think the data is cleaner if I filter by read number.
+
+#Export data
+```{r}
+#Filter data
+filtered_indel_data <- pathway_metric_control_bio %>% filter(IPR_read_freq > 0.001)
+
+write_rds(filtered_indel_data, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230830_pathway_balance_freq_per_indel.rds")
+```
+
+#Plot relative frequency
+```{r}
+plot_example <- pathway_metric_control_bio %>% filter(gRNA %in% c("halfLBR2","NTC","36","empty"))
+
+#Make plots gRNA
+ggplot(plot_example) +
+  geom_quasirandom(aes(bio_rep, IPR_read_freq)) + 
+  facet_wrap(~gRNA, ncol= 2) +
+  theme_bw() +
+  facet_grid(gRNA ~ cell_line)
+
+```

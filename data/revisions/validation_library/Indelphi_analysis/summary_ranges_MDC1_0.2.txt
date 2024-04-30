@@ -1,0 +1,2 @@
+start end gRNA_n common_gRNA
+30712234 30715174 270 0

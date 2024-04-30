@@ -1,0 +1,298 @@
+---
+title: "xv20211230_5_epistasis_inhibitors"
+output: html_document
+---
+# Script to generate figure #5 in the paper. This figure shows that epistatic interactions can be bigger if drugs are used instead of KO. Figure outline:
+A- Effect of drug treatment in MMEJ:NHEJ balance
+B- Matrix for all treatments
+C- Slopes are bigger in inhibition than KO
+D- PARP1 and olaparib correlation
+E- ATM and ATMi correlation
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 6:
+A- PARP1 vs. veliparib
+B- PARP1 vs. talazoparib
+C- ATRi vs. VE-821
+D- ATRi vs. VE-822
+
+This script generates the plots for figure 5 and S6
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+library(rstatix)
+library(ggdendro)
+```
+
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20220110_ratio_kinase_inhib_epistasis.rds")
+
+```
+
+#Figure 5A: Effect in pathway balance
+```{r}
+# Mean effect over replicates per experiment
+mean.combined.inhibitor.data <- combined.inhibitor.data.filt %>% dplyr::group_by(drug,barcode,exp) %>% dplyr::summarise(m.ratio = mean(NHEJMMEJratio), na.rm = T)
+
+#DMSO control data
+DMSO.control <- mean.combined.inhibitor.data %>% filter(drug == "DMSO") %>% ungroup() %>%  select(barcode,DMSO.ratio = m.ratio, exp)
+
+# Calculate log2 differences
+log2.fc.drugs <- mean.combined.inhibitor.data %>% left_join(DMSO.control, by = c("barcode", "exp")) %>% mutate(log2.fc = log2(m.ratio/DMSO.ratio))
+
+# Data plot
+plot.dt.log2.fc.drugs <- log2.fc.drugs %>% filter(!drug %in% c("DMSO","GFP")) %>% dplyr::group_by(barcode,drug) %>% dplyr::summarise(log2.fc = mean(log2.fc, na.rm = T))
+
+# Plot
+ggplot(plot.dt.log2.fc.drugs, aes(drug,log2.fc)) + 
+geom_quasirandom() + 
+stat_mean(geom = "point", color = "red") +
+geom_hline(yintercept = 0, linetype = 2) + 
+theme_bw() +
+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+test.perturbation.drug <- plot.dt.log2.fc.drugs %>%
+  dplyr::group_by(drug) %>%
+  wilcox_test(log2.fc ~ 0)
+
+```
+
+
+# Figure 6B: Heatmap
+```{r}
+#Prepare for dcast
+mean.slope.protein.featurese.inh <- slope.protein.features.inhibitors.filt %>% filter(drug != "DMSO") %>% dplyr::group_by(drug,feature) %>% dplyr::summarise(epistasis = mean(epistasis, na.rm = T))
+
+#dcast epistatic interactions
+slope.prot.features.scale.dcast.inhibitors <- mean.slope.protein.featurese.inh %>% reshape2::dcast(drug ~ feature, value.var = "epistasis") %>% column_to_rownames(var = "drug")
+
+#Heatmap for slope differences
+heatmap.slope.diff.inhibitors <- pheatmap(slope.prot.features.scale.dcast.inhibitors, silent = T)
+heatmap.gene.order.slope.diff.inhibitors <- rownames(slope.prot.features.scale.dcast.inhibitors[dendextend::rotate(heatmap.slope.diff.inhibitors$tree_row, order = c("DNAPKi","ATMi","ATRi_VE821","ATRi_VE822","veliparib","talazoparib","olaparib"))[["order"]],])
+heatmap.chromatin.order.slope.diff.inhibitors <- colnames(slope.prot.features.scale.dcast.inhibitors[,heatmap.slope.diff.inhibitors$tree_col[["order"]]])
+
+#Plot correlations (As a heatmap with corrected pvalues)
+ggplot(mean.slope.protein.featurese.inh) + 
+  geom_tile(aes(fct_relevel(feature, heatmap.chromatin.order.slope.diff.inhibitors),fct_relevel(drug,heatmap.gene.order.slope.diff.inhibitors), fill = epistasis)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top")
+
+# dendogram
+ggdendrogram(dendextend::rotate(heatmap.slope.diff.inhibitors$tree_row, order = c("DNAPKi","ATMi","ATRi_VE821","ATRi_VE822","veliparib","talazoparib","olaparib")), rotate =T)
+
+```
+# Figure 6C: Inhibitors have bigger epistatic interactions than KOs
+```{r}
+#Prepare data tables
+selected.genes.drugs <- slope.protein.features.all %>% filter(gene %in% c("PARP1","ATM","ATR","PRKDC")) %>% select("gene", "feature","epistasis") %>% mutate(class = "protein", perturbation = paste(gene, "KO", sep = "_"))
+
+drug.comparison <- mean.slope.protein.featurese.inh %>% select("perturbation" = "drug", "feature","epistasis") %>% mutate(class = "drug", gene = case_when(grepl("ATM", perturbation) ~ "ATM", grepl("ATR",perturbation) ~ "ATR", gene = grepl("DNAPK", perturbation) ~ "PRKDC", T ~ "PARP1"))
+
+# dt.for.plotting
+comparison.plot <- bind_rows(drug.comparison,selected.genes.drugs)
+
+ggplot(comparison.plot) + geom_quasirandom(aes(fct_reorder(perturbation, desc(class)),epistasis, color = class)) + facet_wrap(~ fct_relevel(gene,c("ATM","PARP1","ATR","PRKDC")), scales = "free_x") +
+theme_bw() +
+theme(axis.title.x = element_blank(), axis.text.x = element_text(angle = 90, vjust = 0.5,hjust = 1), legend.position = "top")
+
+#Test kolmogorov-Smirnof (read more about this test)
+ks.test.inhibitors <- tibble(statistic = NA, p.value = NA, method = NA, alternative = NA)
+
+# Create loop 
+for (i in unique(comparison.plot$gene)){
+  gene.dt <- filter(comparison.plot, gene == i)
+  KO.values <- gene.dt %>% filter(class == "protein") %>% pull(slope.log2) 
+    if (length(unique(gene.dt$perturbation)) == 2){
+      drug.dt <- gene.dt %>% filter(class == "drug") 
+      drug.value <- drug.dt %>% pull(slope.log2)
+      ks_test <- ks.test(KO.values,drug.value) %>% broom::tidy() %>% mutate(gene = i, perturbation = unique(drug.dt$perturbation))
+      ks.test.inhibitors <- bind_rows(ks.test.inhibitors, ks_test)
+    }
+  else{
+      drug.dt <- gene.dt %>% filter(class == "drug")
+    for (j in unique(drug.dt$perturbation)) {
+      drug.value <- drug.dt %>% filter(perturbation == j) %>% pull(slope.log2)
+      ks_test <- ks.test(KO.values,drug.value) %>% broom::tidy() %>% mutate(gene = i, perturbation = j)
+      ks.test.inhibitors <- bind_rows(ks.test.inhibitors, ks_test)
+    }
+  }
+  }
+
+```
+
+#Figure 6D: PARP1 olaparib
+```{r}
+# olaparib vs PARP1
+genes <- slope.protein.features.all %>% filter(gene %in% c("PARP1","ATM","ATR","PRKDC")) %>% reshape2::dcast(feature ~ gene, value.var = "epistasis")
+
+#dcast for plotting
+inhibitors.dcast <- as.data.frame(t(slope.prot.features.scale.dcast.inhibitors)) %>% rownames_to_column(var = "feature")
+
+gene.drug.perturbation <- left_join(inhibitors.dcast , genes)
+
+#Plots (main figure)
+ggplot(gene.drug.perturbation, aes(olaparib, PARP1)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```
+
+#Figure 6E: ATMi vs. ATMKO
+```{r}
+ggplot(gene.drug.perturbation, aes(ATMi, ATM)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```
+# Number in text
+
+#NOTE: This will change, but every number that I refer in the text will available in this chunk
+```{r}
+```
+
+#Supplementary figures
+
+#Figure S6A: Veliparib vs PARP1
+```{r}
+ggplot(gene.drug.perturbation, aes(veliparib, PARP1)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```
+
+#Figure S6B: Talazoparib vs PARP1
+```{r}
+ggplot(gene.drug.perturbation, aes(talazoparib, PARP1)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```
+
+#Figure S6C: VE821 vs ATRKO
+```{r}
+ggplot(gene.drug.perturbation, aes(ATRi_VE821, ATR)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```
+
+#Figure S6D: VE822 vs ATRKO
+```{r}
+ggplot(gene.drug.perturbation, aes(ATRi_VE822, ATR)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+```

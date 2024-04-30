@@ -1,0 +1,46 @@
+---
+title: "xv20240417_create_source_data"
+author: "Xabier Vergara"
+date: "2024-04-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goal of the file
+
+In this file, I will compile all individual data tables to create each figure and compile them in a single .txt file
+
+```{r}
+library(tidyverse)
+```
+
+## Import all individual files
+```{r}
+# List all files
+individual_files <- list.files("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data/", full.names = T)
+
+# Import files as a list and name list elements with the figure name
+list_source_data <- map(individual_files, function(x) {
+  tmp <- read.table(x, header = T)
+})
+
+# Add names to list elements
+names(list_source_data) <- lapply(list_source_data, function(x){
+  unique(x$figure)
+}) %>% as.character()
+```
+
+```{r, max.print=1e10}
+setwd("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/source_data")
+# Create a single file., by creating a sink
+sink("xv20240426_source_data.txt")
+print(list_source_data, row.names = F)
+sink()
+unlink("xv20240426_source_data.txt")
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

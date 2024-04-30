@@ -1,0 +1,298 @@
+---
+title: "xv20211005_2_General_effects_and_conclusions"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(gprofiler2)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r libraries}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+```
+
+# 2A: Genowide effect correlations
+
+```{r}
+# Compute the average effect for every biological replicate (mean x = 19 IPR)
+both.screen.gene.value <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>% 
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(IPR.z.score = mean(mmej.z.score, na.rm = T)) %>% 
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3), pathway = case_when(comb.data < -1.95 ~ "MMEJ", comb.data > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# plot correlation (all three correlations)
+ggplot(both.screen.gene.value) + 
+  geom_point(aes(R1,R2, color = library,alpha = abs(comb.data) > 1.95)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + 
+  xlab("R1 (z-score)") +
+  ylab("R2 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = subset(both.screen.gene.value, abs(comb.data) > 1.95), aes(R1,R2), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho")
+
+ggplot(both.screen.gene.value) + 
+  geom_point(aes(R1,R3, color = library,alpha = abs(comb.data) > 1.95)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + ylab("R3 (z-score)") + xlab("R1 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = subset(both.screen.gene.value, abs(comb.data) > 1.95), aes(R1,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho")
+
+ggplot(both.screen.gene.value) + 
+  geom_point(aes(R2,R3, color = library,alpha = abs(comb.data) > 1.95)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + 
+  ylab("R2 (z-score)") + xlab("R3 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = subset(both.screen.gene.value, abs(comb.data) > 1.95), aes(R2,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho")
+```
+
+Fig2As: Gene editing
+```{r}
+#Chromatin screen
+gene.editing.z.score.chr <- chr.screen.detail %>% select(gene,barcode,freqCut,b.rep,t.rep)
+wt.ge.chr <- chr.screen.controls %>% filter(gene == "WT") %>% select(gene,barcode,freqCut,b.rep,t.rep,-gene) %>% dplyr::group_by(barcode,t.rep) %>% dplyr::summarise(m.wt = mean(freqCut, na.rm = T), sd.wt = sd(freqCut, na.rm = T)) 
+z.score.ge.chr <- gene.editing.z.score.chr %>% left_join(wt.ge.chr, by = c("barcode","t.rep")) %>% mutate(z.freqCut = (freqCut - m.wt)/sd.wt) %>% mutate(ID_gene = paste(gene, "_Chromatin"), library = "Chromatin") %>% dplyr::group_by(ID_gene,library, t.rep) %>% dplyr::summarise(ge.mean = mean(z.freqCut, na.rm = T))
+
+
+#DDR screen
+gene.editing.z.score.ddr <- ddr.screen.detail %>% select(gene,barcode,freqCut,b.rep,t.rep) %>% filter(gene != "LBR_ctrl")
+wt.ge.ddr <- ddr.screen.controls %>% filter(gene == "WT") %>% select(-gene,barcode,freqCut,b.rep,t.rep) %>% dplyr::group_by(barcode,t.rep) %>% dplyr::summarise(m.wt = mean(freqCut, na.rm = T), sd.wt = sd(freqCut, na.rm = T))
+z.score.ge.ddr <- gene.editing.z.score.ddr %>% left_join(wt.ge.ddr, by = c("barcode","t.rep")) %>% mutate(z.freqCut = (freqCut - m.wt)/sd.wt) %>% mutate(ID_gene = paste0(gene, "_DNA_repair"), library = "DNA_repair", t.rep = case_when(t.rep == "R4" ~ "R2", t.rep == "R5"~ "R3", T ~ t.rep)) %>% dplyr::group_by(ID_gene,library, t.rep) %>% dplyr::summarise(ge.mean = mean(z.freqCut, na.rm = T))
+
+#Bind both screens
+both.ge.z.score <- bind_rows(z.score.ge.chr,z.score.ge.ddr) %>% reshape2::dcast(ID_gene +library ~ t.rep, value.var = "ge.mean") %>% filter(complete.cases(.))
+
+#plot
+ggplot(both.ge.z.score) + 
+  geom_point(aes(R1,R2, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,20), xlim = c(-10,20)) +
+  ylab("R2 (Gene editing efficiency z-score)") +
+  xlab("R1 (Gene editing efficiency z-score")  +
+  stat_cor(data = both.ge.z.score, aes(R1,R2), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  theme(legend.position = "none")
+
+ggplot(both.ge.z.score) + 
+  geom_point(aes(R1,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,20), xlim = c(-10,20)) +
+  ylab("R3 (Gene editing efficiency z-score)") +
+  xlab("R1 (Gene editing efficiency z-score") +
+  stat_cor(data = both.ge.z.score, aes(R1,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  theme(legend.position = "none")
+
+ggplot(both.ge.z.score) + 
+  geom_point(aes(R2,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,20), xlim = c(-10,20)) +
+  ylab("R3 (Gene editing efficiency z-score)") +
+  xlab("R2 (Gene editing efficiency z-score") +
+  stat_cor(data = both.ge.z.score, aes(R2,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  theme(legend.position = "none")
+
+
+
+```
+
+Fig 2B: How many genes are involved in each pathway
+```{r}
+# How many genes perturb each pathway
+hits.per.pathway <- both.screen.gene.value %>% group_by(pathway) %>% dplyr::summarise(counts = n())
+ggplot(hits.per.pathway %>% filter(pathway != "NA")) + geom_col(aes(pathway, counts, fill = pathway)) + theme_bw() + coord_cartesian(ylim = c(0,100)) + scale_fill_manual(values = c("#2E358F","#EB2030")) + ylab("Number of genes that perturb each pathway")
+
+# How many genes perturb each pathway
+hits.per.library <- both.screen.gene.value %>% filter(pathway != "NA") %>% group_by(library) %>% dplyr::summarise(counts = n())
+ggplot(hits.per.library %>% filter(library != "NA")) + geom_col(aes(library,counts, fill = library)) + theme_bw() + coord_cartesian(ylim = c(0,100)) + ylab("Number of hits from each library")
+```
+Fig 3C: Check if CORUM picks something
+```{r}
+# Genes in MMEJ
+hits.mmej <- filter(both.screen.gene.value, pathway == "MMEJ") %>% pull(ID_gene) %>% gsub("_.*$","",.)
+write(hits.mmej, "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_mmej_hits.txt")
+
+#Import 
+gotest.mmej <- gost(hits.mmej, organism = "hsapiens",sources = "CORUM")
+ggplot(gotest.mmej$result %>% dplyr::group_by(term_name) %>% dplyr::summarise(p_val = -log10(mean(p_value)))) + geom_col(aes(p_val,reorder(term_name,p_val))) + coord_cartesian(expand = F) + theme_minimal() + xlab("-log10(p-adj)") + ylab("")
+
+ggplot(gotest.mmej$result %>% dplyr::group_by(term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)))) + geom_col(aes(p_val,reorder(term_id,p_val))) + coord_cartesian(expand = F) + theme_minimal() + xlab("-log10(p-adj)") + ylab("")
+
+```
+Figure 3D: Effect sizes of these complexes (with proteins all prots in the complex)
+```{r}
+# 
+screen.with.genes <- both.screen.gene.value %>% separate(ID_gene, into = "gene", remove = F)
+
+# dt with interesting complexes
+FA_complex.genes <- c("BLM","TOP3A","FANCL","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","RMI","RPA1")
+BRCA1_BARD1_BACH1.genes <- c("BARD1","BRCA1","RBBP8","RAD50","TOPBP1","MRE11","NBN","BACH1")
+MDC1_MRN_ATM_FANCD2.genes <- c("RAD50","MRE11","FANCD2","MDC1","NBN","ATM")
+DNA_synth.genes <- c("POLA1","POLA2","POLD1","POLD2","POLD3","POLD4","PRIM2","PRIM1")
+MCM.genes <- c("MCM2","MCM3","MCM4","MCM5","MCM6","MCM7")
+
+prot.complexes <- tibble(gene = c(FA_complex.genes,BRCA1_BARD1_BACH1.genes,MDC1_MRN_ATM_FANCD2.genes,DNA_synth.genes,MCM.genes), complex = c(rep("FA_complex",length(FA_complex.genes)),rep("BRCA1_BARD1_BACH1",length(BRCA1_BARD1_BACH1.genes)),rep("MDC1_MRN_ATM_FANCD2",length(MDC1_MRN_ATM_FANCD2.genes)),rep("DNA_synth",length(DNA_synth.genes)),rep("MCM",length(MCM.genes))))
+
+# Left join screening value
+prot.complex.effects <- left_join(prot.complexes,screen.with.genes %>% select(gene,comb.data))
+
+
+ggplot(prot.complex.effects) + geom_tile(aes(reorder(gene, comb.data),"1",fill = comb.data)) + theme_bw() + scale_fill_gradient2(low = "#2E358F", mid = "grey90",high = "#EB2030") + xlab("") + ylab("") + facet_wrap(~ complex, scales = "free", ncol = 1)
+```
+Figure 3F: Strong effects are conserved across 5 chromatin types
+```{r}
+# Make data table to show all perturbations
+strong.effect.genes <- prot.complex.effects %>% filter(comb.data < -1.95) %>% pull(gene)
+strong.effect.genes.all <- c(strong.effect.genes, "POLL","SUPT5H","SAP130","KAT5","UBE2N")
+
+# Plot all 19IPRs
+strong.hit.19.IPR <- both.screen.detail %>% 
+  filter(gene %in% strong.effect.genes.all) %>%
+  left_join(screen.with.genes %>% select(gene,comb.data,library))
+
+ggplot(strong.hit.19.IPR %>% select(gene, comb.data,mmej.SCscore,library) %>% distinct()) +
+  geom_quasirandom(aes(reorder(gene,comb.data),mmej.SCscore, color = library)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+```
+
+
+Figure 3C: Follow up experiment
+```{r}
+# gRNA difference per gene
+strong_hits <- filter(chromatin.followup, gene %in% c("SUPT5H","SAP130"))
+#Option A (z-scores)
+z.score.plot <- strong_hits %>% 
+  dplyr::group_by(gene,gRNA, barcode) %>% 
+  dplyr::summarise(MMEJfupscore = sum(z.score)/sqrt(n()))
+
+ggplot(z.score.plot) + 
+  geom_quasirandom(aes(fct_relevel(gRNA, c("Combo")),MMEJfupscore)) + 
+  facet_wrap(~ fct_relevel(gene, c("SUPT5H","SAP130"))) +
+  stat_mean(aes(fct_relevel(gRNA, c("Combo")), MMEJfupscore), geom = "point", color ="red") +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("MMEJscore perturbation (z-score)")
+
+#Option B (rel diff)
+```
+
+## Changes in wt freq 
+```{r}
+# Check wt frequency and
+mutation.plot.strongs <- chromatin.followup %>% 
+  filter(gene %in% c("tracr","SUPT5H","SAP130","POLQ") & (gRNA == "Combo"| is.na(gRNA))) %>% 
+  select(gene,bio.rep,barcode,freqMMEJ,freqNHEJ,freqCut) %>% 
+  distinct() %>% 
+  group_by(gene,barcode) %>% 
+  mutate(WT = 1 - freqCut) %>%
+  dplyr::summarise(MMEJ = mean(freqMMEJ, na.rm = T), NHEJ = mean(freqNHEJ, na.rm = T), WT = mean(WT, na.rm = T))
+
+KO.genes <- mutation.plot.strongs %>% filter(gene != "tracr") %>%
+  reshape2::melt(value.name = "frequency") %>%
+  left_join(mutation.plot.strongs %>% 
+              filter(gene == "tracr") %>% 
+              ungroup()%>% 
+              select(-gene) %>% 
+              reshape2::melt(value.name = "WT.frequency"), by =  c("barcode","variable")) %>%
+  mutate(diff = frequency - WT.frequency)
+
+ggplot(KO.genes) + 
+  geom_quasirandom(aes(gene, diff)) + 
+  facet_wrap(~variable) + 
+  theme_bw() + 
+  theme(axis.text.x = (element_text(angle = 90, vjust = 0.5, hjust = 1))) + 
+  coord_cartesian() +
+  geom_hline(yintercept = 0, linetype = 2)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

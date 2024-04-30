@@ -1,0 +1,331 @@
+Building DAG of jobs...
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	1	compare_bw_rep
+	1	convert2gff
+	8	make_compare_bw
+	31
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw
+    jobid: 69
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657364, path=control, genome=hg38
+    threads: 20
+
+Finished job 69.
+1 of 31 steps (3%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.bw
+    jobid: 70
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=BICR78_GSE149670_r2_SRR11657363, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 70.
+2 of 31 steps (6%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.bw
+    jobid: 71
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=BICR78_GSE149670_r1_SRR11657362, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 71.
+3 of 31 steps (10%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.bw
+    jobid: 78
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SKN3_GSE149670_r1_SRR11657373, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 78.
+4 of 31 steps (13%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657374.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657374.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657374.bw
+    jobid: 79
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657374, path=control, genome=hg38
+    threads: 20
+
+Finished job 79.
+5 of 31 steps (16%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/SCC4_GSE149670_r1_SRR11657368.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/SCC4_GSE149670_r1_SRR11657368.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.bw
+    jobid: 94
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SCC4_GSE149670_r1_SRR11657368, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 94.
+6 of 31 steps (19%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657285.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657285.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657285.bw
+    jobid: 84
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657285, path=control, genome=hg38
+    threads: 20
+
+Finished job 84.
+7 of 31 steps (23%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657369.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657369.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657369.bw
+    jobid: 95
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657369, path=control, genome=hg38
+    threads: 20
+
+Finished job 95.
+8 of 31 steps (26%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/FADU_GSE149670_r1_SRR11657347.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/FADU_GSE149670_r1_SRR11657347.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.bw
+    jobid: 76
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=FADU_GSE149670_r1_SRR11657347, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 76.
+9 of 31 steps (29%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/CAL27_GSE149670_r1_SRR11657282.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/CAL27_GSE149670_r1_SRR11657282.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.bw
+    jobid: 83
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=CAL27_GSE149670_r1_SRR11657282, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 83.
+10 of 31 steps (32%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657348.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657348.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657348.bw
+    jobid: 77
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657348, path=control, genome=hg38
+    threads: 20
+
+Finished job 77.
+11 of 31 steps (35%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657315.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657315.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657315.bw
+    jobid: 96
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657315, path=control, genome=hg38
+    threads: 20
+
+Finished job 96.
+12 of 31 steps (39%) done
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/DET562_GSE149670_r1_SRR13764822.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/DET562_GSE149670_r1_SRR13764822.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.bw
+    jobid: 97
+    wildcards: bs=1kb, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=DET562_GSE149670_r1_SRR13764822, path=HNSCC/Farhangdoost2021, genome=hg38
+    threads: 20
+
+Finished job 97.
+13 of 31 steps (42%) done
+
+rule compare_bw_rep:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670.txt
+    jobid: 31
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=BICR78, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38, celltype=HNSCC
+    threads: 10
+
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657374.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373_fcoc.log
+    jobid: 40
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=SKN3, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR11657373, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.npz.
+Finished job 40.
+14 of 31 steps (45%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657369.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368_fcoc.log
+    jobid: 64
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=SCC4, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR11657368, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Finished job 31.
+15 of 31 steps (48%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657285.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282_fcoc.log
+    jobid: 49
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=CAL27, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR11657282, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.npz.
+Finished job 64.
+16 of 31 steps (52%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657348.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347_fcoc.log
+    jobid: 38
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=FADU, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR11657347, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.npz.
+Finished job 49.
+17 of 31 steps (55%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363_fcoc.log
+    jobid: 30
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=BICR78, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r2, srr_id=SRR11657363, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.npz.
+Finished job 38.
+18 of 31 steps (58%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362_fcoc.log
+    jobid: 39
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=BICR78, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR11657362, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.npz.
+Finished job 30.
+19 of 31 steps (61%) done
+
+rule bamcompare:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657315.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.bw
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.npz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.txt
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/tracks/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822_fcoc.log
+    jobid: 65
+    wildcards: bs=1kb, experiment=Farhangdoost2021, sample=GSE149670, target=DET562, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, rep=r1, srr_id=SRR13764822, celltype=HNSCC, genome=hg38
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.npz.
+Finished job 39.
+20 of 31 steps (65%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_fcoc.bw
+    jobid: 5
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670, genome=hg38
+    threads: 5
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373_fcoc.bw
+    jobid: 9
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373, genome=hg38
+    threads: 5
+
+Finished job 9.
+21 of 31 steps (68%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368_fcoc.bw
+    jobid: 21
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368, genome=hg38
+    threads: 5
+
+Finished job 5.
+22 of 31 steps (71%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282_fcoc.bw
+    jobid: 15
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282, genome=hg38
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.npz.
+Finished job 65.
+23 of 31 steps (74%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347_fcoc.bw
+    jobid: 7
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347, genome=hg38
+    threads: 5
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822_fcoc.bw
+    jobid: 22
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822, genome=hg38
+    threads: 5
+
+Finished job 15.
+24 of 31 steps (77%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363_fcoc.bw
+    jobid: 4
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363, genome=hg38
+    threads: 5
+
+Finished job 21.
+25 of 31 steps (81%) done
+
+rule make_compare_bw:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362_fcoc.bw
+    jobid: 8
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, path=HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362, genome=hg38
+    threads: 5
+
+Finished job 7.
+26 of 31 steps (84%) done
+
+rule convert2gff:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/domains/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373_1000_0.9_analysis.bed
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373_domains-1000-0.9.gff3
+    jobid: 14
+    wildcards: experiment=Farhangdoost2021, sample=GSE149670, region=domains-1000-0.9, target=SKN3, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38, rep=1, srr_id=SRR11657373, celltype=HNSCC
+
+Finished job 14.
+27 of 31 steps (87%) done
+Finished job 22.
+28 of 31 steps (90%) done
+Finished job 4.
+29 of 31 steps (94%) done
+Finished job 8.
+30 of 31 steps (97%) done
+
+localrule all_chip_align:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/CAL27_GSE149670_r1_SRR11657282_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/CAL27_GSE149670_r1_SRR11657282_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/CAL27_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/DET562_GSE149670_r1_SRR13764822_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/DET562_GSE149670_r1_SRR13764822_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/DET562_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/FADU_GSE149670_r1_SRR11657347_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/FADU_GSE149670_r1_SRR11657347_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/FADU_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/stats/HNSCC/Farhangdoost2021/BICR78_GSE149670_scatter.pdf, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r1_SRR11657362_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/BICR78_GSE149670_r2_SRR11657363_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/BICR78_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/SCC4_GSE149670_r1_SRR11657368_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/SCC4_GSE149670_r1_SRR11657368_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/SCC4_GSE149670.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/tracks/HNSCC/Farhangdoost2021/1kb/SKN3_GSE149670_r1_SRR11657373_fcoc.bw, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/gff3/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373_domains-1000-0.9.gff3, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/SKN3_GSE149670.txt
+    jobid: 0
+
+Finished job 0.
+31 of 31 steps (100%) done
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-30T162936.979508.snakemake.log

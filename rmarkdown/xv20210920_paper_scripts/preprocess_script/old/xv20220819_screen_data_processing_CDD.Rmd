@@ -16,6 +16,11 @@ output:
 In this document, I will go over different calculations of epistasis.4 different workflows:
 First decision is whether to use log2 MMEJscore or MMEJscore
 Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+
 ```{r}
 knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
 
@@ -74,7 +79,7 @@ readRDS_proof <- function(path, pat) {
 ```
 
 # Libraries
-```{r libraries}
+```{r libraries, warning = FALSE}
 # libraries:
 library(tidyverse)
 library(reshape2)
@@ -186,7 +191,7 @@ screen.tib <- left_join(indels.tib,indels.frequencies.tib, by = c("exp","barcode
 dim(screen.tib)
 
 #Distribution per sample (number of reads per IPR)
-summary_read_number <- indels.dt %>% filter(grepl("R2_B4", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+summary_read_number <- indels.dt %>% filter(grepl("R2_B4", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
 distribution_total_reads_sample <- summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 distribution_reads <- quantile(summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 distribution_indels <- quantile(summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
@@ -203,7 +208,7 @@ R1_distribution_table <- tibble(quantile = names(distribution_del_7),
 
 
 #Distribution per sample (number of reads per IPR) R2
-R2_summary_read_number <- indels.dt %>% filter(grepl("R1_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R2_summary_read_number <- indels.dt %>% filter(grepl("R1_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
 R2_distribution_reads <- quantile(R2_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 R2_distribution_total_reads_sample <- R2_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 R2_distribution_indels <- quantile(R2_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
@@ -219,7 +224,7 @@ R2_distribution_table <- tibble(quantile = names(R2_distribution_del_7),
                                    intact = R2_distribution_wt)
 
 #Distribution per sample (number of reads per IPR) R2
-R3_summary_read_number <- indels.dt %>% filter(grepl("R2_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
+R3_summary_read_number <- indels.dt %>% filter(grepl("R2_B5", exp)) %>% mutate(proccessed_read = rowSums(.[,c(-1,-2)]), indel_reads = rowSums(.[,c("ins_1","del_7")])) %>% dplyr::select(exp, barcode, proccessed_read, indel_reads, del_7, ins_1, wt)
 R3_distribution_total_reads_sample <- R3_summary_read_number %>% dplyr::group_by(exp) %>% dplyr::summarise(pr = sum(proccessed_read)) %>% pull(pr) %>% quantile(c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 R3_distribution_reads <- quantile(R3_summary_read_number$proccessed_read, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
 R3_distribution_indels <- quantile(R3_summary_read_number$indel_reads, c(0.05,0.25,0.5,0.75,0.95)) %>% round()
@@ -410,7 +415,7 @@ fit.z.scores.ratio.IPR.filtered <- filter(fit.z.scores.ratio.mean, abs(mean.z.sc
 #Summary values
 summary_IPR_values <- fit.z.scores.ratio.IPR.filtered %>% dplyr::group_by(pathway_signif, sample) %>% dplyr::summarise(counts = n())
 total_IPR <- fit.z.scores.ratio.IPR.filtered %>% dplyr::group_by(sample) %>% dplyr::summarise(counts = n()) %>% mutate(pathway_signif = "total")
-IPR_values <- bind_rows(summary_IPR_values,total_IPR) %>% reshape2::dcast(pathway_signif ~ sample, fill = 0) %>% select("Pathway_favored" = pathway_signif, KO, "mock_KO" = WT)
+IPR_values <- bind_rows(summary_IPR_values,total_IPR) %>% reshape2::dcast(pathway_signif ~ sample, fill = 0) %>% dplyr::select("Pathway_favored" = pathway_signif, KO, "mock_KO" = WT)
 
 #Print summary
 print(IPR_values)
@@ -418,7 +423,6 @@ print(IPR_values)
 ```
 
 # Substep B: Principal component regression to identify repair proteins with CCDs
-
 ```{r}
 #Filter genes that do not significantly perturb balance and add chromatin info
 DDR.KO.CCD.dt <- log2.distance.ratio %>%
@@ -537,7 +541,6 @@ synergy_summaries <- DR_KO_CCD_all_values %>% filter(model_p.adj < 0.05) %>% dpl
 ##Pre-processing chunk: load all ChIP track z-scores
 ```{r}
 #
-
 chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
 
 ##99% CI for each feature
@@ -581,7 +584,7 @@ estimated_CCD_global <- max_estimated_CCD_FC %>%
   full_join(mean.diff.balance.export, by = "gene")
 
 #Summary table class of DR proteins
-summary_DR_prot_class <- estimated_CCD_global %>% select(class,gene) %>% distinct() %>% dplyr::group_by(class) %>% dplyr::summarise(count = n())
+summary_DR_prot_class <- estimated_CCD_global %>% dplyr::select(class,gene) %>% distinct() %>% dplyr::group_by(class) %>% dplyr::summarise(count = n())
 
 #Print output of the chunk
 print(paste("We find",summary_DR_prot_class$count[1] + summary_DR_prot_class$count[2], "DR proteins with CCD. Among these,", summary_DR_prot_class$count[1],"have global effects as well and", summary_DR_prot_class$count[2], "have exclusively CCD effect. Additionally, we find", summary_DR_prot_class$count[3], "DR proteins that have global effect only"))
@@ -609,7 +612,7 @@ IPR_locations <- read.csv("/DATA/projects/DSBrepair/data/cl20220222_mapping_RSTP
 colnames(IPR_locations) <- c("IPR_barcode","clone","chr","position", "strand")
 
 # Data table to export
-export_screen_result_TS6 <- IPR_locations %>% right_join(clone5_z.score_chrom_tib %>% filter(ID %in% barcodes.list), by = c("IPR_barcode" = "ID")) %>% select(-pool,-binsize, -clone)
+export_screen_result_TS6 <- IPR_locations %>% right_join(clone5_z.score_chrom_tib %>% filter(ID %in% barcodes.list), by = c("IPR_barcode" = "ID")) %>% dplyr::select(-pool,-binsize, -clone)
 ```
 
 #Create table S7: Data to export all major features
@@ -623,7 +626,7 @@ export_screen_result_TS7 <- estimated_FC_CCD %>%
 
 
 #Output files: Export all files needed for making figures
-```{r}
+```{r, eval = FALSE, echo = FALSE}
 setwd(in.dir)
 
 #Step 1: Raw freqCut & log2MMEJNHEJ values
@@ -648,18 +651,18 @@ saveRDS_proof(export_screen_result_TS7, file = "data/processed_data/xv20220819_T
 
 ```
 
-```{r}
+#Export supplementary tables in the paper
+```{r, eval = FALSE, echo = FALSE}
 setwd(in.dir)
 #Export for supplementary files (.xlsx file)
 
-#Table S4
+#Table S4: ∆log2MMEJ:NHEJ scores for 519 proteins and 19 IPRs.
 write.xlsx(export_screen_result_TS4, file = "data/supplementary_tables/xv20220819_Table_S4a_delta_log2_MMEJ_NHEJ.xlsx")
 
-#Table S6
+#Table S6: Genomic coordinates, chromatin feature scores and barcodes of 19 IPRs in K562 clone 5
 write.xlsx(export_screen_result_TS6, file = "data/supplementary_tables/xv20220819_Table_S6_clone_5_chromatin_features.xlsx")
 
-#Table S7
-
+#Table S7: Chromatin context dependent effects of proteins in the screen.
 write.xlsx(export_screen_result_TS7, file = "data/supplementary_tables/xv20220819_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx")
 
 ```

@@ -1,0 +1,9 @@
+Error in rule filter_blackgrey_ctrl:
+    jobid: 0
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657285.bam
+
+RuleException:
+CalledProcessError in line 665 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Command ' set -euo pipefail;  zcat /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz | cat - /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657285-grey.bed |     samtools view -U /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657285.bam -L /dev/stdin /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657285.bam > test ' returned non-zero exit status -2
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 665, in __rule_filter_blackgrey_ctrl
+  File "/home/x.vergara/miniconda3/envs/chip/lib/python3.5/concurrent/futures/thread.py", line 55, in run

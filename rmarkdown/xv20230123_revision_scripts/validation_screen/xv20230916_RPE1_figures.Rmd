@@ -1,0 +1,318 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim: In this file, I will explore some of the possible plots, where I get general conclusions from K562 and RPE1wt data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+#Proteins_validation
+proteins_gRNA <- tibble(gRNA = c("36","38","40","42","44","46","48","50","52","54","56","58","60","62","64","66","68","70","72","74"),
+                        gene = c("ATM","ATR","BLM","BOD1L1","BRCA2","BRCC3","CHAF1A","CHEK2","FAAP24","FANCD2","FANCG","FANCM","MDC1","PARP1","POLL","RAD50","RBBP8","RMI2","SMC5","TOPBP1"))
+
+#Processed data
+K562_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220819_Table_S7_DR_screen_results.rds") %>% 
+  left_join(proteins_gRNA) %>%
+  mutate(cell_line = "K562") %>%
+  select(gene, fdr = CCD_model_p_adj, chrom_feature, CCD_score =CCD_synergy_score,global_diff, global_p_adj, gRNA, cell_line) %>% na.omit() %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(pathway = case_when(sum(CCD_score < 0) == 0 & sum(CCD_score > 0) != 0 ~ "NHEJ",
+                                    sum(CCD_score > 0) == 0 & sum(CCD_score < 0) != 0 ~ "MMEJ",
+                                    sum(CCD_score > 0) != 0 & sum(CCD_score < 0) != 0 ~ "both",
+                                    T ~ "none"))
+
+RPE1_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230916_CCD_analysis_summary_RPE1_5reads_n3.rds") %>% 
+  left_join(proteins_gRNA) %>% 
+  mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature)) %>%
+  select(gene, fdr, chrom_feature, CCD_score,global_diff, global_p_adj, gRNA, cell_line, pathway)
+
+#All combined CCD summary table
+RPE1_K562_CCD <- bind_rows(K562_CCD, RPE1_CCD)
+
+viability_data <- readRDS(file= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230908_dna_quantification_viability.rds")
+
+#All log2_values
+RPE1_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230916_log2_balance_chromatin_RPE1_5reads.rds") %>% left_join(proteins_gRNA)
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% left_join(proteins_gRNA) %>% na.omit()
+
+#K562 data on proteins in the validation screen
+K562_validation_prots <- K562_CCD %>% na.omit() %>% filter(chrom_feature %in% c("H3K4me1","H3K36me3","LMNB1","H3K27me3","H3K27ac","H3K4me2","H3K4me3","H3K9me3","H3K9me2","late_replicating"))
+
+#Export data frame
+chromatin_data_RPE1 <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230806_DSB_TRIP_pool_chromatin_data.rds")
+
+```
+
+#Load control data
+```{r}
+#RPE1 parental (halfLBR2)
+rpe_control <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_RPE1_control_data.rds")
+
+#RPE1 parental KO examples
+RPE_KO_balances <- readRDS(file =  "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_RPE1_min_read_5.rds")
+
+```
+
+
+
+#Global effects: I need to import all the log2 values from K562, PRO and DEF
+```{r, fig.width=6, fig.height = 3}
+#Combine data files
+K562_global_effects <- K562_log2 %>% select(gene, barcode, mean_log2_bal = mean.log2foldchange) %>% mutate(cell_line = "K562")
+RPE1_global_effects <- RPE1_log2 %>% select(gene, barcode, mean_log2_bal = mean_diff) %>% mutate(cell_line = "RPE1")
+
+RPE1_K562_cell_lines_log2 <- bind_rows(K562_global_effects, RPE1_global_effects)
+
+
+#Gene order based on all data
+combined_order <- three_cell_lines_log2 %>% filter(cell_line == "K562") %>% dplyr::group_by(gene) %>% dplyr::summarise(avg_balance = mean(mean_log2_bal)) %>% arrange(avg_balance) %>% pull(gene)
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE1_cells/xv20230916_RPE1_effects.pdf",width = 6, height = 3)
+ggplot(RPE1_K562_cell_lines_log2 %>% na.omit()) +
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_log2_bal,fill = fct_relevel(cell_line, c("PRO","DEF","K562"))),  position = position_dodge2(preserve = "single"), geom = "bar", fun.data = "mean_sd") + 
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_log2_bal, group = fct_relevel(cell_line, c("PRO","DEF","K562"))), position = position_dodge2(preserve = "single"), geom = "errorbar", fun.data = "mean_sd",width = 0.5) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "top",
+        axis.title.x = element_blank()) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("∆log2 MMEJ::NHEJ") +
+  labs(fill = "Cell line") +
+  scale_fill_manual(values = c("grey70","#98bad5"))
+dev.off()
+
+```
+
+#Plot M- and N- synergies
+```{r, fig.width=7, fig.hetigh = 10}
+toxic_values <- viability_data %>%
+  filter(dna_score < 0.33 & cell_line == "RPE1") %>%
+  ungroup() %>%
+  dplyr::select(cell_line, gRNA) %>%
+  distinct() %>%
+  left_join(proteins_gRNA) %>% mutate(plot = "toxicity")
+
+synergy_values <- RPE1_K562_CCD %>%
+  select(gRNA, cell_line, pathway,global_diff,gene,fdr) %>%
+  distinct() %>%
+  full_join(toxic_values) %>%
+  mutate(pathway = case_when(plot == "toxicity" ~ "toxicity",
+                             fdr > 0.25 ~ "none",
+                             fdr <= 0.25 ~ pathway)) %>%
+  filter(!is.na(gene))
+
+#Manual order
+gene_list_order <- c("TOPBP1","RBBP8","ATR","SMC5","RAD50","ATM","MDC1","CHEK2","FANCM","FANCD2","FAAP24","FANCG","PARP1","RMI2","BLM","BOD1L1","CHAF1A","BRCC3","BRCA2","POLL")
+
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230915_CCD_effects_validation.pdf", width = 10, height = 5)
+ggplot() + 
+  geom_tile(data = synergy_values, aes(fct_relevel(cell_line,c("K562","RPE1")), fct_relevel(gene, gene_list_order), fill =pathway)) +
+  theme_bw() + coord_fixed() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(fill = "CCD type (FDR ~ 0.25)") + 
+  scale_fill_manual(values = c("#849223", "#8C510A","#01665E","grey90","grey70")) +
+  xlab("Cell line") + ylab("Proteins with CCDs")
+#dev.off()
+
+```
+
+#Cosine distance calculations
+```{r}
+#Filter out values that do not reach high enough values
+filter_out_chromatin <- tibble(cell_line = "PRO",
+                               chrom_feature = c("H3K9me3","LMNB1","H3K27me3"))
+
+
+
+#Filter chromatin features that are not good
+filtered_CCDs <- RPE1_K562_CCD %>%
+  filter(!is.na(gene)) %>%
+  anti_join(filter_out_chromatin) %>%
+  anti_join(toxic_values) %>%
+  reshape2::dcast(gene + chrom_feature ~ cell_line, value.var = "CCD_score")
+
+#Calculate cosine distance for PRO
+RPE1_K562_distance_all <- map_dfr(unique(filtered_CCDs$gene), function(x){
+  CCD_table <- filtered_CCDs %>%
+    filter(gene == x) %>%
+    select(RPE1, K562) %>%
+    na.omit()
+  
+  #calculate concordance
+  cosine_value <- cosine(as.matrix(CCD_table))[1,2]
+  tibble(gene = x, cosine_dist = cosine_value)
+})
+
+#Join CCD_scores
+RPE1_DEF_distances_all <- RPE1_K562_distance_all %>% dplyr::left_join(RPE1_CCD %>% select(gene, gRNA,fdr)) 
+
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230915_CCD_cosine_similarity_PRO.pdf", width = 7, height = 3)
+ggplot(RPE1_DEF_distances_all %>% distinct()) +
+  geom_col(aes(fct_relevel(gene, gene_list_order),cosine_dist, fill = fdr < 0.25)) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype =2) +
+  xlab("Proteins with CCDs") + 
+  theme_bw() + 
+  theme(axis.text.x =  element_text(angle = 90,
+                                    hjust = 1,
+                                    vjust = 0.5)) + 
+  ylab("Cosine similarity score") + 
+  scale_fill_manual(values = c("grey70", "#98bad5"))  + 
+  coord_cartesian(ylim = c(-1,1))
+#dev.off()
+
+```
+
+#Cosine similarity distribution in PRO cells
+```{r}
+#Select random pairs from population
+RPE1_K562_CCDs <- filtered_CCDs %>% na.omit()
+
+#All possible pairs
+all_combinations_dt <- tidyr::crossing(RPE1_K562_CCDs %>% select(gene),gene, gene) %>% select(-gene) %>% distinct()
+colnames(all_combinations_dt) <- c("K562_gene","RPE1_gene") #Change column names
+filtered_combination <- filter(all_combinations_dt, K562_gene != RPE1_gene)
+
+#Calculate all cosine distances
+all_posible_combinations <- map2_dfr(all_combinations_dt$K562_gene, all_combinations_dt$RPE1_gene, function(x,y){
+  K562_set <- filter(RPE1_K562_CCDs, gene == x) %>% pull(K562)
+  RPE1_set <- filter(RPE1_K562_CCDs, gene == y) %>% pull(RPE1)
+  cosine_dist <- as.numeric(cosine(K562_set,RPE1_set))
+  tibble(gene_K562 = x, gene_RPE1 = y, cosine_dist = cosine_dist)
+})
+
+#Sampling loop to select random samples of equal size as interacting pairs
+  random_sample_cosine_values <- map_dfr(c(1:100), function(i){
+   set.seed(i)
+    K562_CCDs_random <- all_posible_combinations %>% sample_n(17) %>% pull(cosine_dist)
+    tibble(seed = i, cosine_dist = K562_CCDs_random)
+  })
+
+#Create density matrices for plotting later
+density.matrix.datapoints <- tibble()
+for (i in c(1:100)){
+  seed.unique <- filter(random_sample_cosine_values, seed == i) %>% pull(cosine_dist)%>% as.numeric()
+  dens.seed.unique <- density(seed.unique, from = -1, to = 1) %>% tidy() %>% mutate(seed = i) %>% mutate(round_x = round(x, digits = 2)) %>% dplyr::group_by(round_x) %>% dplyr::summarise(mean_y = mean(y), seed = i)
+  density.matrix.datapoints <- density.matrix.datapoints %>% bind_rows(dens.seed.unique)
+}
+
+#Calculate mean and sd to plot in density plots for random effects
+summarise.mean.sd_sample <- density.matrix.datapoints %>% dplyr::group_by(round_x) %>% dplyr::summarise(avg_y = mean(mean_y), sd_y = sd(mean_y), counts = n())
+
+#Calculate real interaction density data
+real_density_plot <- density(RPE1_DEF_distances_all %>% na.omit() %>% pull(cosine_dist), from = -1, to = 1) %>% tidy()
+```
+
+#Plot cosine similarities
+```{r,fig.width=2.75,fig.height=2.5}
+#Plot this figure
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230915_PRO_cosine_similarity_stats.pdf", width = 2.75, height = 2.5)
+ggplot(summarise.mean.sd_sample) + 
+  geom_ribbon(aes(round_x, ymax = avg_y + sd_y, ymin = avg_y - sd_y), alpha = 0.2, fill = "grey60") +
+  geom_line(aes(round_x,avg_y), color = "grey60", linetype = 2) + 
+  geom_line(data = real_density_plot, aes(x,y), color = "#98bad5", size = 1.25) +
+    theme_bw() + theme(legend.position = "top") + 
+  ylab("Density") + xlab("Cosine distance")
+#dev.off()
+
+```
+
+#Cosine similarity distribution in PRO cells
+```{r}
+#Select random pairs from population
+DEF_K562_CCDs <- filtered_CCDs %>% select(-PRO) %>% na.omit()
+
+#All possible pairs
+all_combinations_dt <- tidyr::crossing(DEF_K562_CCDs %>% select(gene),gene, gene) %>% select(-gene) %>% distinct()
+colnames(all_combinations_dt) <- c("K562_gene","DEF_gene") #Change column names
+filtered_combination <- filter(all_combinations_dt, K562_gene != DEF_gene)
+
+#Calculate all cosine distances
+all_posible_combinations <- map2_dfr(all_combinations_dt$K562_gene, all_combinations_dt$DEF_gene, function(x,y){
+  K562_set <- filter(DEF_K562_CCDs, gene == x) %>% pull(K562)
+  DEF_set <- filter(DEF_K562_CCDs, gene == y) %>% pull(DEF)
+  cosine_dist <- as.numeric(cosine(K562_set,DEF_set))
+  tibble(gene_K562 = x, gene_PRO = y, cosine_dist = cosine_dist)
+})
+
+#Sampling loop to select random samples of equal size as interacting pairs
+  random_sample_cosine_values <- map_dfr(c(1:100), function(i){
+   set.seed(i)
+    DEF_CCDs_random <- all_posible_combinations %>% sample_n(16) %>% pull(cosine_dist)
+    tibble(seed = i, cosine_dist = DEF_CCDs_random)
+  })
+
+#Create density matrices for plotting later
+DEF_density.matrix.datapoints <- tibble()
+for (i in c(1:100)){
+  seed.unique <- filter(random_sample_cosine_values, seed == i) %>% pull(cosine_dist)%>% as.numeric()
+  dens.seed.unique <- density(seed.unique, from = -1, to = 1) %>% tidy() %>% mutate(seed = i) %>% mutate(round_x = round(x, digits = 2)) %>% dplyr::group_by(round_x) %>% dplyr::summarise(mean_y = mean(y), seed = i)
+  DEF_density.matrix.datapoints <- DEF_density.matrix.datapoints %>% bind_rows(dens.seed.unique)
+}
+
+#Calculate mean and sd to plot in density plots for random effects
+DEF_summarise.mean.sd_sample <- DEF_density.matrix.datapoints %>% dplyr::group_by(round_x) %>% dplyr::summarise(avg_y = mean(mean_y), sd_y = sd(mean_y), counts = n())
+
+#Calculate real interaction density data
+DEF_real_density_plot <- density(DEF_K562_distance_all %>% na.omit() %>% pull(cosine_dist), from = -1, to = 1) %>% tidy()
+
+```
+
+#Plot cosine similarities
+```{r,fig.width=2.75,fig.height=2.5}
+#Plot this figure
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230915_DEF_cosine_similarity_stats.pdf", width = 2.75, height = 2.5)
+ggplot(DEF_summarise.mean.sd_sample) + 
+  geom_ribbon(aes(round_x, ymax = avg_y + sd_y, ymin = avg_y - sd_y), alpha = 0.2, fill = "grey60") +
+  geom_line(aes(round_x,avg_y), color = "grey60", linetype = 2) + 
+  geom_line(data = DEF_real_density_plot, aes(x,y), color = "#9f86bf", size = 1.5) +
+    theme_bw() + theme(legend.position = "top") + 
+  ylab("Density") + xlab("Cosine distance")
+dev.off()
+
+```
+
+
+#Cosine distance calculations
+```{r, fig.height=3, fig.width=7, warning=F}
+#Calculate cosine distance for PRO
+DEF_K562_distance_all <- map_dfr(unique(filtered_CCDs$gene), function(x){
+  CCD_table <- filtered_CCDs %>%
+    filter(gene == x) %>%
+    select(DEF, K562) %>%
+    na.omit()
+  
+  #calculate concordance
+  cosine_value <- cosine(as.matrix(CCD_table))[1,2]
+  tibble(gene = x, cosine_dist = cosine_value)
+})
+
+#Join CCD_scores
+K562_DEF_distances_all <- DEF_K562_distance_all %>% dplyr::left_join(DEF_CCD %>% select(gene, gRNA,fdr)) 
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230915_CCD_cosine_similarity_DEF.pdf", width = 7, height = 3)
+ggplot(K562_DEF_distances_all %>% distinct()) +
+  geom_col(aes(fct_relevel(gene, gene_list_order),cosine_dist, fill = fdr < 0.25)) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype =2) +
+  xlab("Proteins with CCDs") + 
+  theme_bw() + 
+  theme(axis.text.x =  element_text(angle = 90,
+                                    hjust = 1,
+                                    vjust = 0.5)) + 
+  ylab("Cosine similarity score") + 
+  scale_fill_manual(values = c("grey70", "#9f86bf")) + 
+  coord_cartesian(ylim = c(-1,1))
+dev.off()
+
+```

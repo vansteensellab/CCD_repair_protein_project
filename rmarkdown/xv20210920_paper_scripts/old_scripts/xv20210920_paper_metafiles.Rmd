@@ -1,0 +1,64 @@
+---
+title: "xv20210920_Screens_metafile_all_together"
+output: html_document
+---
+I will use this script to generate the metafile that will run all the samples from every screen
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+## List all metafiles that I will use for the run:
+# Standard column names will be the following ones - ID,GCF.run, library, bio.rep (B1 or B2), t.rep (R1,R2 and R3), plate,well, PCR_type and file (with full directory path)
+
+```{r}
+# read tsv separately and put them together later
+chr.screen.gcf5858 <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210920_meta_files_both_screens/xv20200221_MetaDataCRISPRScreen.tsv", header = T)
+chr.screen.gcf5927 <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210920_meta_files_both_screens/xv20200420_metadata_screen_full.tsv", header = T)
+ddr.screen.gcf6442 <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210920_meta_files_both_screens/xv20210525_meta_file_ddr_screen_B4.tsv", header = T)
+ddr.screen.gcf6238 <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210920_meta_files_both_screens/xv20210525_meta_file_ddr_screen_B5.tsv", header = T)
+
+#Standardize all metafiles
+
+#GCF585 (Chr)
+st.chr.screen.gcf5858 <- chr.screen.gcf5858 %>% 
+  select(ID, PCR_type, file) %>% 
+  separate(ID, into = c("GCF.run",NA,"t.rep","plate","well")) %>% 
+  mutate(library = "chromatin",
+         bio.rep = "B1",
+         file.b = paste0("/DATA/projects/DSBrepair/data/5858_CRISPRscreen/", file),
+         ID = paste(GCF.run,"chr", bio.rep,t.rep, plate, well, sep = "_")) %>% 
+  select(ID, GCF.run,library, bio.rep, t.rep, plate, well, PCR_type, file = file.b)
+
+#GCF5927 (Chr)
+st.chr.screen.gcf5927 <- chr.screen.gcf5927 %>% 
+  select(ID, PCR_type, file) %>% 
+  separate(ID, into = c("bio.rep","t.rep","plate","well")) %>% 
+  mutate(library = "chromatin",
+         GCF.run = "5927",
+         file.b = paste0("/DATA/projects/DSBrepair/data/5927_CRISPRscreen_R2/", file),
+         ID = paste(GCF.run,"chr",bio.rep, t.rep, plate, well, sep = "_")) %>% 
+  select(ID, GCF.run,library, bio.rep, t.rep, plate, well, PCR_type, file = file.b)
+
+#GCF6442 (DDR)
+st.ddr.screen.gcf6442 <- ddr.screen.gcf6442 %>% 
+  select(ID, PCR_type, file, t.rep, b.rep) %>% 
+  separate(ID, into = c("bio.rep","t.rep","plate","well")) %>% 
+  mutate(library = "chromatin",
+         GCF.run = "5927",
+         file.b = paste0("/DATA/projects/DSBrepair/data/5927_CRISPRscreen_R2/", file),
+         ID = paste(GCF.run,"chr",bio.rep, t.rep, plate, well, sep = "_")) %>% 
+  select(ID, GCF.run,library, bio.rep, t.rep, plate, well, PCR_type, file = file.b)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

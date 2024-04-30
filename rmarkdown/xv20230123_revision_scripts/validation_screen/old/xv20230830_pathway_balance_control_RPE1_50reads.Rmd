@@ -1,0 +1,352 @@
+---
+title: "xv20230830_validation_screen_chromatin_bias_controls"
+author: "Xabier Vergara"
+date: "2023-07-26"
+output:
+  html_document: default
+  pdf_document: default
+---
+#Date: 30th August 2023
+#Author: Xabier Vergara
+#Aim: The aim of this file is to wrap up the filtering strategy and measure if pathway balance in control samples has chromatin biases in the control samples
+
+#Load libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+
+## Import data: Balance data and some other details
+```{r, warning=F}
+# Import data for high confidence reporters and calculate mean
+high_confidence_IPR <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230830_pathway_balance_50reads_per_indel.rds") %>%
+  dplyr::group_by(barcode, cell_line, gRNA) %>%
+  dplyr::summarise(mean_bal = mean(log2_bal, na.rm = T),
+                   reps = n())
+
+
+#Pools used in the experiment
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Pair of 
+```
+
+#Add chromatin info for RPE1 cells
+#Load chromatin info of the IPRs in RPE cells (2000)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000_", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000_", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = scale((ratio_r1 + ratio_r2)/2)) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools_2000 <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "DEF",
+                               iPCR_cell == "RPE1Proff" ~ "PRO",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity, - dam_LMNNB2) %>%
+  mutate(binsize = "2000")
+```
+
+
+#Load chromatin info of the IPRs in RPE cells (5000)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "5000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "5000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-5000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=5000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = scale((ratio_r1 + ratio_r2)/2)) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools_5000 <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "DEF",
+                               iPCR_cell == "RPE1Proff" ~ "PRO",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity, -dam_LMNNB2)  %>%
+  mutate(binsize = "5000")
+```
+
+
+#Load chromatin info of the IPRs in RPE cells (10000)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "10000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "10000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-10000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=10000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = scale((ratio_r1 + ratio_r2)/2)) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools_10000 <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "DEF",
+                               iPCR_cell == "RPE1Proff" ~ "PRO",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity)  %>%
+  mutate(binsize = "10000")
+```
+
+#Load chromatin info of the IPRs in RPE cells (20000)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "20000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "20000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-20000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=20000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = scale((ratio_r1 + ratio_r2)/2)) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools_20000 <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "DEF",
+                               iPCR_cell == "RPE1Proff" ~ "PRO",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity) %>%
+  mutate(binsize = "20000")
+```
+
+#Merge all binsizes in one data table
+```{r}
+#Bind the chromatin data for all binsizes
+chromatin_pools_binsize <- bind_rows(chromatin_features_pools_20000,
+                                     chromatin_features_pools_10000,
+                                     chromatin_features_pools_5000,
+                                     chromatin_features_pools_2000)
+```
+
+
+
+
+#Join with balances and calculate the correlation (do this for all marks) = Spearman's
+```{r, warning=F}
+#Merge RPE data with chromatin data with different bins
+values_chromatin_RPE_controls <- left_join(high_confidence_IPR, chromatin_pools_binsize) %>%
+  filter(gRNA %in% c("LBR2") & reps > 1) %>% na.omit()
+
+#Calculate spearman correlation for all chromatin features
+cell_lines <- c("RPE1","PRO","DEF")
+binsizes <- c("2000","5000","10000","20000")
+
+#Calculate spearman correlation coefficient per cell line and chromatin feature
+spearman_coefficients <- map_dfr(cell_lines, function(x){
+  filter_data <- values_chromatin_RPE_controls %>% filter(cell_line == x)
+  binsize_filter <- map_dfr(binsizes, function(y){
+    bin_filter <- filter_data %>% filter(binsize == y)
+    rho_table <- map_dfr(colnames(bin_filter[6:16]), function(j){
+      balance <- bin_filter$mean_bal
+      feature <- bin_filter %>% pull(j)
+      cor.test(balance, feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+    })
+  rho_table %>% mutate(cell_line = x, binsize = y) %>% distinct()
+  })
+})
+
+#Chromatin feature order for plotting
+chromatin_order <- c("dam_H3K9me3","dam_H3K9me2","late_replicating","dam_LMNB1","dam_LMNB2","dam_H3K27me3","chip_H3K4me3","chip_H3K4me2","chip_H3K4me1","chip_H3K27ac","chip_H3K36me3")
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% distinct()) + 
+  geom_col(aes(fct_relevel(chromatin,chromatin_order),estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(binsize,binsizes)~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+
+#Test data bining
+```{r}
+#Arrange control data set
+indel_data_inh <- high_confidence_IPR %>%
+  filter(reps > 1) %>% 
+  left_join(chromatin_pools_binsize) %>%
+  filter(binsize == "2000" & gRNA == "LBR2")
+
+#Melt chromatin data
+melt_chromatin <- indel_data_inh %>%
+  select(-mean_bal,-reps) %>%
+  reshape2::melt() %>%
+  separate(variable, into = c("tech", "antibody")) %>%
+  select(-tech) %>%
+  left_join(indel_data_inh %>% 
+              select(barcode,cell_line, gRNA,mean_bal) %>% 
+              distinct())
+
+#Calculate bins per antibody
+binned_control_chromatin_data <- map_dfr(unique(melt_chromatin$antibody), function(x) {
+  map_dfr(unique(melt_chromatin$cell_line), function(y) {
+  melt_chromatin %>%
+    filter(antibody == x & cell_line == y) %>%
+    mutate(percentile = ntile(value, n = 20)) %>%
+    group_by(percentile,antibody,cell_line) %>%
+    dplyr::summarise(bin_balance = mean(mean_bal),
+                     bin_min = case_when(percentile == 1 ~ -10,
+                                         T ~ min(value)),
+                     bin_max = case_when(percentile == 20 ~ 10,
+                                         T ~ max(value)),
+                     bin_mean_chrom = mean(value),
+                     IPR_n = n()) %>% distinct()
+})
+})
+
+```
+
+#Binned data plotting (as before, spearman correlations)
+```{r}
+#Dcast binned data for plotting
+dcast_RPE_controls <- binned_control_chromatin_data
+
+#Calculate spearman correlation coefficient per cell line and chromatin feature
+spearman_coefficients_binned <- map_dfr(cell_lines, function(x){
+    rho_table <- map_dfr(unique(binned_control_chromatin_data$antibody), function(j){
+        filter_data <- binned_control_chromatin_data %>% filter(cell_line == x & antibody == j) %>% na.omit()
+      balance <- filter_data$bin_balance
+      feature <- filter_data$bin_mean_chrom
+      cor.test(balance, feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+    })
+  rho_table %>% mutate(cell_line = x, binsize = y) %>% distinct()
+  })
+
+#Chromatin feature order for plotting
+chromatin_order <- c("H3K9me3","H3K9me2","replicating","LMNB1","LMNB2","H3K27me3","H3K4me3","H3K4me2","H3K4me1","H3K27ac","H3K36me3")
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients_binned %>% distinct()) + 
+  geom_col(aes(fct_relevel(chromatin,chromatin_order),estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(~ fct_relevel(cell_line, cell_lines))
+
+```
+
+
+#Conclusion: 
+I definitely need more data on RPE1 cells. It is quite sparce! Data is noisy in general mainly PRO and DEF (correlation coefficients are not great). They get much better if we bin the data, it might be a matter of other factores hidded in the pool (# IPR/cell or other things). But, the correlations the bias euchromatin/heterochromatin is consistent across different cell lines.
+

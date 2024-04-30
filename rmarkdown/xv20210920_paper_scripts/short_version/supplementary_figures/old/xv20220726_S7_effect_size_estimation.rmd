@@ -1,0 +1,124 @@
+---
+title: "xv20220712_S5_effect_size_estimation"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S5 in the short version of the paper.
+
+Fig. S5: Estimation of genome-wide dynamic ranges of chromatin features. A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
+
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+library(ggbeeswarm)
+```
+
+# Import data tables
+```{r import, warning=FALSE,message=FALSE}
+setwd(in.dir)
+
+print("For this script the following data was inputed:")
+#Clone 5 chromatin Version cl20201026
+clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","ChIP_zscore_selection")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+
+# Individual data point (intermediate step)
+step2.epistasis <- readRDS_proof("data/processed_data/CCD_analysis","fold_change_ratio_KO")
+ 
+slope.protein.features.all <- readRDS_proof("data/processed_data","DR_KO_CCD_summary")
+```
+
+#Supplementary Figures
+
+#Figure S5A:
+
+A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
+```{r Fig_S6_A}
+chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
+
+##95% CI for each feature
+CI99_chromatin_features <- chromatin_features_plot %>% dplyr::group_by(variable) %>% dplyr::summarise(CI0.5 = quantile(value, 0.005), CI99.5 = quantile(value, 0.995), range = CI99.5 - CI0.5, mean = mean(value))
+
+#Plot S7A:  Chromatin ranges
+ggplot(chromatin_features_plot) + 
+  geom_violin(aes(fct_relevel(variable, heatmap.chromatin.order), value), fill = "grey70", color = "black") + theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ 
+  geom_quasirandom(data = chromatin_features_plot %>% filter(ID %in% clone5_bc_cluster), aes(fct_relevel(variable, heatmap.chromatin.order), value), color = "red", size = 1)  + 
+  geom_errorbar(data = CI99_chromatin_features, aes(x = variable,ymin = CI0.5, ymax = CI99.5), color = "black", width = 0.5) 
+```

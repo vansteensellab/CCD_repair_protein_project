@@ -1,0 +1,713 @@
+---
+title: "xv2020503_follow_up_indel_processing"
+output: html_document
+---
+
+## Indel processing script - Usual script we use
+
+# This is the processsing that I will use for Screening processing - Modification of ruben's script (IndelProcessing.Rmd)
+
+The aim of this script is to process and clean the dataframe -> Generate dt with as little as possbile varibles for the whole screen.
+
+## Description of Data
+
+For this analysis we need the mapping and the indel data of the TRIP integrations. These 
+files are obtained with the crispr_trip.snake script that C. Leemans edited. This data 
+contains the genomic locations of the TRIP integrations (hg38) and the indel frequencies 
+at each integration.
+
+The mutations were called by counting the distance between two constant regions. These
+were separated by barcode. The barcodes were also filtered on the starcode, to pick out
+the most abundant, and considered real, ones.
+
+Mutations files : *count.table
+
+| barcode  | call | indel | count
+| ------- | --------- | ----- | ------ |
+| TTCTATTCGCACACAA | ins | 1 | 35 |
+| TTTCCCACATCAGGAG | wt | 0 | 67 |
+| CCATAGTAGTGATTAC | del | -4 | 1 |
+
+Barcode files: *starcode file
+
+| barcode | counts | variants |
+| --------|--------|----------|
+|TTCTATTCGCACACAA | 2345 | .... |
+
+Note: Indel python pipeline keeps updating, so its output files. This file might need some minor changes to adjust to snakemake output. 
+
+# Data importing and processing
+## Path, Libraries, Parameters and Useful Functions
+```{r setup, message=FALSE, warnings=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+StartTime <-Sys.time()
+
+# 6-digit Date tag:
+Date <- substr(gsub("-", "",Sys.time()),1,8) 
+
+# libraries:
+library(tidyverse)
+library(data.table)
+# library(car)
+library(parallel)
+library(gtools)
+```
+
+
+
+## Indel data import
+Indel and bc data will be imported for further analysis, I am writting this in the following two chunks
+
+```{r import}
+# Set directory to the mutation output folder of the CRISPR-TRIP snakemake script
+setwd("/DATA/projects/DSBrepair/data/xv20210430_CRISPR_follow_up/indelPCR_counts")
+# Import files in list and make individual tables
+# I use this if all the samples are good. Here however I do not use all the samples. 
+file.list <- list.files(".",
+    pattern='*[.]co', full.names=T)
+
+# import the data
+df.list.indel <- mclapply(file.list, read.table, col.names=c('barcode', 'call', 'indel', 'count'), mc.cores = 20, stringsAsFactors = FALSE, header=T)
+# rename the lists
+names(df.list.indel) <- gsub('.*?/(.*?)[.]co.*', '\\1', file.list)
+
+# count the sample number
+n.samples.indel <- length(df.list.indel)
+
+```
+
+### Some data pre-processing
+Set everything in a dataframe that contains barcodes, indel ratios, and efficiencies.
+```{r indeldataframe}
+# Generate a datatable with the number of indelreads per mutations, sample and barcode 
+mut.list = mclapply(names(df.list.indel), function(exp){
+    dt = data.table(df.list.indel[[exp]])
+    dt[, indel:=as.character(indel)]
+    dt[call=='wt' & indel=='2', indel:='ssODN']
+    sum_count = data.table(exp=exp,
+                           dt[, list(count=sum(count)),by=c('barcode', 'indel')])
+    count_cast = data.table::dcast(sum_count[!is.na(indel),], exp + barcode ~ indel,
+                      value.var='count')
+    return(count_cast)
+}, mc.cores=10)
+
+#Bind all data frames (one per sample) together
+
+indels.dt = do.call(rbind, c(mut.list, fill=T))
+indels.dt[is.na(indels.dt)] = 0
+
+#Change colnames in indels.dt
+
+indel_cols <- names(indels.dt)[grep("[0-9]|ssODN|Inf", names(indels.dt))]
+indel_cols <- gsub("-", "del_", indel_cols)
+indel_cols[grep("^[0-9].*", indel_cols)] <- gsub("^", "ins_", indel_cols[grep("^[0-9].*", indel_cols)])
+indel_cols[grep("ins_0", indel_cols)] <- "wt"
+names(indels.dt) <- c("exp", "barcode", indel_cols)
+
+
+# List of barcodes that are in the clone #5 
+
+barcodes.list <- c("AGGGCGTAAAATATTT", "TATGGCTGTCGGGTAG", "TGTCCCTTAGTACTTT", "AGAAAATAATATGACG", "CGGCCTGAAGGTCAGG", "TTGAACGCGGGCTCGG", "GCTAACATCACGAATC", "GCGCACCCTTTAATTG", "ACTGTCGAGTTGTCCG", "CCGGGGACGTATGCAC", "TCTTTTGAGGAGCTGA", "ATATCGTTGCTGGAGA", "CATCCACCACACTTCA", "ACCCCTAAAGGCGCTG", "ATACTATATTTAACGG", "GAGCGCGTCACCGGGT", "GTACCTCTCGATAGTG", "TGGCCAATATTTGTCT", "CATTTCTGATCAATAA")
+
+# Filter both indels and counts dt for the barcodes in the clone
+
+indels.dt <- indels.dt %>% filter(barcode %in% barcodes.list)
+
+## Select plates with nice data
+off.plates <- tibble(plate= c("P1","P2"), t.rep = c("R3","R3"), bio.rep = c("B1","B1"), off = "Yes")
+
+### Pool samples into two bio.reps
+indels.merged.dt <- indels.dt %>% separate(exp, into = c("plate","bio.rep","t.rep","well")) %>% anti_join(off.plates) %>% select(-t.rep) %>% dplyr::group_by(plate,bio.rep,well,barcode) %>% dplyr::summarise_all(sum, na.rm = T) %>% mutate(exp = paste(plate,bio.rep,well, sep = "_")) %>% ungroup() %>% select(-plate,-bio.rep,-well)
+
+# Generate indel frequency data table
+
+indels.frequencies.dt = data.frame(indels.merged.dt[,c('exp', 'barcode')],
+                                  indels.merged.dt[, -c(1,134)] /
+                                    rowSums(indels.merged.dt[, -c(1,134)]))
+
+# Rename indels.frequencies.dt
+indel_pct_cols <- gsub("^", "pct_", indel_cols)
+names(indels.frequencies.dt)[3:length(names(indels.frequencies.dt))] <- indel_pct_cols
+
+# Dimensions check
+
+dim(indels.merged.dt)
+dim(indels.frequencies.dt)
+
+
+```
+
+```{r}
+# Save all three data frames as a single tibble
+indels.merged.tib <- as_tibble(indels.merged.dt)
+indels.frequencies.tib <- as_tibble(indels.frequencies.dt)
+
+# Join indels & descr.variables
+
+indels.merged.tib$exp <- gsub("indel_","", indels.merged.tib$exp)
+indels.frequencies.tib$exp <- gsub("indel_","", indels.frequencies.tib$exp)
+
+screen.tib <- join(indels.merged.tib,indels.frequencies.tib, by = c("exp","barcode"))
+
+dim(screen.tib)
+
+```
+# Plot overall densities of WT, NHEJ and MMEJ
+```{r}
+# WT
+plot(density(screen.tib$pct_wt))
+# Ins_1
+plot(density(screen.tib$pct_ins_1))
+# Del_7
+plot(density(screen.tib$pct_del_7))
+```
+
+
+# Save screen data to RDS 
+```{r}
+# Save RDS
+setwd("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data")
+saveRDS(screen.tib, file = "xv20210510_follow_up_indel_data_merged.rds")
+```
+
+## Link to next file
+```{r}
+#Import and modify metadata file
+plate_random_positions <- read.csv("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210209_E1383_plate_random.csv") %>% mutate(plate = paste0("P",plate))
+
+
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+screen.data.tib <- screen.tib %>% filter(del_7 + ins_1 > 30) %>% 
+                                  mutate(indelreads = rowSums(.[, indel_cols]),
+                                                  MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+                                                  NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+                                                  freqMMEJ = pct_del_7,
+                                                  freqNHEJ = pct_ins_1,
+                                                  freqCut = 1 - pct_wt,
+                                                  NHEJMMEJratio = ins_1 / del_7) %>%
+                                separate(exp, into = c("plate","bio.rep","well"), sep = "_")
+
+#Change well denotation
+screen.data.tib$well = gsub("(?<![0-9])([0-9])(?![0-9])", "0\\1", screen.data.tib$well, perl = TRUE)
+
+#Filter LigIV_combo out
+
+
+#screen final
+screen.data.final <- screen.data.tib %>% left_join(plate_random_positions, by = c("plate","well" = "random_pos")) %>%
+                                select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN")) %>% distinct()
+
+screen.data.final <- screen.data.final %>% filter(!(targets == "LigIV_Combo" & plate == "P1" ))
+
+```
+
+
+# Plot cutting frequency per well/plate
+```{r}
+# Cutting controls
+uncut.control <- screen.data.final %>% dplyr::group_by(well, plate,bio.rep) %>% dplyr::mutate(cuteff = mean(freqCut), cut_controls = targets %in% c("no_break","LBR2"))
+# Transfection efficiency 
+ggplot(uncut.control %>% select(plate, cuteff, cut_controls,targets) %>% filter(cut_controls == T) %>% distinct()) + geom_quasirandom(aes(plate,cuteff, color = targets))
+
+# FreqCut controls
+cut.control <- screen.data.final %>% filter(targets == "tracr") %>% dplyr::group_by(well, plate,bio.rep) %>% dplyr::mutate(cuteff = mean(freqCut))
+ggplot(cut.control %>% select(bio.rep, cuteff,targets) %>% distinct()) + geom_quasirandom(aes(bio.rep,cuteff))
+```
+
+
+
+##Extract WT population
+```{r}
+# Filter data for only wt DSBs
+wt.filter <- screen.data.final %>% filter(targets == "tracr")
+wt.followup <- wt.filter %>% dplyr::group_by(barcode,bio.rep) %>% dplyr::summarise(WT.mean = mean(MMEJscore,na.rm = T), WT.sd = sd(MMEJscore,na.rm = T)) %>% right_join(wt.filter, by = c("barcode","bio.rep"))
+
+# Plot frequency plot for each barcode
+ggplot(wt.filter) + geom_density(aes(MMEJscore, fill = bio.rep, color = bio.rep), alpha = 0.3) + facet_wrap(~ barcode) + theme_bw() + ggtitle("WT DSBs - MMEJs score distribution")
+
+#Plot mean & sd of each of the barcodes
+ggplot(wt.followup) + geom_pointrange(aes(y = reorder(barcode,WT.mean), x = WT.mean, xmin = WT.mean - WT.sd, xmax = WT.mean + WT.sd, color = bio.rep)) + theme_bw() + ggtitle("WT DSBs - MMEJscore distribution (mean +- sd)") + ylab("") + xlab("MMEJscore")
+
+##Control KOs
+POLQ.filter <- filter(screen.data.filtered, grepl("POLQ", targets))
+LIG4.filter <- filter(screen.data.filtered, grepl("LigIV", targets))
+
+```
+
+
+#Code for z.score normalization
+```{r}
+
+#STEP 1 : Calculate z-scores
+
+# Filter data for on
+#Export data for future plots
+wt.mmej.score.b <- wt.followup %>% dplyr::select(barcode,bio.rep,MMEJscore = WT.mean) %>% distinct() %>% left_join(new.domains.c5 %>% dplyr::select(barcode,chromatin)) %>% mutate(targets = "WT")
+
+# Calculate z-score (per sample)
+z.scores.calc.mmej.b <- screen.data.final %>% left_join(wt.followup %>% dplyr::select(barcode,bio.rep, WT.mean,WT.sd), by = c("barcode","bio.rep")) %>% mutate(z.score = (MMEJscore - WT.mean)/WT.sd) %>% distinct()
+
+#STEP 2 : Combine z-scores per chromatin
+ch.z.scores.calc.mmej <- z.scores.calc.mmej.b %>% left_join(new.domains.c5.bis %>% dplyr::select(barcode,chromatin), by = c("barcode")) %>% dplyr::group_by(plate,bio.rep, well,chromatin,targets) %>% dplyr::mutate(ch.z.score = mean(z.score, na.rm = T)) %>% distinct()
+
+#gene categories
+controls <- c("HDAC5","HMGA1","KDM3A","PICK1","PSMA1")
+mll.proteins <- c("ASH2L","RBBP5","WDR5","DPY-30","KDM6A","KMT2A","KMT2C","KMT2D","NCOA6","PA1","PAXIP","KMT2C/D")
+other.hits <- c("DPF3","HMG20B","HMGN4","ING1","JARID2","SAP130","SUPT5H")
+
+followup.genes <- c(controls,mll.proteins,other.hits)
+
+# STEP 3: 
+cchz.scores.calc.mmej <- ch.z.scores.calc.mmej %>% dplyr::select(bio.rep,plate, well,chromatin, targets, ch.z.score) %>% 
+    distinct() %>% 
+    dplyr::group_by(well,chromatin,targets,plate) %>%
+    dplyr::mutate(mmej.SCscore = sum(ch.z.score, na.rm = T)/sqrt(n())) %>%
+    ungroup() %>%
+    select(well,chromatin,targets,mmej.SCscore) %>%
+    distinct() %>%
+    dplyr::group_by(chromatin) %>%
+    distinct() %>% 
+    right_join(ch.z.scores.calc.mmej, by = c("well","targets","chromatin")) %>%
+    ungroup() %>% separate(targets, into = c("gene","gRNA")) %>% mutate(category = case_when(gene %in% controls ~ "random",gene %in% mll.proteins ~ "mll_proteins",gene %in% other.hits ~ "other_hits",TRUE ~ "controls"))
+
+#Export all combos
+combos.followup <- filter(cchz.scores.calc.mmej, gRNA == "Combo") %>% select(gene, mmej.SCscore,plate,chromatin) %>% distinct()
+
+
+# STEP 4: Remove variables and export data (filter data that doesn't have a p.value - single value)
+#chz.scores.mmej <- cchz.scores.calc.mmej %>% filter(!is.na(targets)) %>% dplyr::select(targets,barcode,chromatin,mmej.SCscore, mmej.ch.score = ch.z.score,MMEJscore,freqCut,mmej.z.score = z.score,bio.rep,t.rep,plate,well)
+
+#STEP 5: dcast genes per chromatin value and replicate
+#chz.mmej.dcast <- reshape2::dcast(cchz.scores.calc.mmej %>% ungroup() %>% dplyr::select(gene,gRNA,chromatin,mmej.SCscore) %>% distinct(), targets ~ chromatin, value.var = "mmej.SCscore", fun.aggregate = mean) %>% column_to_rownames("targets")
+
+#combos.dcast <- reshape2::dcast(cchz.scores.calc.mmej %>% filter(grepl("Combo",targets)) %>% ungroup() %>% dplyr::select(targets,chromatin,mmej.SCscore) %>% distinct(), targets ~ chromatin, value.var = "mmej.SCscore", fun.aggregate = mean) %>% column_to_rownames("targets")
+
+#STEP5: dcast genes per p.value
+#chz.mmej.pval.dcast <- reshape2::dcast(chz.scores.mmej %>% ungroup() %>% dplyr::select(gene,chromatin,mmej.p.val) %>% distinct(), gene ~ chromatin, value.var = "mmej.p.val")
+```
+# Export data
+```{r}
+# save final RDS
+saveRDS(cchz.scores.calc.mmej, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+```
+
+
+# linear model for each gene
+#Run lm for every gene
+```{r}
+#Plot data table
+followup.all <- cchz.scores.calc.mmej %>% select(barcode,targets,chromatin,MMEJscore,b.rep)
+followup.control <-  wt.followup %>% filter(targets == "tracr") %>% select(barcode,targets,chromatin,MMEJscore,b.rep,t.rep)
+followup.all.lm <- bind_rows(tmp.all, tmp.control)
+
+#transform into factors
+tmp.all.lm[sapply(tmp.all.lm, is.character)] <- lapply(tmp.all.lm[sapply(tmp.all.lm, is.character)], 
+                                                                                        as.factor)
+
+#Set reference to WT
+tmp.all.lm$gene <- relevel(tmp.all.lm$gene, ref = "WT")
+
+#
+all.lm.k27 <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "H3K27me3"))) %>% mutate(gene = gsub("gene","",term), k27_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.th <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "late_replicating-LAD-H3K9me2"))) %>% mutate(gene = gsub("gene","",term), th_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.et <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "euchromatin-transcription"))) %>% mutate(gene = gsub("gene","",term), et_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.t <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "transcription"))) %>% mutate(gene = gsub("gene","",term), t_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.oh <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "other-heterochromatin"))) %>% mutate(gene = gsub("gene","",term), oh_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+p.value.summ <- all.lm.k27 %>% select(gene, k27_pvalue) %>% bind_cols(all.lm.th$th_pvalue,all.lm.et$et_pvalue, all.lm.oh$oh_pvalue, all.lm.t$t_pvalue) %>% column_to_rownames(var = "gene")
+colnames(p.value.summ) <- c("k27_pvalue","th_pvalue","et_pvalue","oh_pvalue","t_pvalue")
+
+# Correlate with z-scores
+correlation.z.p <- all.lm.th %>% mutate(gene = gsub("gene","",term), diff = 0.450 + estimate) %>% left_join(screen.detail %>% filter(chromatin == "late_replicating-LAD-H3K9me2") %>% select(gene,barcode,mmej.SCscore,MMEJscore)) %>% distinct() %>% mutate(hit.p.value = p.value < 0.05, hit.z.score = abs(mmej.SCscore) > 1.65, discrepant = abs(mmej.SCscore) > 1.65 & p.value > 0.05) %>% mutate(adj.p.value = p.adjust(p.value, method = "fdr"))
+
+```
+
+```{r}
+#Normalize to LigIV and POLQ
+LigIV.values <- filter(combos.followup,gene == "LigIV") %>% select(chromatin, max.v = mmej.SCscore)
+POLQ.values <- filter(combos.followup, gene == "POLQ") %>% dplyr::group_by(chromatin) %>% dplyr::summarise(min.v = mean(mmej.SCscore))
+#Normalize to max
+normalized.combos <- combos.followup %>% left_join(LigIV.values) %>% left_join(POLQ.values) %>% mutate(norm.mmejSCscore = case_when(mmej.SCscore > 0 ~ mmej.SCscore/max.v, mmej.SCscore < 0 ~ - (mmej.SCscore/min.v)))
+#gene categores
+controls <- c("HDAC5","HMGA1","KDM3A","PICK1","PSMA1")
+mll.proteins <- c("ASH2L","RBBP5","WDR5","DPY30","KDM6A","KMT2A","KMT2C","KMT2D","NCOA6","PA1","dKMT2CD","PAXIP1")
+other.hits <- c("DPF3","HMG20B","HMGN4","ING1","JARID2","SAP130","SUPT5H")
+
+# Add categories
+normalized.combos.b <- normalized.combos %>% mutate(gene = str_replace(targets, "_Combo","")) %>% mutate(category = case_when(gene %in% controls ~ "random",
+                                                                                                                              gene %in% mll.proteins ~ "mll_proteins",
+                                                                                                                              gene %in% other.hits ~ "other_hits",
+                                                                                                                              TRUE ~ "controls"))
+
+#Not normalized
+combos.plot <- combos.followup %>% mutate(gene = str_replace(targets, "_Combo","")) %>% mutate(category = case_when(gene %in% controls ~ "random",
+                                                                                                                              gene %in% mll.proteins ~ "mll_proteins",
+                                                                                                                              gene %in% other.hits ~ "other_hits",
+                                                                                                                              TRUE ~ "controls"))
+```
+#Correlation plot
+```{r}
+B1.values <- cchz.scores.calc.mmej %>% filter(bio.rep == "B1") %>% select(plate,well,chromatin,gene,gRNA,B1.MMEJscore = ch.z.score, category) %>% distinct()
+B2.values <- cchz.scores.calc.mmej %>% filter(bio.rep == "B2") %>% select(plate,well,chromatin,gene,gRNA,B2.MMEJscore = ch.z.score,category) %>% distinct()
+
+correlation <- left_join(B1.values,B2.values, by = c("well","chromatin","gene","gRNA","plate","category"))
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210518_correlattion_plots.pdf")
+ggplot(correlation) + geom_point(aes(B1.MMEJscore,B2.MMEJscore, color = chromatin)) + theme_bw() + coord_fixed(ratio = 1, xlim = c(-19,7), ylim = c(-19,7)) + scale_color_manual(values = chromatin.colors) + facet_wrap(~category)
+dev.off()
+```
+# Plot controls
+```{r}
+# Control plots LigIV and POLQ
+chromatin.colors <- c("#00983A","#FFDE00","#D91F5D","#63328A","#838688")
+chromatin.levels <- c("euchromatin-transcription","transcription","H3K27me3","late_replicating-LAD-H3K9me2","other-heterochromatin")
+
+# Controls plot
+LigIV.plot <- filter(cchz.scores.calc.mmej, gene == "LigIV") %>% dplyr::group_by(gene,gRNA,chromatin) %>% dplyr::summarise(mmej.SCscore = mean(mmej.SCscore))
+POLQ.plot <- filter(cchz.scores.calc.mmej, gene == "POLQ") %>% dplyr::group_by(gene,gRNA,chromatin)  %>% dplyr::summarise(mmej.SCscore = mean(mmej.SCscore))
+control.plot <- rbind(LigIV.plot,POLQ.plot)
+
+#LigIV & POLQ
+ggplot(control.plot) + geom_quasirandom(aes(gene,mmej.SCscore, color = fct_relevel(chromatin,chromatin.levels))) + scale_color_manual(values = chromatin.colors, name = "Chromatin type") + theme_bw() + coord_cartesian(ylim = c(-18,6)) + ylab("MMEJscore (z-score)") + facet_wrap(~ gRNA) + geom_hline(yintercept = c(-1.65,1.65), linetype = 2)
+
+```
+# MLL proteins plot (geom_tile plot with the "significant hits" highlighted)
+```{r}
+
+# Plots
+MLL.prots.random <- cchz.scores.calc.mmej %>% 
+    filter(category %in% c("mll_proteins","random")) %>% 
+    select(chromatin,gene,mmej.SCscore,category,gRNA) 
+
+# Get values from screening
+MLL.prots.screen <- screen.detail %>% 
+    filter(gene %in% mll.prots) %>% 
+    mutate(gRNA = "screening", category = case_when(gene %in% mll.proteins ~ "mll_proteins", gene %in% c("KMT2C","KMT2D") ~ "mll_proteins", T ~ "random")) %>%
+    select(chromatin,gene,mmej.SCscore,category,gRNA)
+
+#Bind both data.frames
+MLL.prots.all <- bind_rows(MLL.prots.random,MLL.prots.screen)
+
+# Plot geom_tile
+ggplot(MLL.prots.all %>% distinct()) + 
+    geom_tile(aes(gene,chromatin, fill = mmej.SCscore)) + 
+    geom_point(data = MLL.prots.all %>% 
+                   distinct() %>% 
+                   filter(abs(mmej.SCscore) > 1.65), aes(gene,chromatin), size = 1, alpha = 0.5) +
+    facet_wrap(category ~ fct_relevel(gRNA, c("screening","Combo")), scale = "free_x", ncol = 6) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F") + 
+    theme_bw() + theme(axis.text.x = element_text(angle = 90))  + 
+    coord_cartesian(expand = F) + theme_bw()
+
+#Only combos screening + followup
+mll.prots <- c("KMT2C","KMT2D","PAXIP1","RBBP5","KDM6A","KMT2A","ASH2L","HDAC5","HMGA1","KDM3A","PICK1","PSMA1")
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210520_screening_combo_plots.pdf",width = 8, useDingbats = F)
+ggplot(MLL.prots.all %>% filter(gRNA %in% c("screening","Combo") & gene %in% mll.prots) %>% distinct()) + 
+    geom_tile(aes(chromatin,fct_relevel(gene,mll.prots), fill = mmej.SCscore)) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    geom_point(data = MLL.prots.all %>% filter(gRNA %in% c("screening","Combo")) %>% 
+                  distinct() %>% 
+                  filter(abs(mmej.SCscore) > 1.65), aes(chromatin,fct_relevel(gene,mll.prots)), size = 1, alpha = 0.5) +
+    facet_wrap(category ~ fct_relevel(gRNA, c("screening","Combo")), scales = "free_y", ncol = 2) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F") + 
+    coord_cartesian(expand = F)
+dev.off()
+
+#Only mll complex proteins that were not in the screening
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210519_extra_mll_combo_plots.pdf",width = 8,height = 5, useDingbats = F)
+ggplot(MLL.prots.random %>% filter(gRNA == "Combo" & gene %in% c("WDR5","PA1","NCOA6","DPY30","dKMT2CD","HDAC5","HMGA1","KDM3A","PICK1","PSMA1")) %>% distinct()) + 
+    geom_tile(aes(chromatin,gene, fill = mmej.SCscore)) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    geom_point(data = MLL.prots.random %>% filter(gRNA == "Combo" & gene %in% c("WDR5","PA1","NCOA6","DPY30","dKMT2CD","HDAC5","HMGA1","KDM3A","PICK1","PSMA1")) %>% 
+                   distinct() %>% 
+                   filter(abs(mmej.SCscore) > 1.65), aes(chromatin,gene), size = 1, alpha = 0.5) +
+    facet_wrap(~ category, scales = "free_y", ncol = 2) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F", limits = c(-4,2)) + 
+    coord_cartesian(expand = F)
+dev.off()
+
+```
+
+
+
+
+#MLL prots and random plots (correlation between screening and follow up)
+```{r}
+# Correlation between Screening and follow up for each type
+correlation.followup <- MLL.prots.all %>% 
+    filter(gRNA == "Combo" & !gene %in% c("KDM6A","KMT2A")) %>% 
+    select(chromatin,category,gene, followup.score = mmej.SCscore)
+
+correlation.screening <- MLL.prots.all %>% 
+    filter(gRNA == "screening" & !gene %in% c("KDM6A","KMT2A")) %>% 
+    select(chromatin,category,gene, screening.score = mmej.SCscore)
+
+comb.corr.fs <- left_join(correlation.screening,correlation.followup) %>% distinct()
+
+# Plot correlation between (combos and screen)
+ggplot(comb.corr.fs %>% distinct()) + 
+    geom_point(aes(screening.score,followup.score, color = chromatin)) + 
+    facet_wrap(~ category) + 
+    geom_abline(slope =1, intercept = 0, linetype = 2) + 
+    coord_fixed(xlim = c(-5,3), ylim = c(-5,3), expand = F) + 
+    geom_smooth(method = "lm", aes(screening.score,followup.score)) + 
+    theme_bw() + 
+    scale_color_manual(values = chromatin.colors) + 
+    stat_cor(aes(screening.score,followup.score), label.x = -4.5,label.y = 2)
+
+```
+
+## correlation between same perturbation (combos or singles are more reproducible)
+I want to check if similar perturbations are correlated (Do we see similar effects in different types of chromatin?)
+```{r}
+#Test with RBBP5 first
+tmp.cor.RBBP5 <- cchz.scores.calc.mmej %>% filter(gene == "RBBP5") %>% select(chromatin,gRNA, mmej.SCscore) %>% distinct() %>% reshape2::dcast(gRNA ~ chromatin, value.var = "mmej.SCscore") %>% column_to_rownames(var = "gRNA")
+
+c.tmp.RBBP5 <- cor(t(tmp.cor.RBBP5))
+
+## Write general function for each gene
+MLL.random.prots <- cchz.scores.calc.mmej %>% filter(category %in% c("mll_proteins","random")) %>% select(chromatin,gene,gRNA, mmej.SCscore) %>% distinct()
+
+
+corr.gRNAs <- function(y) {
+    gene.dcast <- MLL.random.prots %>% filter(gene == y) %>% select(-gene) %>% distinct() %>% 
+        reshape2::dcast(chromatin ~ gRNA, value.var = "mmej.SCscore", fun.aggregate = mean) %>% 
+        column_to_rownames(var = "chromatin")
+    cor.gene <- cor(gene.dcast, method = "kendall")
+    cor.gene[upper.tri(cor.gene)]
+}
+
+mll.prots.cor <- as.vector(sapply(mll.proteins,corr.gRNAs))
+random.prots.cor <- as.vector(sapply(controls,corr.gRNAs))
+
+# 
+random.mll.prots.cor <- numeric()
+sample.gRNAs <- function(y) {
+    sample.dt <- MLL.random.prots[sample(nrow(MLL.random.prots),5),c("gRNA","gene")]
+    random.dcast <- sample.dt %>% left_join(MLL.random.prots,by = c("gRNA", "gene")) %>% distinct() %>%
+        reshape2::dcast(chromatin ~ gene + gRNA, value.var = "mmej.SCscore", fun.aggregate = mean) %>% 
+        column_to_rownames(var = "chromatin")
+    cor.random <- cor(random.dcast, method = "kendall")
+    cor.random[upper.tri(cor.random)]
+}
+set.seed(1)
+random.mll.prots.cor <- unlist(sapply(mll.proteins,sample.gRNAs))
+
+set.seed(1)
+random.random.prots.cor <- unlist(sapply(controls,sample.gRNAs))
+
+#Put three things together
+random.mll.cor <- tibble(class = rep("mll",length(random.mll.prots.cor)), type = rep("sample",length(random.mll.prots.cor)), value = random.mll.prots.cor)
+mll.cor <- tibble(class = rep("mll",length(mll.prots.cor)), type = rep("real",length(mll.prots.cor)), value = mll.prots.cor)
+random.noeff.cor <- tibble(class = rep("noeff",length(random.random.prots.cor)), type = rep("sample",length(random.random.prots.cor)), value = random.random.prots.cor)
+noeff.cor <- tibble(class = rep("noeff",length(random.prots.cor)),type = rep("real",length(random.prots.cor)), value = random.prots.cor)
+plot.cor.analysis <- bind_rows(random.mll.cor,mll.cor,noeff.cor,random.noeff.cor)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+#plot
+ggplot(plot.cor.analysis, aes(type,value)) + geom_quasirandom() + geom_boxplot(alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), ref.group = "sample") + facet_wrap(~ class) + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient")
+
+ggplot(plot.cor.analysis, aes(class,value)) + geom_quasirandom() + geom_boxplot(alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), ref.group = "noeff") + facet_wrap(~ type) + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient")
+```
+## Do the same as above but with 19 barcodes (it will give better sample size)
+## correlation between same perturbation (combos or singles are more reproducible)
+I want to check if similar perturbations are correlated (Do we see similar effects in different types of chromatin?)
+```{r}
+#Gene categories
+controls.sc <- c("HDAC5","HMGA1","KDM3A","PICK1","PSMA1")
+mll.proteins.sc <- c("ASH2L","RBBP5","PAXIP1","KDM6A","KMT2A")
+
+# Select only the ones selected from screening
+MLL.random.prots.barcode <- cchz.scores.calc.mmej %>% filter(gene %in% controls | gene %in% mll.proteins.sc) %>% dplyr::group_by(barcode,gene,gRNA) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% ungroup() %>% distinct() 
+
+
+corr.gRNAs.barcode <- function(y) {
+    gene.dcast <- MLL.random.prots.barcode %>% filter(gene == y) %>% select(-gene) %>% distinct() %>% 
+        reshape2::dcast(barcode ~ gRNA, value.var = "bc.mmejscore") %>% 
+        column_to_rownames(var = "barcode")
+    cor.gene <- cor(gene.dcast, method = "pearson")
+    cor.gene[upper.tri(cor.gene)]
+}
+
+
+
+mll.prots.cor.bc <- as.vector(sapply(mll.proteins.sc,corr.gRNAs.barcode))
+noeff.prots.cor.bc <- as.vector(sapply(controls.sc,corr.gRNAs.barcode))
+
+# 
+random.mll.prots.cor <- numeric()
+sample.table <- MLL.random.prots.barcode %>% select(gene,gRNA) %>% distinct()
+sample.gRNAs.bc <- function(y) {
+    sample.dt <- sample.table[sample(nrow(sample.table),5),c("gRNA","gene")]
+    mll.join <- MLL.random.prots.barcode %>% ungroup() %>% select(gRNA,gene,barcode,bc.mmejscore)
+    random.dcast <- sample.dt %>% merge(mll.join, by = c("gRNA", "gene")) %>% reshape2::dcast(barcode ~ gene + gRNA, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+   cor.random <- cor(random.dcast, method = "pearson")
+   cor.random[upper.tri(cor.random)]
+}
+set.seed(1)
+random.prots.cor.bc <- as.vector(sapply(mll.proteins.sc,sample.gRNAs.bc))
+
+#Put three things together
+random.mll.cor.bc <- tibble(type = rep("sampling",length(random.prots.cor.bc)), value = random.prots.cor.bc)
+mll.cor.bc <- tibble(type = rep("MLL_hits",length(mll.prots.cor.bc)), value = mll.prots.cor.bc)
+noeff.cor.bc <- tibble(type = rep("random_genes",length(noeff.prots.cor.bc)), value = noeff.prots.cor.bc)
+plot.cor.analysis.bc <- bind_rows(random.mll.cor.bc,mll.cor.bc,noeff.cor.bc)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+my_comparisons = list( c("MLL_hits","random_genes"),c("random_genes","sampling"), c("MLL_hits","sampling"))
+#plot
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210517_other_gRNAs_hits_correlation.pdf",width = 5,height = 6)
+ggplot(plot.cor.analysis.bc, aes(type,value)) + geom_quasirandom() + geom_boxplot(aes(fill = type),alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), comparisons = my_comparisons, label.x.npc = 0.4) + theme_bw() + coord_cartesian(expand = T, ylim = c(-1,2)) + ylab("Pearson correlation coefficient")
+dev.off()
+
+```
+#Do I see similar things with other gRNAs
+```{r}
+#
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210520_other_gRNAs_hits.pdf",height = 6)
+ggplot(MLL.prots.all %>% distinct() %>% filter(gRNA != "screening" & gene %in% c("HDAC5","HMGA1","KDM3A","PICK1","PSMA1","ASH2L","RBBP5","PAXIP1","KDM6A","KMT2A"))) + geom_quasirandom(aes(chromatin,mmej.SCscore, color = gRNA)) + facet_wrap(~ fct_relevel(gene,mll.proteins.sc), ncol = 5) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+dev.off()
+
+
+
+```
+
+##Other hits geom tile
+```{r}
+# Plot geom_tile
+ggplot(cchz.scores.calc.mmej %>% filter(category != "controls") %>% distinct()) + geom_tile(aes(chromatin,gene, fill = mmej.SCscore)) + facet_wrap(category ~ gRNA, scale = "free_y", ncol = 5) + scale_fill_gradient2() + theme_bw() + theme(axis.text.x = element_text(angle = 90))  + geom_point(data = cchz.scores.calc.mmej %>% filter(category != "controls") %>% distinct() %>% filter(abs(mmej.SCscore) > 1.65), aes(chromatin,gene), size = 1, alpha = 0.5) + coord_cartesian(expand = F)
+```
+
+#Export plot
+```{r}
+chromatin.colors <- c("#00983A","#FFDE00","#D91F5D","#63328A","#838688")
+chromatin.levels <- c("euchromatin-transcription","transcription","H3K27me3","late_replicating-LAD-H3K9me2","other-heterochromatin")
+
+# LigIV & POLQ controls
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210511_controls_followup.pdf", height = 3,width = 5)
+ggplot(control.plot) + geom_quasirandom(aes(targets,mmej.SCscore, color = fct_relevel(chromatin,chromatin.levels))) + scale_color_manual(values = chromatin.colors, name = "Chromatin type") + theme_bw() + coord_cartesian(ylim = c(-18,5)) + ylab("MMEJscore (z-score)")
+dev.off()
+
+# Plot tile
+ggplot(combos.plot %>% filter(category != "controls")) + geom_tile(aes(fct_relevel(gene,rl),chromatin, fill = mmej.SCscore)) + facet_wrap(~category, scales = "free_x") + scale_fill_gradient2(low = "#EB2030", high = "#2E358F", limits = c(-7,7), oob = scales::squish) + coord_cartesian(expand = F) + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+rl <- c("ASH2L","RBBP5","WDR5","DPY-30","NCOA6","PA1","PAXIP","KDM6A","KMT2A","KMT2C","KMT2D","KMT2C_D")
+
+
+
+```
+
+#Other hits (how do they look)
+# MLL proteins plot (geom_tile plot with the "significant hits" highlighted)
+```{r}
+# Plots
+otherhits.prots.random <- cchz.scores.calc.mmej %>% 
+    filter(category %in% c("other_hits","random")) %>% 
+    select(chromatin,gene,mmej.SCscore,category,gRNA) 
+
+# Get values from screening
+otherhits.prots.screen <- screen.detail %>% 
+    filter(gene %in% other.hits | gene %in% controls) %>% 
+    mutate(gRNA = "screening", category = case_when(gene %in% other.hits ~ "other_hits", T ~ "random")) %>%
+    select(chromatin,gene,mmej.SCscore,category,gRNA)
+
+#Bind both data.frames
+otherhits.prots.all <- bind_rows(otherhits.prots.random,otherhits.prots.screen)
+
+# Plot geom_tile
+ggplot(otherhits.prots.all %>% distinct()) + 
+    geom_tile(aes(gene,chromatin, fill = mmej.SCscore)) + 
+    geom_point(data = otherhits.prots.all %>% 
+                   distinct() %>% 
+                   filter(abs(mmej.SCscore) > 1.65), aes(gene,chromatin), size = 1, alpha = 0.5) +
+    facet_wrap(category ~ fct_relevel(gRNA, c("screening","Combo")), scale = "free_x", ncol = 6) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F") + 
+    theme_bw() + theme(axis.text.x = element_text(angle = 90))  + 
+    coord_cartesian(expand = F) + theme_bw()
+
+#Only combos screening + followup
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210517_other_hits_combo_plots.pdf",width = 8, useDingbats = F)
+ggplot(otherhits.prots.all %>% filter(gRNA %in% c("screening","Combo")) %>% distinct()) + 
+    geom_tile(aes(chromatin,fct_relevel(gene,mll.proteins.sc), fill = mmej.SCscore)) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    geom_point(data = otherhits.prots.all %>% filter(gRNA %in% c("screening","Combo")) %>% 
+                   distinct() %>% 
+                   filter(abs(mmej.SCscore) > 1.65), aes(chromatin,fct_relevel(gene,mll.proteins.sc)), size = 1, alpha = 0.5) +
+    facet_wrap(category ~ fct_relevel(gRNA, c("screening","Combo")), scales = "free_y", ncol = 2) +
+    scale_fill_gradient2(low = "#EB2030",mid = "grey90", high = "#2E358F") + 
+    coord_cartesian(expand = F)
+dev.off()
+
+```
+
+#Do I see similar things with other gRNAs (correlations and points)
+```{r}
+#
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210517_other_hits_other_gRNAs_hits.pdf",height = 4)
+ggplot(otherhits.prots.all %>% distinct() %>% filter(gRNA != "screening")) + geom_quasirandom(aes(fct_relevel(gene,other.hits),mmej.SCscore, color = gRNA)) + facet_wrap(~ chromatin,scales = "free_x") + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+dev.off()
+```
+
+# other hits correlations
+```{r}
+#Gene categories
+controls.sc <- c("HDAC5","HMGA1","KDM3A","PICK1","PSMA1")
+spe.hits <- c("DPF3","HMG20B","HMGN4","ING1","JARID2")
+genomewide.hits <- c("SAP130","SUPT5H")
+
+# Select only the ones selected from screening
+otherhits.random.prots.barcode <- cchz.scores.calc.mmej %>% filter(gene %in% controls | gene %in% other.hits) %>% dplyr::group_by(barcode,gene,gRNA) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup()
+
+
+corr.gRNAs.barcode <- function(y) {
+    gene.dcast <- otherhits.random.prots.barcode %>% filter(gene == y) %>% select(-gene) %>% distinct() %>% 
+        reshape2::dcast(barcode ~ gRNA, value.var = "bc.mmejscore", fun.aggregate = mean) %>% 
+        column_to_rownames(var = "barcode")
+    cor.gene <- cor(gene.dcast, method = "spearman")
+    cor.gene[upper.tri(cor.gene)]
+}
+
+spe.prots.cor.bc <- as.vector(sapply(spe.hits,corr.gRNAs.barcode))
+noeff.prots.cor.bc <- as.vector(sapply(controls.sc,corr.gRNAs.barcode))
+genomewide.prots.cor.bc <- as.vector(sapply(genomewide.hits,corr.gRNAs.barcode))
+# 
+random.mll.prots.cor <- numeric()
+sample.gRNAs.bc <- function(y) {
+    sample.dt <- MLL.random.prots.barcode[sample(nrow(MLL.random.prots),5),c("gRNA","gene")]
+    random.dcast <- sample.dt %>% left_join(MLL.random.prots.barcode,by = c("gRNA", "gene")) %>% distinct() %>%
+        reshape2::dcast(barcode ~ gene + gRNA, value.var = "bc.mmejscore", fun.aggregate = mean) %>% 
+        column_to_rownames(var = "barcode")
+    cor.random <- cor(random.dcast, method = "spearman")
+    cor.random[upper.tri(cor.random)]
+}
+set.seed(1)
+random.prots.cor.bc.spe <- unlist(sapply(spe.hits,sample.gRNAs.bc))
+
+#Put three things together
+random.cor.bc.spe <- tibble(type = rep("random",length(random.prots.cor.bc.spe)), value = random.prots.cor.bc)
+spe.cor.bc <- tibble(type = rep("spe",length(spe.prots.cor.bc)), value = spe.prots.cor.bc)
+noeff.cor.bc <- tibble(type = rep("noeff",length(noeff.prots.cor.bc)), value = noeff.prots.cor.bc)
+genomewide.cor.bc <- tibble(type = rep("genomewide",length(genomewide.prots.cor.bc)), value = genomewide.prots.cor.bc)
+plot.cor.analysis.bc.spe <- bind_rows(random.cor.bc.spe,spe.cor.bc,noeff.cor.bc,genomewide.cor.bc)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+#plot
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210517_other_gRNAs_hits_correlation.pdf",width = 5,height = 6)
+ggplot(plot.cor.analysis.bc.spe, aes(type,value)) + geom_quasirandom() + geom_boxplot(aes(fill = type),alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), method = "anova", label.x.npc = 0.4) + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Pearson correlation coefficient")
+dev.off()
+
+```

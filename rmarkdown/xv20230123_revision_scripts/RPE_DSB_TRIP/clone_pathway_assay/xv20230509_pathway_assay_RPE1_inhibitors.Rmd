@@ -1,0 +1,198 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+
+#Load chromatin info of the reporters
+```{r}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230330_RPE_clone32_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+
+#Make a dataframe with all the files
+chromatin_features_clone32_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_clone32_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% reduce(left_join, by = "name")
+
+#Bind both
+chromatin_features_clone32 <-  left_join(chromatin_features_clone32_chip, chromatin_features_clone32_dam, by = c("ID"="name"))
+
+
+```
+# CONCLUSION: I created a dataframe with all values
+
+#Chromatin features of IPRs
+```{r}
+
+heatmap_matrix <-  chromatin_features_clone32 %>% filter(nchar(ID) == 16) %>% column_to_rownames(var = "ID")
+
+#Plot heatmap
+#pheatmap
+clone32_heatmap <- pheatmap(heatmap_matrix, silent = T)
+
+#Cluster IPRs by features
+clone32_bc_cluster <- rownames(heatmap_matrix[clone32_heatmap$tree_row[["order"]],])
+chromatin_cluster <-  colnames(heatmap_matrix[,clone32_heatmap$tree_col[["order"]]])
+
+#write.table(clone32_bc_cluster, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/figures/xv20220927_barcode_clustering.txt")
+
+#dt for plotting
+clone_32_IPR_melt <- heatmap_matrix %>% rownames_to_column(var = "barcode") %>% reshape2::melt(value.name = "z_score", var.name = "feature")
+
+#Plot
+ggplot(clone_32_IPR_melt %>% filter(variable != "dam_H3K27me3")) + 
+  geom_tile(aes(fct_relevel(barcode, clone32_bc_cluster),fct_relevel(variable,chromatin_cluster), fill = z_score)) +
+  scale_fill_gradient2(low = "#009B9E",mid = "#F1F1F1", high = "#C75DAB", limits = c(-2,2), oob =scales::squish)  + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title = element_blank(), 
+        legend.position = "top") + 
+  coord_fixed(expand = F,ratio = 0.75)
+
+
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230424_E2222_RPE1_kinase_inh/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+
+clone_32_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230424_E2222_RPE1_kinase_inh/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("seq_run","sample_ID","exp","cell_line","clone","p53_status","sample","conc"))
+}) %>% filter(clone == 32 & barcode %in% clone_32_IPR_melt$barcode)
+
+```
+
+#Process pathway balance data
+```{r}
+#total counts per barcode in each clone
+read_per_barcode <- clone_32_pathway_assay %>%
+  dplyr::group_by(barcode, clone,conc,p53_status, sample,exp) %>%
+  dplyr::summarise(total = sum(count))
+
+# Check editing efficiency
+pathway_assay_clones <- clone_32_pathway_assay %>% 
+  filter(exp == "E2216") %>%
+  right_join(read_per_barcode) %>%
+  na.omit() %>%
+  mutate(freq = count/total,
+         mut = paste(call, gsub("-","",indel), sep = "_"))
+
+#dcast total counts
+dcast_counts_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + sample_ID + clone + p53_status + sample + conc + exp ~ mut, value.var = "count", fill=0, fun.aggregate = mean)
+
+
+
+#dcast total counts
+dcast_freq_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + sample_ID + clone + p53_status + sample + conc + exp ~ mut, value.var = "freq", fill= 0, fun.aggregate = mean)
+
+colnames(dcast_freq_clones)[6:length(colnames(dcast_freq_clones))] <- paste0("freq_", colnames(dcast_counts_clones)[6:length(dcast_counts_clones)])
+
+#combine both
+dcast_counts_freq_clones <- dcast_counts_clones %>%
+  left_join(read_per_barcode)
+
+# Process kinase inhibitor data
+pathway_assay_clones.processed <- dcast_counts_freq_clones %>% 
+  filter(del_7 + ins_1 > 30 & exp == "E2216") %>% #Apply the read number filtering step
+  mutate(freqCut = 1 - (wt_0/(del_7+ins_1+wt_0)),
+         log2MMEJNHEJratio = log2(del_7 / ins_1),
+         MMEJ_freq = del_7/(del_7+ins_1)) %>%
+  dplyr::select(barcode, sample_ID,clone,p53_status,sample,exp,conc,log2MMEJNHEJratio,MMEJ_freq,freqCut, del_7, ins_1, wt_0,total)  %>% distinct()
+
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- pathway_assay_clones.processed %>% 
+  dplyr::group_by(sample_ID,clone,p53_status,sample,conc) %>%
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>%
+  filter(mean.cut < 0.90) %>% 
+  dplyr::select(sample_ID,clone,p53_status,sample,conc)
+
+#Filter based on cutting efficiency
+filtered.RPE.clones.tib <- pathway_assay_clones.processed %>% 
+  anti_join(filter.out.wells, by = c("exp", "replicate","gRNA","clone"))
+```
+
+#Check first plot (individual values)
+```{r}
+#Left_join
+pathway_location_clone32 <- average_values %>% left_join(chromatin_features_clone32, by = c("barcode" = "ID"))
+
+#Calculate correlation coeficients
+
+spearman_coefficients <- map_dfr(colnames(pathway_location_clone32[8:28]), function(x){
+  balance <- pathway_location_clone32$mean_ratio
+  feature <-  pathway_location_clone32[x]
+  spearman.rho <- stats::cor(balance, feature, method = "spearman")
+  tibble(chromatin = x, rho = spearman.rho[1])
+})
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% filter(chromatin != "dam_H3K27me3")) + 
+  geom_col(aes(reorder(chromatin,rho),rho)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.")
+
+```
+
+#Correlation examples
+```{r}
+#With LMNB2
+ggplot(pathway_location_clone32, aes(dam_H3K9me3, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+
+#With H3K4me3
+ggplot(pathway_location_clone32, aes(chip_H3K27ac.x, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+#With LMNB2
+ggplot(pathway_location_clone32, aes(chip_H3K27me3.y, mean_ratio)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+
+```

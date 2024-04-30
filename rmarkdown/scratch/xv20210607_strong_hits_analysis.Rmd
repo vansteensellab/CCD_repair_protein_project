@@ -1,0 +1,212 @@
+---
+title: "xv20210603_correlation_DDR_CRISPR_screen"
+output: html_document
+---
+#In this document, I will correlate the common hits between ddr and crispr screens and check if the noise levels are similar between screening and follow-up
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# libraries:
+library(tidyverse)
+library(data.table)
+# library(car)
+library(parallel)
+library(gtools)
+```
+
+## Load both screen data
+
+```{r library}
+#load CRISPR screen
+chromatin.screen <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+
+controls.chromatin.screen <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+#load ddr screen
+ddr.screen <- readRDS("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/AGM20210527_chz_scores_mmej.rds")
+```
+
+#Check noise levels in the follow-up and screening
+For this, I'll first calculate the st.dev between for each gene per replicate and plot all z.scores per replicate to see how they look
+```{r}
+# Standard deviation
+chromatin.screen.dev <- chromatin.screen %>% select(gene,mmej.ch.score,chromatin) %>% distinct() %>% dplyr::group_by(gene,chromatin) %>% dplyr::summarise(m_sc = sum(mmej.ch.score)/sqrt(n()), st.dev_sc = sd(mmej.ch.score,na.rm = T), count_sc = n())
+
+#Noise in follow up experiment
+flip.exp <- ch.z.scores.calc.mmej %>% filter(grepl("KMT2A",targets)| grepl("KDM6A",targets))
+
+
+flip.ext.filt <- flip.exp %>% filter(grepl("Combo",targets)) %>% separate(targets, into = c("gene","gRNA")) %>% ungroup() %>% select(gene,mmej.ch.score = ch.z.score,chromatin) %>% distinct() %>% dplyr::group_by(gene,chromatin) %>% dplyr::summarise(m_fup = sum(mmej.ch.score, na.rm = T)/sqrt(n()), st.dev_fup = sd(mmej.ch.score), count_fup = n())
+
+#Noise in screening
+noise.chromatin.screen <- chromatin.screen.dev %>% filter(gene %in% c("KDM6A","KMT2A"))
+
+KDM6A.KMT2A.noise <- chromatin.screen %>% filter(gene %in% c("KDM6A","KMT2A")) %>% select(gene, mmej.ch.score,chromatin)%>% distinct() %>% bind_rows(flip.exp %>% filter(grepl("Combo",targets)) %>% separate(targets, into = c("gene","gRNA")) %>% ungroup() %>% select(gene,mmej.ch.score = ch.z.score,chromatin) %>% distinct()) %>% dplyr::group_by(gene,chromatin) %>% dplyr::summarise(m_tot = sum(mmej.ch.score)/sqrt(n()), st.dev_tot = sd(mmej.ch.score), count_tot = n())
+
+#Bind all together
+noise.all <- noise.chromatin.screen %>% left_join(KDM6A.KMT2A.noise, by = c("gene", "chromatin")) %>% left_join(flip.ext.filt, by = c("gene", "chromatin")) %>% mutate(diff = abs(m_sc - m_fup)/2)
+
+#Density plot (st.dev)
+ggplot(chromatin.screen.dev) + geom_density(aes(st.dev_sc)) + theme_bw() + geom_rug(data = KDM6A.KMT2A.noise, aes(x = st.dev_tot, color = gene), outside = F, length = unit(0.25,"npc"),sides = "top") + geom_rug(data = noise.chromatin.screen, aes(x = st.dev_sc, color = gene), outside = F, length = unit(0.25,"npc"))
+
+# Does stdev and half range correlate
+#ggplot(noise.all) + geom_point(aes(diff, st.dev_tot))
+
+#How do dots look
+fup_data <- flip.exp %>% filter(grepl("Combo",targets)) %>% separate(targets, into = c("gene","gRNA")) %>% ungroup() %>% select(gene,mmej.ch.score = ch.z.score,chromatin) %>% distinct()
+
+sc_data <- chromatin.screen %>% filter(gene %in% c("KDM6A","KMT2A")) %>% select(gene, mmej.ch.score,chromatin)%>% distinct()
+
+ggplot() + geom_quasirandom(data = fup_data, aes(chromatin,mmej.ch.score, color = "follow_up")) + geom_quasirandom(data = sc_data, aes(chromatin,mmej.ch.score,color = "screening")) + facet_wrap(~ gene) + theme_bw() + geom_hline(yintercept = 0) + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+
+
+There are a bunch of common genes between ddr screen and chromatin screen. I will try to correlate and see wether the noise levels are different or not. 
+
+
+## Intersect both data sets
+Here, I show correlations between chromatin screen and a very preliminary version of the ddr screen
+```{r}
+#Gene intersection
+gene.intersection <- intersect(ddr.screen$gene, chromatin.screen$gene)
+
+#Filter chromatin.screen
+screen.correlation <- chromatin.screen %>% select(gene,chromatin,mmej.SCscore,chrom.mmejSCscore = mmej.SCscore,plate) %>% distinct() %>% filter(gene %in% gene.intersection) %>% left_join(ddr.screen %>% select(gene,chromatin,ddr.mmejSCscore = mmej.SCscore) %>% distinct(), by = c("gene","chromatin"))
+
+#Check number of genes per plate
+ggplot(screen.correlation %>% select(gene, plate) %>% distinct() %>% dplyr::group_by(plate) %>% dplyr::summarise(common_genes = n())) + 
+  geom_col(aes(plate,common_genes))
+
+#Plot correlation (ddr vs. chromatin screen)
+ggplot(screen.correlation) + geom_point(aes(chrom.mmejSCscore,ddr.mmejSCscore, color = abs(chrom.mmejSCscore) > 1.65 & abs(ddr.mmejSCscore) > 1.65)) + facet_wrap(~ plate, nrow = 2) + geom_abline(slope = 1, intercept = 0) + theme_bw() + coord_fixed(ratio = 1, xlim = c(-10,3), ylim = c(-10 ,3)) + theme(legend.position = "none")
+
+```
+
+#Correlate each replicate for the same data set
+
+Here I correlate different replicates of the CRISPR screen
+```{r}
+
+#Plot correlation for Replicates in chromatin
+chromatin.screen.replicates <- chromatin.screen %>% select(gene,chromatin,mmej.ch.score,plate, b.rep,t.rep) %>% distinct() %>% filter(gene %in% gene.intersection) %>% mutate(replicate = paste(b.rep,t.rep, sep = "_")) %>% distinct() %>% reshape2::dcast(gene + chromatin + plate ~ replicate, value.var = "mmej.ch.score")
+
+#Plot R1 vs R2
+ggplot(chromatin.screen.replicates) + geom_point(aes(B1_R1,B1_R2, color = abs(B1_R1) > 1.65 & abs(B1_R2) > 1.65)) + facet_wrap(~ plate) + theme_bw() + geom_abline(slope = 1, intercept = 0)
+
+#Plot R1 vs R3
+ggplot(chromatin.screen.replicates) + geom_point(aes(B1_R1,B2_R3, color = abs(B1_R1) > 1.65 & abs(B2_R3) > 1.65)) + facet_wrap(~ plate) + theme_bw() + geom_abline(slope = 1, intercept = 0)
+
+#Plot R2 vs R3
+ggplot(chromatin.screen.replicates) + geom_point(aes(B1_R2,B2_R3, color = abs(B1_R2) > 1.65 & abs(B2_R3) > 1.65)) + facet_wrap(~ plate) + theme_bw() + geom_abline(slope = 1, intercept = 0)
+
+```
+
+# Check common hits
+```{r}
+# Bind dataframes
+bind.screens <- left_join(screen.correlation, chromatin.screen.replicates, by = c("gene", "chromatin","plate")) 
+
+#select genes that are hits in every replicate
+common.hits <- bind.screens %>% filter_at(vars(-gene, -chromatin, -plate), all_vars(abs(.) > 1.65))
+
+#common hits
+ggplot(common.hits) + geom_tile(aes(gene, chromatin, fill = chrom.mmejSCscore)) + scale_fill_gradient2()
+
+```
+
+# How this selection criteria look for whole chromatin library
+```{r}
+#Plot correlation for Replicates in chromatin
+chromatin.screen.replicates.all <- chromatin.screen %>% select(gene,chromatin,mmej.ch.score,plate, b.rep,t.rep) %>% distinct() %>% mutate(replicate = paste(b.rep,t.rep, sep = "_")) %>% distinct() %>% reshape2::dcast(gene + chromatin + plate ~ replicate, value.var = "mmej.ch.score") %>% rowwise() %>% mutate(mean.zscore = sum(B1_R1,B1_R2,B2_R3, na.rm = T)/3)
+
+hits.in.everyrep <- chromatin.screen.replicates.all %>% filter_at(vars(-gene, -chromatin, -plate), all_vars(abs(.) > 1.65))
+
+#Select by abs(z.score) > 2.5
+chromatin.screen.2.5.hits <- filter(chromatin.screen, abs(mmej.SCscore) > 2.5) %>% pull(gene) %>% unique()
+
+#common hits
+ggplot(hits.in.everyrep) + geom_tile(aes(gene, chromatin, fill = B1_R1)) + scale_fill_gradient2()
+
+ggplot(chromatin.screen.replicates.all) + 
+  geom_point(aes(B1_R1,B2_R3, color = abs(B1_R1) > 1.65 & abs(B1_R2) > 1.65 & abs(B2_R3) > 1.65)) + 
+  #scale_color_gradient2(mid = "grey90") + 
+  theme_bw() + 
+  #facet_wrap(~ chromatin) + 
+  coord_cartesian(ylim = c(-7,4), xlim = c(-7,4)) + 
+  theme(legend.position =  "none")
+
+#Filter hits that are >1.65 in every replicate
+hits.in.three.reps <- filter(chromatin.screen.replicates.all, abs(B1_R1) > 1.65 & abs(B1_R2) > 1.65 & abs(B2_R3) > 1.65) %>% select(gene, chromatin)
+
+heatmap.big.effectors <- chromatin.screen.replicates.all %>% filter(gene %in% hits.in.three.reps$gene)
+
+ggplot(heatmap.big.effectors) +
+  geom_tile(aes(gene, chromatin, fill = mean.zscore)) + 
+  scale_fill_gradient2()
+
+#
+st.hit.levels <- c("SUPT5H","SAP130","HMGB1","LBR","TOPBP1","KAT5","TRERF1","UBE2N")
+
+ggplot(heatmap.big.effectors) + 
+  geom_point(aes(B1_R1,B2_R3, color = mean.zscore)) + 
+  scale_color_gradient2() +
+  coord_fixed(ylim = c(-10, 4), xlim = c(-10, 4)) + 
+  theme_bw() +
+  geom_vline(xintercept = -1.65) +
+  geom_hline(yintercept = -1.65) +
+  facet_wrap(~ fct_relevel(gene, st.hit.levels), nrow = 2)
+
+
+
+```
+### Plot effect sizes in MMEJscore
+```{r}
+# Select MMEJ score per barcode and replicate for WT controls
+control.mmejscores <- controls.chromatin.screen %>% 
+  filter(gene == "WT") %>% 
+  dplyr::group_by(barcode,chromatin) %>%
+  dplyr::summarise(mean.wt.MMEJscore = mean(MMEJscore, na.rm = T))
+
+#Filter screening data for these genes and plot MMEJscore vs wt
+hit.mmejscores <- chromatin.screen %>% 
+  filter(gene %in% hits.in.three.reps$gene) %>% 
+  dplyr::group_by(barcode, chromatin, gene) %>%
+  dplyr::summarise(mean.MMEJscore = mean(MMEJscore, na.rm = T)) %>%
+  distinct()
+
+#Pool POLQ data
+polq.mmejscoore <- controls.chromatin.screen %>%
+  filter(gene == "POLQ") %>%
+  dplyr::group_by(barcode,chromatin,gene) %>%
+  dplyr::summarise(mean.MMEJscore = mean(MMEJscore,na.rm = T))
+
+#Left_join and normalize data
+norm.hits.mmejscore <- hit.mmejscores %>%
+  bind_rows(polq.mmejscoore) %>%
+  left_join(control.mmejscores, by = c("barcode", "chromatin")) %>%
+  mutate(log2.normMMEJscore = log2(mean.MMEJscore/mean.wt.MMEJscore))
+
+# Add statistict test for each of this categories
+stat.test <- norm.hits.mmejscore %>% 
+  group_by(gene,chromatin) %>%
+  t_test(log2.normMMEJscore ~ 1, mu = 0) %>%
+  adjust_pvalue() %>%
+  mutate(y.position = 35)
+
+#Plot changes
+ggplot(norm.hits.mmejscore) + 
+  geom_quasirandom(aes(chromatin,log2.normMMEJscore)) +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~ fct_relevel(gene,st.hit.levels), nrow = 2) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ylab("log2(KO.MMEJsc/wt.MMEJsc)") + 
+  coord_cartesian(ylim = c(-1.2,1))
+
+#Plot statistical significance of this differences
+#ggplot(stat.test) +
+ # geom_tile(aes(chromatin,gene, fill = -log10(p.adj))) +
+#  geom_point(data = stat.test %>% filter(-log10(p.adj) > 1.3),aes(chromatin,gene))
+
+
+```

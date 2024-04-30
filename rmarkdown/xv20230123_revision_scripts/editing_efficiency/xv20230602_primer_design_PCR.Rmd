@@ -1,0 +1,129 @@
+---
+title: "xv20230531_editing_check_screen"
+author: "Xabier Vergara"
+date: "2023-05-31"
+output: html_document
+---
+#In this script, I will check if gRNAs target regions that can be amplified by PCR (~ 5Kb)
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(crisprseekplus)
+```
+
+#Functions
+```{r}
+IDTrna_dna <- function(x) {
+    gsub("GTTTTAGAGCTATGCT","",gsub("r","",gsub(" ","",gsub("/AltR./","",gsub("U","T",x)))))
+}
+
+#Write fasta
+writeFasta<-function(data, filename){
+  fastaLines = c()
+  for (rowNum in 1:nrow(data)){
+    fastaLines = c(fastaLines, as.character(paste(">", data[rowNum,"ID"], sep = "")))
+    fastaLines = c(fastaLines,as.character(data[rowNum,2]))
+  }
+  fileConn<-file(filename)
+  writeLines(fastaLines, fileConn)
+  close(fileConn)
+}
+```
+
+
+
+#Map positions and create bed file
+```{r}
+primer_files <- list.files(path= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency", pattern="primers", full.names = T)
+
+primer_desing <- map_dfr(primer_files, function(x) {
+  primers <- read.delim(x, header = F)
+  colnames(primers) <- c("direction", as.character(primers[2,-10]))
+  primer_rows <- sort(c(seq(3,nrow(primers),5),seq(4,nrow(primers),5)))
+
+primer_info <- primers[primer_rows,] %>%
+  mutate(pair = rep(c(1:10),each=2),
+         amplicon_size = rep(primers[seq(5,nrow(primers),5),2], each = 2),
+         gene = str_extract(x, "(?<=E2284_).*(?=_prim)"),
+         ID = gsub(" primer","",paste(gene,pair,direction, sep = "_")))
+})
+
+writeFasta(primer_desing, "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency/xv20230602_primer_PCR.fasta")
+
+```
+
+#Map these primer to check if they have more than one binding site in the genome
+```{r}
+unique_primer_coordinates <- read_delim(file= "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency/primer_unique_PCR.bed", col_names = F)
+colnames(unique_primer_coordinates) <- c("chr", "start","end","ID","mapq","orientation")
+
+#Left join
+primer_info_position <- left_join(primer_desing,unique_primer_coordinates)
+
+#Get pairs with both primers annealing once
+unique_pairs <- primer_info_position %>% 
+  na.omit() %>% 
+  dplyr::group_by(gene, pair) %>% 
+  dplyr::summarise(count = n()) %>% 
+  filter(count == 2) %>%
+  select(gene, pair)
+
+#filter based on mapping
+primer_info_position_specific <- left_join(unique_pairs, primer_info_position)
+
+```
+
+#Check distance to first gRNA
+```{r}
+#
+distance_to_gRNA <- primer_info_position_specific %>% 
+  left_join(bed_file_targeted %>% 
+              select(gene, chr, "start_gRNA" = start, "end_gRNA" = end)) %>% 
+  mutate(dist_gRNA = abs(start_gRNA - start),
+         dist_end_gRNA = abs(end - end_gRNA),
+         closest = case_when(`Template strand` == "Plus" ~ dist_gRNA,
+                             `Template strand` == "Minus" ~ dist_end_gRNA))
+
+#Distances per pair
+distance_pair <- distance_to_gRNA %>% reshape2::dcast(gene + pair ~ direction, value.var = "closest") %>%
+  mutate(total = `Forward primer` + `Reverse primer`)
+
+#Plot distances per gene
+ggplot(distance_pair) + geom_point(aes(`Forward primer`, `Reverse primer`)) + facet_wrap(~ gene)
+
+ggplot(distance_pair %>% filter(total > 900)) + geom_point(aes(total, gene, color = as.character(pair)))
+
+#Filter pairs 
+resection_pairs <- distance_pair %>% filter(total > 900) %>% select(gene, pair)
+
+primer_info_position_dist <-  left_join(resection_pairs, primer_info_position_specific)
+
+```
+#Conclusion: There is no primer designed next to a gRNA. I will be stringent and get primers with at least 900 bp extra distance
+
+#Order primers with low self complementarity
+```{r}
+min_three_comp <- primer_info_position_dist %>% reshape2::dcast(gene + pair ~ direction, value.var = "Self 3' complementarity") %>%
+  mutate(total = `Forward primer` + `Reverse primer`) %>%
+  dplyr::group_by(gene) %>%
+  slice_min(order_by = total) %>%
+  select(gene, pair)
+
+min_total_comp <- min_three_comp %>% 
+  left_join(primer_info_position_dist) %>%
+  reshape2::dcast(gene + pair ~ direction, value.var = "Self complementarity") %>%
+  mutate(total = as.numeric(`Forward primer`) + as.numeric(`Reverse primer`)) %>%
+  dplyr::group_by(gene) %>%
+  slice_min(order_by = total) %>%
+  select(gene, pair)
+
+```
+#Conclusion: I will order these pairs of primers
+
+#Create the order for IDT
+```{r}
+# dataframe to export
+order_idt_primers <- min_total_comp %>% left_join(primer_info_position_dist)
+
+write_tsv(order_idt_primers, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency/xv20230602_primer_order_IDT.tsv")
+```

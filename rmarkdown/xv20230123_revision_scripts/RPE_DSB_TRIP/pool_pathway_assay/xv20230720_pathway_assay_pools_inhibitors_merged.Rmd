@@ -1,0 +1,185 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("exp_n","sample_ID","cell_line","condition","bio_rep","t_rep"))
+})
+```
+
+
+#Number of mapped IPRs with indel data (most optimistic)
+```{r}
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Import barcode sequences
+#RPE cells
+RPE_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+U2OS_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+#Bind both
+all_IPRs <- bind_rows(RPE_IPR, U2OS_IPR) %>% mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% filter(pool %in% selected_pools)
+```
+#CONCLUSION: We are recovering the whole complexity for U2OS & PRO (input 400 ng). With DEF & RPE we are not capturing full complexity (input 200 ng).
+
+#Filter barcodes by indel counts
+```{r}
+#dcast table with all mutations
+indel_data_merged_tech <- clone_pools_pathway_assay %>% 
+  dplyr::group_by(barcode,outcome, exp_n, cell_line, condition) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F)) %>% left_join(all_IPRs) %>% na.omit()
+
+#Only look at LBR2 vs. tracr
+control_balance <- indel_data_merged_tech %>% filter(condition %in% c("LBR2","tracr") & outcome %in% c("ins_1","del_-7","wt_0"))
+
+#Look at read numbers
+control_balance_dcast <- control_balance %>% reshape2::dcast(barcode + cell_line + condition ~ outcome, value.var = "counts")
+
+#Control_measurements
+pathway_metric_control <- control_balance_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1))
+
+#Conservative filtering
+cons_filter_pathway <- pathway_metric_control %>% filter(`del_-7` > 10 & ins_1 > 10)
+
+#How many positions do I still have
+summary_plot <- cons_filter_pathway %>% dplyr::group_by(cell_line, condition) %>% dplyr::summarise(IPR_n = n())
+  
+#Dcast
+dcast_merged <- indel_data_merged_tech %>% 
+    reshape2::dcast(barcode + cell_line + exp_n + sample_ID + condition ~ outcome, fill = 1) # Not the proper way of adding a pseudo count
+ 
+#Clean noise
+filter_dcast_merged <- dcast_merged %>%
+  mutate(reads = wt_0 + ins_1 + `del_-7`) %>%
+  filter(reads > 50)  %>%
+  mutate(total_reads = rowSums(.[6:213])) %>%
+  select(barcode, cell_line, exp_n, sample_ID, condition, ins_1, `del_-7`, wt_0,total_reads) %>%
+  mutate(total_indel = ins_1 + `del_-7`,
+         TIF = 1-(wt_0/total_reads),
+         balance = log2(`del_-7`/ins_1))
+
+#Mapped IPRs
+mapped_IPRs <- filter_dcast_merged %>% left_join(all_IPRs) %>% na.omit()
+
+#Pathway_barcodes
+filtered_indel_reads <- mapped_IPRs %>%
+  filter(ins_1 + `del_-7` > 50)
+```
+
+
+#Plot averages
+```{r}
+balance_average <- filtered_indel_reads %>% 
+  dplyr::group_by(barcode, cell_line, condition) %>%
+  dplyr::summarise(mean_balance = mean(balance), sd_balance = sd(balance))
+
+TIF_average <- filtered_indel_reads %>% 
+  dplyr::group_by(barcode, cell_line, condition) %>%
+  dplyr::summarise(mean_TIF = mean(TIF), sd_TIF = sd(TIF))
+
+#Left_join (both)
+pooled_average_data <- balance_average %>% left_join(TIF_average)
+
+```
+#CONCLUSION: Data looks very noisy
+
+#Load chromatin info of the IPRs in RPE cells
+```{r}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(repliseq = (ratio_r1 + ratio_r2)/2) %>%
+    dplyr::select("ID" = barcode, repliseq)
+})
+
+#Bind both
+chromatin_features_pools <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","cell","transfection","complexity"), remove = F)
+```
+
+
+#Bind chromatin and pathway balance data
+```{r}
+#Bind data together
+tmp <- chromatin_features_pools  %>% 
+  left_join(pooled_average_data, by = "barcode") %>% 
+  na.omit()
+
+```
+
+
+#Plot tile plot
+```{r}
+#Number of coocurrence: For RPE1 & DEF it could be 4, and U2OS or PRO a max of 3.
+iPR_barcode <- filtered_indel_reads %>% 
+  dplyr::group_by(barcode,cell_line,condition) %>%
+  dplyr::summarise(reps = n())
+
+
+filtered_tile_plot.data <- iPR_barcode %>% dplyr::group_by(cell_line,condition,reps) %>% dplyr::summarise(IPR_n = n())
+
+ggplot(filtered_tile_plot.data) +
+  geom_tile(aes(reps,condition, fill = IPR_n)) +
+  facet_wrap(~ cell_line, scales = "free_x") +
+  theme_bw()
+
+```
+
+
+

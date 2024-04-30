@@ -1,0 +1,2 @@
+start end gRNA_n common_gRNA
+132557327 132559367 32 14

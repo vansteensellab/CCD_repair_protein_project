@@ -1,0 +1,291 @@
+---
+title: "xv20211230_4_epistasis_model"
+output: html_document
+---
+
+# Script to generate figure #4 in the paper. This figure describes how epistatic interactions are present between chromatin features and protein KOs. Figure outline:
+A- Step by Step for KAT5 and H3K9me2
+B- Matrix for all hits
+C- Hits per library
+D- Hits per pathway
+E- Strong hits examples
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 5:
+A- All proteins matrix
+B- Balance perturbation strong hits
+
+This script generates the plots for figure 4 and S5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+library(ggpubr)
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_epistasis.rds")
+```
+
+#Figure 4A: Step by step explanation KAT5
+```{r}
+#Step 1: IPR WT vs. KAT5
+ggplot(step1.epistasis %>% filter(gene %in% c("WT","KAT5"))) + geom_point(aes(fct_reorder(barcode,m.log2MMEJ), m.log2MMEJ, color = gene)) + scale_color_manual(values = c("#EF6817","#21201F")) + theme_bw() +  ylab("log2(MMEJ:NHEJ balance)") + theme(axis.text.x = element_blank(), legend.position = "top")
+
+#Step2: Distance vs H3K9me2
+ggplot(step2.epistasis %>% 
+         filter(gene %in% c("KAT5")),
+       aes(H3K9me2,m.log2.dist, color = gene)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_color_manual(values = "#EF6817") +
+  theme_bw() + ylab("Distance WT vs. KO")
+
+# Gent intercept and slope
+slope.protein.features.all %>% filter(gene == "KAT5" & feature == "H3K9me2")
+
+#Plot KAT5 interactions
+ggplot(slope.protein.features.all %>% filter(term != "(Intercept)",gene == "KAT5")) +
+  geom_col(aes(fct_relevel(feature,heatmap.chromatin.order.slope.diff.hits),slope.log2, fill = gene)) + geom_vline(aes(xintercept = 0)) + theme_bw() + coord_flip() + scale_fill_manual(values = "#EF6817")
+
+```
+
+# Figure 4B: Matrix for hits
+```{r}
+#genes to select
+hit.genes <- filter(hits.both.screens, pathway != "NA") %>% separate(ID_gene, into = "gene") %>% pull(gene) %>% unique()
+
+# dcaast with selected
+slope.prot.features.dcast.hits <- slope.protein.features.all %>% filter(gene %in% hit.genes & term != "(Intercept)") %>% reshape2::dcast(gene ~ feature, value.var = "slope.log2") %>% column_to_rownames(var = "gene")
+
+
+#Heatmap
+heatmap.slope.diff.hits <- pheatmap(slope.prot.features.dcast.hits, silent = T)
+
+heatmap.gene.order.slope.diff.hits <- rownames(slope.prot.features.dcast.hits[heatmap.slope.diff.hits$tree_row[["order"]],])
+heatmap.chromatin.order.slope.diff.hits <- colnames(slope.prot.features.dcast.hits[,heatmap.slope.diff.hits$tree_col[["order"]]])
+
+# heatmap
+ggplot(slope.proteins.all %>% filter(gene %in% hit.genes)) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.hits),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = slope.log2)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + coord_fixed(expand = F,ratio = 1)
+
+# Dendrogram
+ggdendrogram(heatmap.slope.diff.hits$tree_row)
+```
+
+# Figure 4C: Epistasis per library
+```{r}
+slope.library <- slope.proteins.all %>% left_join(hits.both.screens %>% separate(ID_gene, into = "gene", remove = T) %>% select(gene,library,pathway) %>% distinct()) %>% filter(library %in% c("Chromatin","DNA_repair"))
+
+# Plot per library(all)
+ggplot(slope.library) + geom_quasirandom(aes(library,abs(slope.log2), color = library)) + theme_bw() + scale_color_manual(values = levels(as_factor(library.colors$color))) + theme(legend.position = "top")
+
+#test
+chromatin.genes.slope <- slope.library %>% filter(library == "Chromatin") %>% pull(slope.log2) %>% abs()
+dna_repair.genes.slope <- slope.library %>% filter(library == "DNA_repair") %>% pull(slope.log2) %>% abs()
+
+ks.test.library <- ks.test(chromatin.genes.slope,dna_repair.genes.slope)
+```
+
+#Figure 4D: Epistasis per pathway
+```{r}
+# Plot per library 
+ggplot(slope.library %>% filter(pathway != "NA")) + geom_quasirandom(aes(pathway, abs(slope.log2), color = pathway)) + theme_bw() + scale_color_manual(values = c("#EB2030","#2E358F")) + theme(legend.position = "top")
+
+#test
+NHEJ.genes.slope <- slope.library %>% filter(pathway == "NHEJ") %>% pull(slope.log2) %>% abs()
+MMEJ.genes.slope <- slope.library %>% filter(pathway == "MMEJ") %>% pull(slope.log2) %>% abs()
+
+ks.test.pathway <- ks.test(NHEJ.genes.slope,MMEJ.genes.slope)
+```
+
+
+#Figure 4E: Strong genes
+```{r}
+#Plot this for POLL, POLQ and RAD50
+# Plot per library 
+POLQ.POLL.RAD50 <- slope.library %>% filter(gene %in% c("POLL","POLQ","RAD50")) %>% select(gene,slope.log2, library) %>% distinct()
+
+ggplot(POLQ.POLL.RAD50, aes(gene,abs(slope.log2))) + geom_quasirandom() + theme_bw() + scale_color_manual(values = library.colors)
+
+```
+
+# Number in text
+
+#NOTE: This will change, but every number that I refer in the text will available in this chunk
+```{r}
+```
+
+#Supplementary figures
+
+#Figure S5A: slope with all proteins
+```{r}
+# dcast all genes
+slope.prot.features.dcast.all <- slope.protein.features.all %>% filter(term != "(Intercept)") %>% reshape2::dcast(gene ~ feature, value.var = "slope.log2") %>% column_to_rownames(var = "gene")
+
+#Heatmap
+heatmap.slope.diff.all <- pheatmap(slope.prot.features.dcast.all, silent = T)
+
+heatmap.gene.order.slope.diff.all <- rownames(slope.prot.features.dcast.all[heatmap.slope.diff.all$tree_row[["order"]],])
+
+# heatmap
+ggplot(slope.proteins.all) + 
+  geom_tile(aes(fct_relevel(gene,heatmap.gene.order.slope.diff.all),fct_relevel(feature, heatmap.chromatin.order.slope.diff.hits), fill = slope.log2)) +
+  scale_fill_gradient2( low = "#8c510a",mid = "#f5f5f5", high = "#01665e")  + 
+  theme_bw() + theme(axis.text.x = element_blank(), axis.title.y = element_blank(), legend.position = "top",) + 
+  coord_fixed(expand = F,ratio = 20)
+
+# Dendrogram
+ggdendrogram(heatmap.slope.diff.all$tree_row, labels = F)
+```
+
+#Figure S5B: genes in plot
+```{r}
+# Filter proteins highlighted 
+ggplot(per_19IPR_data %>% filter(gene %in% c("POLL","RAD50","POLQ"))) +
+  geom_quasirandom(aes(gene,IPR.z.score)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme_bw()
+```
+
+#Figure S5C: Slope is correlated with perturbation
+```{r}
+#
+effect.size <- slope.protein.features.all %>% filter(complete.cases(.) & gene %in% hit.genes) %>% dcast(gene + feature ~ term, value.var = "slope.log2") %>% select(gene, feature, intercept= '(Intercept)', slope = "unlist(model.dt[j])")
+
+# Plot slope vs effect size
+summ.slope.library <- effect.size %>% dplyr::group_by(gene) %>% dplyr::summarise(med.slope = mean(abs(slope), na.rm = T), mean.intercept = mean(intercept))
+
+ggplot(summ.slope.library, aes(med.slope, mean.intercept)) + geom_point() + stat_cor(method = "spearman",cor.coef.name = "rho") + geom_smooth(method = "lm") +
+  theme_bw()
+
+```

@@ -1,0 +1,149 @@
+---
+title: "xv20230531_editing_check_screen"
+author: "Xabier Vergara"
+date: "2023-05-31"
+output: html_document
+---
+#In this script, I will check if gRNAs target regions that can be amplified by PCR (~ 5Kb)
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(crisprseekplus)
+```
+
+#Functions
+```{r}
+IDTrna_dna <- function(x) {
+    gsub("GTTTTAGAGCTATGCT","",gsub("r","",gsub(" ","",gsub("/AltR./","",gsub("U","T",x)))))
+}
+
+#Write fasta
+writeFasta<-function(data, filename){
+  fastaLines = c()
+  for (rowNum in 1:nrow(data)){
+    fastaLines = c(fastaLines, as.character(paste(">", data[rowNum,"gRNA_ID"], sep = "")))
+    fastaLines = c(fastaLines,as.character(data[rowNum,"gRNA_DNA"]))
+  }
+  fileConn<-file(filename)
+  writeLines(fastaLines, fileConn)
+  close(fileConn)
+}
+```
+
+#Import all gRNA sequences
+```{r cars}
+gRNA_list <- readxl::read_xlsx(path = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/revisions/DDR_screen_order_sample.xlsx")
+
+#Modify list to get a nice list
+modified_gRNA <-gRNA_list %>% 
+  select(gRNA_ID = 'Sequence Name', well = 'Well Position',RNA_seq = 'Sequence') %>%
+  mutate(gRNA_DNA = paste0(IDTrna_dna(RNA_seq),"NGG"))
+
+#Create a FASTA file with theme
+writeFasta(modified_gRNA, "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency/gRNA_PAM.fasta")
+
+```
+
+#Map positions and create bed file
+```{r}
+#Import bed file and check distances between gRNA target sites
+mapped_gRNAs <- read.delim(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/editing_efficiency/gRNA_mapped_unique.bed", header = F)
+colnames(mapped_gRNAs) <- c("chr","start","end","name","A","B")
+
+#Separate gRNA and targetted gene
+mapped_gRNAs_sep <- mapped_gRNAs %>% separate(name, into = c("gene","gRNA_n"))
+
+#Check number of gRNA per gene (4 gRNA/gene)
+mapped_gRNAs_sep %>% dplyr::group_by(gene) %>% dplyr::summarise(c = n()) %>% pull(c) %>% mean()
+
+#Check number of gRNA per gene (519 genes)
+length(unique(mapped_gRNAs_sep$gene))
+
+```
+
+## Distance between gRNA
+```{r}
+dist_gene <- mapped_gRNAs_sep %>% 
+  dplyr::group_by(gene) %>% 
+  dplyr::summarise(min_start = min(start), max_end = max(end), chr = unique(chr)) %>%
+  mutate(dist = abs(max_end - min_start))
+
+#Filter only gRNA that target once
+target_chr <- dist_gene %>% 
+  dplyr::group_by(gene) %>% 
+  dplyr::summarise(count = n()) %>%
+  filter(count == 1) %>%
+  pull(gene)
+
+#gene_single target
+single_target <- dist_gene %>%
+  filter(gene %in% target_chr)
+
+#Control plot
+ggplot(single_target) + 
+  geom_density(aes(log10(dist))) + 
+  theme_bw() +
+  ggtitle("Distance between gRNA in the pool per gene")
+
+```
+
+## Load proteins with CCD
+```{r}
+#Import results from screen
+data_DR_screen <- read_xlsx("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/supplementary_tables/xv20220819_Table_S7a_global_CCD_MMEJ_NHEJ_results.xlsx")
+effect_types <- data_DR_screen %>% select(gene,DR_effect_type) %>% distinct()
+
+#Left_join
+distance_effects <- single_target %>% left_join(effect_types)
+
+#Control plot
+ggplot() + 
+  geom_density(data = single_target %>% left_join(effect_types), aes(log10(dist), color = DR_effect_type)) + 
+  geom_density(data = single_target, aes(log10(dist)), fill = "grey70", alpha = 0.25) + 
+  theme_bw() +
+  ggtitle("Distance between gRNA in the pool per gene")
+
+```
+
+# Select 10-20 to desing primers
+# 1st criteria: Can I use any of these for the validation library
+```{r}
+file_list <- list.files(path = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",full.names = T)
+
+gRNA_position_validation <- map_dfr(file_list, function(x) {
+  read.table(file = x,header = T) %>% select("gRNA_n"=ID,"chr"=Chromosome,"start" = Cutsite.coordinate, "gene" = Gene.symbol)
+  })
+
+
+gRNA_position_validation$gRNA_n <- as.character(gRNA_position_validation$gRNA_n)
+
+#Filter library gRNAs to get those in validation
+gene_followup <- unique(gRNA_position_validation$gene)
+
+filter_followup <- mapped_gRNAs_sep %>% 
+  filter(gene %in% gene_followup) %>%
+  bind_rows(gRNA_position_validation)
+  
+
+
+#calculate distances and ranges
+dist_gene_followup <- filter_followup %>% 
+  dplyr::group_by(gene) %>% 
+  dplyr::summarise(min_start = min(start), max_end = max(start), chr = unique(chr)) %>%
+  mutate(dist = abs(max_end - min_start))
+
+#Filter genes that have targetted regoion < 4kb
+gRNA_with_effect_4Kb <- dist_gene_followup %>% filter(dist < 4000)
+#Number of genes like this
+dim(gRNA_with_effect_4Kb)
+
+#Genes that I will test
+genes_to_target <-  unique(gRNA_with_effect_4Kb$gene)[-2]
+
+#Bed file to target
+bed_file_targeted <- dist_gene_followup %>%
+  filter(gene %in% genes_to_target) %>%
+  select(gene, chr, "start"=min_start, "end" = max_end)
+
+```
+

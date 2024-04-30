@@ -1,0 +1,129 @@
+---
+title: "xv20211006_4_strong_effects_correlation"
+output: html_document
+---
+# V1.0 (xv20211006)
+Figure 4: Strong pathway regulators regulate pathway balance by different mechanisms.
+A) SUPT5H and SAP130 regulate pathway balance across all integrations and different perturbations
+B) SUPT5H and SAP130 regulate MMEJ::NHEJ balance by different mechanisms
+C) Their perturbations 
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r libraries}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+```
+
+Figure 4A: Follow up experiment (multiple gRNAs)
+```{r}
+# gRNA difference per gene
+strong_hits <- filter(chromatin.followup, gene %in% c("SUPT5H","SAP130"))
+#Option A (z-scores)
+z.score.plot <- strong_hits %>% 
+  dplyr::group_by(gene,gRNA, barcode) %>% 
+  dplyr::summarise(MMEJfupscore = sum(z.score)/sqrt(n()))
+
+ggplot(z.score.plot) + 
+  geom_quasirandom(aes(fct_relevel(gRNA, c("Combo")),MMEJfupscore)) + 
+  facet_wrap(~ fct_relevel(gene, c("SUPT5H","SAP130"))) +
+  stat_mean(aes(fct_relevel(gRNA, c("Combo")), MMEJfupscore), geom = "point", color ="red") +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("MMEJscore perturbation (z-score)")
+
+```
+
+Figure 4B: Different perturbation type
+```{r}
+# Check wt frequency and
+mutation.plot.strongs <- chromatin.followup %>% 
+  filter(gene %in% c("tracr","SUPT5H","SAP130","POLQ") & (gRNA == "Combo"| is.na(gRNA))) %>% 
+  select(gene,bio.rep,barcode,freqMMEJ,freqNHEJ,freqCut) %>% 
+  distinct() %>% 
+  group_by(gene,barcode) %>% 
+  mutate(WT = 1 - freqCut) %>%
+  dplyr::summarise(MMEJ = mean(freqMMEJ, na.rm = T), NHEJ = mean(freqNHEJ, na.rm = T), WT = mean(WT, na.rm = T))
+
+KO.genes <- mutation.plot.strongs %>% filter(gene != "tracr") %>%
+  reshape2::melt(value.name = "frequency") %>%
+  left_join(mutation.plot.strongs %>% 
+              filter(gene == "tracr") %>% 
+              ungroup()%>% 
+              select(-gene) %>% 
+              reshape2::melt(value.name = "WT.frequency"), by =  c("barcode","variable")) %>%
+  mutate(diff = frequency - WT.frequency)
+
+ggplot(KO.genes) + 
+  geom_quasirandom(aes(gene, diff)) + 
+  facet_wrap(~variable) + 
+  theme_bw() + 
+  theme(axis.text.x = (element_text(angle = 90, vjust = 0.5, hjust = 1))) + 
+  coord_cartesian() +
+  geom_hline(yintercept = 0, linetype = 2)
+```
+

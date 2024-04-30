@@ -1,0 +1,387 @@
+---
+title: "xv20211004_3_DNA_repair_chromatin"
+output: html_document
+---
+
+# V1.0 (xv20211004)
+Figure 3: DNA repair pathways are very robust across chromatin types
+A) Matrix 19 IPR with significant hits (z-score > 1.95)
+B) Variance vs. mean scatterplot, show trendC) Effect size of MMEJ factors correlate with the MMEJ frequency of that IPRD) Is there any outlier to this trends? - Hint towards ATR
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r libraries}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+```
+
+# Put both screens together
+```{r}
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+```
+
+# Figure A: Heatmap in every chromatin type
+```{r}
+# Get heatmap by chromatin type (4 types, but maybe it's better to make 4 "same as RS paper")
+
+
+per_chrhits <- both.screen.detail %>% dplyr::group_by(ID_gene, mmej.SCscore) %>% dplyr::summarise(counts = n()) %>% filter(abs(mmej.SCscore) > 2.97) %>% pull(ID_gene) %>% unique()
+
+# Filter table by gene_ID
+heatmap.99.hits <-both.screen.detail %>% filter(ID_gene %in% per_chrhits) %>% select(ID_gene,chromatin,mmej.SCscore)  %>% distinct() %>% reshape2::dcast(ID_gene ~ chromatin, value.var = "mmej.SCscore") %>% column_to_rownames(var = "ID_gene")
+
+# heatmap rows
+colnames(heatmap.99.hits) <- c("Regulatory elements (4 IPRs)","H3K27me3 (4 IPRs)","Triple heterochromatin (4 IPRs)","Others (5 IPRs)","Gene bodies (2 IPRs)")
+
+# Arrange dendogram
+dst.hits <- dist(heatmap.99.hits)
+hc_row.hits <- hclust(dst.hits)
+row_dend.hits <- as.dendrogram(hc_row.hits)
+row_dend.hits <- seriate_dendrogram(row_dend.hits, dst.hits, method="OLO")
+
+#Plot heatmap
+pheatmap(as.matrix(t(heatmap.99.hits)), 
+         breaks = seq(-10,10, by = 0.2),
+         cellwidth = 8,
+         cellheight = 12, 
+         treeheight_col = 80, 
+         show_colnames = T,
+         show_rownames = T,
+         border_color = NA, 
+         cluster_row = F,
+         cluster_cols=as.hclust(row_dend.hits),
+         color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+
+# Test for variance
+
+#DATA TO BE USED
+data.for.test.chromatin <- both.screen.detail %>% select(ID_gene, mmej.z.score,t.rep,barcode, chromatin) %>% mutate(chrom.b = case_when(chromatin %in% c("euchromatin-transcription","transcription") ~ "euchromatin", T ~ chromatin)) %>% distinct() %>% filter(ID_gene %in% per_chrhits)
+
+# Variance test for all these 
+variance.chromatin <- data.for.test.chromatin %>% dplyr::group_by(ID_gene, chromatin) %>% dplyr::summarise(stdev = sd(mmej.z.score), mean.effect = mean(mmej.z.score))
+ggplot(variance.chromatin) + geom_point(aes(mean.effect, stdev)) + facet_wrap(~ chromatin)
+
+ggplot(data.for.test.chromatin) + geom_quasirandom(aes(chrom.b,mmej.z.score))
+
+#aov2
+aov2.summary <- tidy(aov(mmej.z.score ~ chromatin + ID_gene, data = data.for.test.chromatin))
+
+#make empty tibble
+aov.chromatin<-tibble(term=NA, df=NA, sumsq=NA, meansq=NA, statistic=NA, p.value=NA, gene=NA)
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(data.for.test.chromatin$ID_gene)) {
+  aovtest<-data.for.test.chromatin%>%
+    filter(ID_gene==i)%>%
+    aov(mmej.z.score ~ chromatin, data = .)
+ 
+  aov.chromatin<-aov.chromatin%>%
+    add_row(tidy(aovtest), gene=i)
+}
+
+### adjust multiple hypothesis testing
+tmp.aov.chrom <- aov.chromatin%>% filter(term == "chromatin") %>% distinct(.) %>%
+  mutate(CorrPvalue=p.adjust(p.value, "fdr"))
+
+#make empty tibble
+WelchTest.chromatin<-tibble(gene=NA, pvalue=NA, fstatistic=NA, df1=NA, df2=NA )
+ 
+#loop over identity of enhancers and do Welch test per enhancer
+for (i in unique(data.for.test.chromatin$ID_gene)) {
+  wFtest<-data.for.test.chromatin%>%
+    filter(ID_gene==i)%>%
+    welch.test(mmej.z.score ~ chrom.b, data = .)
+ 
+  WelchTest.chromatin<-WelchTest.chromatin%>%
+    add_row(gene=i, pvalue=wFtest$p.value, fstatistic=wFtest$statistic, df1=wFtest$parameter[1], df2=wFtest$parameter[2])
+}
+
+### adjust multiple hypothesis testing
+tmp.welchtest.chrom <- WelchTest.chromatin%>%
+  mutate(CorrPvalue=p.adjust(pvalue, "BH"))
+
+
+```
+# Figure B: Perturbations are correlated across different types of chromatin
+```{r}
+#Add mean effect across chromatin types heatmap.hits.99
+#
+chrom.effects.mean <- heatmap.99.hits %>% mutate(mean.effect = rowMeans(., na.rm = T)) 
+
+#Reg.els vs. mean
+p1 <- ggplot(chrom.effects.mean, aes(mean.effect, `H3K27me3 (4 IPRs)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(label.y = 32, label.x = -15) +
+  coord_fixed(xlim = c(-15,35), ylim = c(-15,35)) +
+  theme_bw() +
+  geom_abline()  +
+  stat_cor(data = subset(chrom.effects.mean,`Triple heterochromatin (4 IPRs)` < 0), aes(mean.effect, `Triple heterochromatin (4 IPRs)`), label.y = 28, label.x = -15, color = "#2E358F") +
+  xlab("mean z-score (19 IPRs)")
+
+p2 <- ggplot(chrom.effects.mean, aes(mean.effect, `Triple heterochromatin (4 IPRs)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(label.y = 32, label.x = -15) +
+  coord_fixed(xlim = c(-15,35),ylim = c(-15,35)) +
+  theme_bw() +
+  geom_abline() +
+  stat_cor(data = subset(chrom.effects.mean,`Triple heterochromatin (4 IPRs)` < 0), aes(mean.effect, `Triple heterochromatin (4 IPRs)`), label.y = 28, label.x = -15, color = "#2E358F") +
+  xlab("mean z-score (19 IPRs)")
+
+p3 <- ggplot(chrom.effects.mean, aes(mean.effect, `Gene bodies (2 IPRs)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(label.y = 32, label.x = -15) +
+  coord_fixed(xlim = c(-15,35),ylim = c(-15,35)) +
+  theme_bw() +
+  geom_abline() +
+  stat_cor(data = subset(chrom.effects.mean,`Gene bodies (2 IPRs)` < 0), aes(mean.effect, `Gene bodies (2 IPRs)`), label.y = 28, label.x = -15, color = "#2E358F") +
+  xlab("mean z-score (19 IPRs)")
+
+p4 <- ggplot(chrom.effects.mean, aes(mean.effect, `Others (5 IPRs)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  coord_fixed(xlim = c(-15,35),ylim = c(-15,35)) +
+  stat_cor(label.y = 32, label.x = -15) +
+  theme_bw() +
+  geom_abline() +
+  stat_cor(data = subset(chrom.effects.mean,`Others (5 IPRs)` < 0), aes(mean.effect, `Others (5 IPRs)`), label.y = 28, label.x = -15, color = "#2E358F") +
+  xlab("mean z-score (19 IPRs)")
+
+p5 <- ggplot(chrom.effects.mean, aes(mean.effect, `Regulatory elements (4 IPRs)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  coord_fixed(xlim = c(-15,35),ylim = c(-15,35)) +
+  stat_cor(label.y = 32, label.x = -15) +
+  theme_bw() +
+  geom_abline() +
+  stat_cor(data = subset(chrom.effects.mean,`Regulatory elements (4 IPRs)` < 0), aes(mean.effect, `Regulatory elements (4 IPRs)`), label.y = 28,label.x = -15, color = "#2E358F") +
+  xlab("mean z-score (19 IPRs)")
+
+```
+
+Fig 3C: Residuals from correlations
+```{r}
+# linear model and augment with broom to get residuals
+lm.trip.het <- lm(chrom.effects.mean$`Triple heterochromatin (4 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+lm.euchr <- lm(chrom.effects.mean$`Regulatory elements (4 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+lm.K27 <- lm(chrom.effects.mean$`H3K27me3 (4 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+lm.others <- lm(chrom.effects.mean$`Others (5 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+
+#Make a dt with all columns
+res.trip.het <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.trip.het$.resid,fitted = lm.trip.het$.fitted, chromatin = "Triple heterochromatin (4 IPRs)")
+res.euchr <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.euchr$.resid,fitted = lm.euchr$.fitted, chromatin = "Regulatory elements (4 IPRs)")
+res.K27 <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.K27$.resid,fitted = lm.K27$.fitted, chromatin = "H3K27me3 (4 IPRs)")
+res.others <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.others$.resid,fitted = lm.others$.fitted, chromatin = "Others (5 IPRs)")
+
+#Make one table with all residuals and fitted data
+res.fit.chromatin.types <- bind_rows(res.trip.het,res.euchr,res.K27,res.others) %>%
+  mutate(case_when())
+
+#Plot residuals
+ggplot(res.fit.chromatin.types) + geom_point(aes(fitted, residuals^2, color = chromatin)) + 
+  scale_color_manual(values = chromatin.colors) +
+  theme_bw() + 
+  geom_text_repel(data = subset(res.fit.chromatin.types, (residuals)^2 > 6), aes(fitted,residuals^2,label = ID_gene))
+  
+
+```
+
+# Figure 3C.bis: Residuals from 1,1 model
+```{r}
+# linear model and augment with broom to get residuals
+lm.trip.het.d <- lm(chrom.effects.mean$`Triple heterochromatin (4 IPRs)` - chrom.effects.mean$mean.effect ~ 0) %>% augment()
+lm.euchr.d <- lm(chrom.effects.mean$`Regulatory elements (4 IPRs)`- chrom.effects.mean$mean.effect ~ 0) %>% augment()
+lm.K27.d <- lm(chrom.effects.mean$`H3K27me3 (4 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+lm.others.d <- lm(chrom.effects.mean$`Others (5 IPRs)` ~ chrom.effects.mean$mean.effect) %>% augment()
+
+res.trip.het.d <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.trip.het.d$.resid,fitted = lm.trip.het.d$.fitted, chromatin = "Triple heterochromatin (4 IPRs)")
+res.euchr.d <- tibble(ID_gene = rownames(chrom.effects.mean), residuals = lm.euchr$.resid,fitted = lm.euchr$.fitted, chromatin = "Regulatory elements (4 IPRs)")
+```
+
+# Figure 3D: ATR inhibition
+```{r}
+#ING1 proteins
+ING1.hits <- filter(chromatin.followup, gene == "ING1")
+
+ING.plot <- chromatin.followup %>% 
+  filter(gene == "ING1" & gRNA == "Combo") %>% 
+  mutate(experiment = "followup") %>%
+  select(chromatin,barcode,gene,z.score,experiment) %>%
+  bind_rows(filter(both.screen.detail, gene == "ING1") %>%
+              select(chromatin, gene, z.score = mmej.z.score,barcode) %>%
+              mutate(experiment = "screen")) %>%
+  dplyr::group_by(gene,barcode,chromatin,experiment) %>% 
+  dplyr::summarise(MMEJfupscore = sum(z.score)/sqrt(n()))
+
+ggplot(ING.plot) + 
+  geom_quasirandom(aes(chromatin,MMEJfupscore)) + 
+  facet_wrap(~ fct_relevel(experiment, c("screen","followup"))) +
+  stat_mean(aes(chromatin, MMEJfupscore), geom = "point", color ="red") +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("MMEJscore perturbation (z-score)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust = 0.5))
+
+# ATR inhibition
+
+
+
+```
+
+
+```{r}
+# Variation of these values
+mean_vs_variance_plot <- both.screen.detail %>% filter(ID_gene %in% per_chrhits) %>% dplyr::group_by(ID_gene) %>% dplyr::summarise(mean.effect = mean(mmej.SCscore),sd.IPR = var(mmej.SCscore), pathway = case_when(mean.effect > 0 ~ "NHEJ",mean.effect < 0 ~ "MMEJ"))
+
+#Plot
+ggplot(mean_vs_variance_plot %>% filter(ID_gene != "POLL"), aes(abs(mean.effect),sd.IPR)) + geom_point(aes(color = pathway)) + theme_bw() + geom_smooth(method = "lm") + coord_cartesian() + xlab("abs(Average z-score)") + ylab("sd(z-score)")
+ggplot(mean_vs_variance_plot %>% filter(ID_gene != "POLL"), aes(abs(mean.effect),sd.IPR)) + geom_point(aes(color = pathway)) + theme_bw() + geom_smooth(method = "lm") + coord_cartesian() + xlab("abs(Average z-score)") + ylab("sd(z-score)")
+
+```
+
+
+# Supplementary figure 3: Heatmap in every IPR
+```{r}
+
+#Compute the real value per IPR
+per_IPRdata <- both.screen.detail %>% dplyr::group_by(ID_gene, barcode) %>% dplyr::summarise(IPR.MMEJscore = sum(mmej.z.score, na.rm = T)/sqrt(n()), counts = n()) %>% filter(counts > 2)
+
+# Compute genes that have an overall effect of 95
+CI.99.hits <- per_IPRdata %>% filter(abs(IPR.MMEJscore) > 2.65) %>% pull(ID_gene) %>% unique()
+length(CI.99.hits)
+
+# Filter table by gene_ID
+heatmap.99.hits <-per_IPRdata %>% filter(ID_gene %in% CI.99.hits) %>% reshape2::dcast(ID_gene ~ barcode, value.var = "IPR.MMEJscore") %>% column_to_rownames(var = "ID_gene")
+
+#Arrange dendogram, to show a transition from MMEJ to NHEJ
+dst.hits <- dist(heatmap.99.hits)
+hc_row.hits <- hclust(dst.hits)
+row_dend.hits <- as.dendrogram(hc_row.hits)
+row_dend.hits <- seriate_dendrogram(row_dend.hits, dst.hits, method="OLO")
+
+# Plot heatmap
+pheatmap(as.matrix(t(heatmap.99.hits)), 
+         breaks = seq(-10,10, by = 0.2),
+         cellwidth = 8,
+         cellheight = 8, 
+         treeheight_col = 80, 
+         show_colnames = T,
+         show_rownames = F,
+         border_color = NA, 
+         cluster_row = T,
+         color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+```
+
+
+# Variance test per IPR
+```{r}
+#Compute the real value per IPR  for test
+data.for.test.IPR <- both.screen.detail %>% select(ID_gene, barcode, mmej.z.score,t.rep) %>% filter(ID_gene %in% CI.99.hits)
+
+#make empty tibble
+WelchTest.IPR<-tibble(gene=NA, pvalue=NA, fstatistic=NA, df1=NA, df2=NA )
+ 
+#loop over identity of enhancers and do Welch test per enhancer
+for (i in unique(data.for.test.IPR$ID_gene)) {
+  wFtest<-data.for.test.IPR%>%
+    filter(ID_gene==i)%>%
+    welch.test(mmej.z.score ~ barcode, data = .)
+ 
+  WelchTest.IPR<-WelchTest.IPR%>%
+    add_row(gene=i, pvalue=wFtest$p.value, fstatistic=wFtest$statistic, df1=wFtest$parameter[1], df2=wFtest$parameter[2])
+}
+
+### adjust multiple hypothesis testing
+tmp.welchtest <- WelchTest.IPR%>%
+  mutate(CorrPvalue=p.adjust(pvalue, "BH"))
+
+genes <- tmp.welchtest %>% filter(CorrPvalue < 0.05) %>% pull(gene)
+
+heatmap.99.hits <-per_IPRdata %>% filter(ID_gene %in% genes) %>% reshape2::dcast(ID_gene ~ barcode, value.var = "IPR.MMEJscore") %>% column_to_rownames(var = "ID_gene")
+
+```
+
+# Figure B: Variance vs. mean effect
+```{r}
+# calculate mean per gene in and variance
+mean_vs_variance_plot <- per_IPRdata %>% filter(ID_gene %in% CI.95.hits) %>% dplyr::group_by(ID_gene) %>% dplyr::summarise(mean.effect = mean(IPR.MMEJscore),sd.IPR = sd(IPR.MMEJscore), pathway = case_when(mean.effect > 0 ~ "NHEJ",mean.effect < 0 ~ "MMEJ"))
+
+#Plot
+ggplot(mean_vs_variance_plot) + geom_point(aes(abs(mean.effect), sd.IPR, color = pathway)) + theme_bw() + geom_
+```
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,222 @@
+---
+title: "xv20230329_RPE1_pool_pathway assay"
+author: "Xabier Vergara"
+date: "2023-07-26"
+output:
+  html_document: default
+  pdf_document: default
+---
+#Date: 26th July 2023
+#Author: Xabier Vergara
+#Aim: The aim of this file is to wrap up the filtering strategy and measure if pathway balance in control samples has chromatin biases.
+
+#Load libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+
+## Import data: Balance data and some other details
+```{r, warning=F}
+# Import data for high confidence reporters and calculate mean
+high_confidence_IPR <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_high_confidence_IPR_set.rds") %>%
+  dplyr::group_by(barcode, cell_line, condition) %>%
+  dplyr::summarise(mean_bal = mean(balance, na.rm = T),
+                   mean_TIF = mean(TIF, na.rm = T),
+                   reps = n()) %>%
+  filter(reps > 1)
+
+
+#Pools used in the experiment
+selected_pools <- c("U2OS_High_100")
+
+```
+
+
+#Add chromatin info for U2OS cells
+#Load chromatin info of the IPRs in U2OS cells (2000)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_U2OS_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000_", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000_", full.names = T)
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, log2_mean) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "(?<=2018_).*(?=_E-MTAB)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "log2_mean")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, mean) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "mean")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Bind both
+chromatin_features_pools_2000 <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity) %>%
+  mutate(binsize = "2000")
+```
+
+#Bin the data
+```{r}
+#Arrange control data set
+indel_data_inh <- pathway_metric_control_bio %>%
+  dplyr::group_by(cell_line, condition,barcode) %>%
+  dplyr::summarise(mean_bal = mean(log2_bal),
+                   reps = n()) %>%
+  filter(reps > 1) %>% 
+  left_join(chromatin_features_pools_2000) %>%
+  filter(binsize == "2000")
+
+#Melt chromatin data
+melt_chromatin <- indel_data_inh %>%
+  select(-mean_bal, -reps) %>%
+  reshape2::melt() %>%
+  separate(variable, into = c("tech", "antibody")) %>%
+  select(-tech) %>%
+  left_join(indel_data_inh %>% 
+              select(barcode,cell_line, condition,mean_bal) %>% 
+              distinct())
+
+#Control data
+control_data_chromatin <- melt_chromatin %>% 
+  filter(cell_line == "U2OS" & condition == "LBR2")
+
+#Calculate bins per antibody
+binned_control_chromatin_data <- map_dfr(unique(melt_chromatin$antibody), function(x) {
+  control_data_chromatin %>%
+    filter(antibody == x) %>%
+    mutate(percentile = ntile(value, n = 25)) %>%
+    group_by(percentile,antibody) %>%
+    dplyr::summarise(bin_balance = mean(mean_bal),
+                     bin_min = case_when(percentile == 1 ~ -10,
+                                         T ~ min(value)),
+                     bin_max = case_when(percentile == 20 ~ 10,
+                                         T ~ max(value)),
+                     bin_mean_chrom = mean(value),
+                     IPR_n = n()) %>% distinct()
+})
+
+
+```
+#Plot the data
+```{r}
+ggplot(binned_control_chromatin_data, aes(bin_mean_chrom,bin_balance)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ antibody) +
+  theme_bw()
+```
+
+#Join with balances and calculate the correlation (do this for all marks) = Spearman's
+```{r, warning=F}
+#Merge RPE data with chromatin data with different bins
+values_chromatin_U2OS <- left_join(high_confidence_IPR, chromatin_features_pools_2000)
+
+#Calculate spearman correlation for all chromatin features
+cell_lines <- c("U2OS")
+binsizes <- c("2000","5000","10000","20000","250000")
+
+spearman_coefficients <- map_dfr(cell_lines, function(x){
+  filter_data <- values_chromatin_U2OS %>% filter(cell_line == x)
+  binsize_filter <- map_dfr(binsizes, function(y){
+    bin_filter <- filter_data %>% filter(binsize == y)
+    rho_table <- map_dfr(colnames(values_chromatin_U2OS[7:15]), function(j){
+      balance <- bin_filter$mean_bal
+      feature <- as.numeric(as.matrix(bin_filter[j]))
+        cor.test(x = balance, y = feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+    })
+  rho_table %>% mutate(cell_line = x, binsize = y) %>% distinct()
+  })
+})
+
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% distinct()) + 
+  geom_col(aes(chromatin,estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(binsize,binsizes)~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+
+#Join with balances and calculate the correlation (do this for all marks) = Pearson's
+```{r, warning=F}
+pearson_coefficients <- map_dfr(cell_lines, function(x){
+  filter_data <- values_chromatin_U2OS %>% filter(cell_line == x)
+  binsize_filter <- map_dfr(binsizes, function(y){
+    bin_filter <- filter_data %>% filter(binsize == y)
+    rho_table <- map_dfr(colnames(values_chromatin_U2OS[7:15]), function(j){
+      balance <- bin_filter$mean_bal
+      feature <- as.numeric(as.matrix(bin_filter[j]))
+        cor.test(x = balance, y = feature, method = "pearson", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+    })
+  rho_table %>% mutate(cell_line = x, binsize = y) %>% distinct()
+  })
+})
+
+#Plot correlation coefficients
+ggplot(pearson_coefficients %>% distinct()) + 
+  geom_col(aes(chromatin,estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Pearson's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(binsize,binsizes)~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+#Conclusion: 
+  In U2OS, there is no correlation between chromatin features and MMEJ frequency. I will check if this is the case for TIF
+
+#Join with balances and calculate the correlation with TIF (do this for all marks) = Pearson's
+```{r, warning=F}
+
+pearson_coefficients_TIF <- map_dfr(cell_lines, function(x){
+  filter_data <- values_chromatin_U2OS %>% filter(cell_line == x)
+  binsize_filter <- map_dfr(binsizes, function(y){
+    bin_filter <- filter_data %>% filter(binsize == y)
+    rho_table <- map_dfr(colnames(values_chromatin_U2OS[7:15]), function(j){
+      balance <- bin_filter$mean_TIF
+      feature <- as.numeric(as.matrix(bin_filter[j]))
+        cor.test(x = balance, y = feature, method = "pearson", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+    })
+  rho_table %>% mutate(cell_line = x, binsize = y) %>% distinct()
+  })
+})
+
+#Plot correlation coefficients
+ggplot(pearson_coefficients_TIF %>% distinct()) + 
+  geom_col(aes(chromatin,estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Pearson's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(binsize,binsizes)~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+Conclusion: There's nothing with TIF as well. There are other confounding factors, we will wait for higher quality data. But, most likely we cannot use this cell line.
+
+#Export U2OS data
+```{r}
+#Export log2 chromatin data for RPE1
+write_rds(chromatin_pools_binsize, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_chromatin_features_log2_U2OS.rds")
+```
+

@@ -1,0 +1,136 @@
+##fileformat=VCFv4.1
+##FILTER=<ID=F004,Description="Tum medium read depth strand bias check: Calls In 8% Reads Bt Depth 10 And 200 (inclusive)">
+##FILTER=<ID=F005,Description="Tum high read depth strand bias check: Calls In 4% Reads > Depth 200">
+##FILTER=<ID=F006,Description="Small call excessive repeat check: Fail if Length <= 4 and Repeats > 9">
+##FILTER=<ID=F010,Description="Variant must not exist within the Unmatched Normal Panel">
+##FILTER=<ID=F012,Description="Germline: When length < 11 and depth > 9, fail if the variant is seen in both 20% of normal reads AND 20% of tumour reads in either pindel or bwa">
+##FILTER=<ID=F018,Description="Sufficient Depth: Pass if depth > 10">
+##FILTER=<ID=F015,Description="No normal calls">
+##FILTER=<ID=F016,Description="Verify indel condition">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PP,Number=1,Type=Integer,Description="Pindel calls on the positive strand">
+##FORMAT=<ID=NP,Number=1,Type=Integer,Description="Pindel calls on the negative strand">
+##FORMAT=<ID=PB,Number=1,Type=Integer,Description="BWA calls on the positive strand">
+##FORMAT=<ID=NB,Number=1,Type=Integer,Description="BWA calls on the negative strand">
+##FORMAT=<ID=PD,Number=1,Type=Integer,Description="BWA mapped reads on the positive strand">
+##FORMAT=<ID=ND,Number=1,Type=Integer,Description="BWA mapped reads on the negative strand">
+##FORMAT=<ID=PR,Number=1,Type=Integer,Description="Total mapped reads on the positive strand">
+##FORMAT=<ID=NR,Number=1,Type=Integer,Description="Total mapped reads on the negative strand">
+##FORMAT=<ID=PU,Number=1,Type=Integer,Description="Unique calls on the positive strand">
+##FORMAT=<ID=NU,Number=1,Type=Integer,Description="Unique calls on the negative strand">
+##FORMAT=<ID=TG,Number=1,Type=Integer,Description="Total distinct contributuing read groups">
+##FORMAT=<ID=VG,Number=1,Type=Integer,Description="Variant distinct contributuing read groups">
+##INFO=<ID=PC,Number=1,Type=String,Description="Pindel call">
+##INFO=<ID=RS,Number=1,Type=Integer,Description="Range start">
+##INFO=<ID=RE,Number=1,Type=Integer,Description="Range end">
+##INFO=<ID=LEN,Number=1,Type=Integer,Description="Length">
+##INFO=<ID=REP,Number=1,Type=Integer,Description="Change repeat count within range">
+##INFO=<ID=S1,Number=1,Type=Integer,Description="S1">
+##INFO=<ID=S2,Number=1,Type=Float,Description="S2">
+##INFO=<ID=F017,Number=0,Type=Flag,Description="Variant must not overlap with a simple repeat">
+##SAMPLE=<ID=NORMAL,Description="Wild type",Platform=ILLUMINA,Protocol=WGS,SampleName=eebc2429-9186-49de-9911-35feaa58187b>
+##SAMPLE=<ID=TUMOUR,Description="Mutant",Platform=ILLUMINA,Protocol=WGS,SampleName=c121de15-78f7-4698-91bf-fd0485c466c2>
+##contig=<ID=GL000216.1,assembly=GRCh37,length=172294,species=human>
+##contig=<ID=GL000233.1,assembly=GRCh37,length=45941,species=human>
+##contig=<ID=21,assembly=GRCh37,length=48129895,species=human>
+##contig=<ID=GL000249.1,assembly=GRCh37,length=38502,species=human>
+##contig=<ID=7,assembly=GRCh37,length=159138663,species=human>
+##contig=<ID=GL000245.1,assembly=GRCh37,length=36651,species=human>
+##contig=<ID=Y,assembly=GRCh37,length=59373566,species=human>
+##contig=<ID=GL000210.1,assembly=GRCh37,length=27682,species=human>
+##contig=<ID=GL000223.1,assembly=GRCh37,length=180455,species=human>
+##contig=<ID=GL000240.1,assembly=GRCh37,length=41933,species=human>
+##contig=<ID=18,assembly=GRCh37,length=78077248,species=human>
+##contig=<ID=GL000234.1,assembly=GRCh37,length=40531,species=human>
+##contig=<ID=16,assembly=GRCh37,length=90354753,species=human>
+##contig=<ID=GL000204.1,assembly=GRCh37,length=81310,species=human>
+##contig=<ID=GL000243.1,assembly=GRCh37,length=43341,species=human>
+##contig=<ID=GL000248.1,assembly=GRCh37,length=39786,species=human>
+##contig=<ID=GL000196.1,assembly=GRCh37,length=38914,species=human>
+##contig=<ID=GL000246.1,assembly=GRCh37,length=38154,species=human>
+##contig=<ID=GL000220.1,assembly=GRCh37,length=161802,species=human>
+##contig=<ID=MT,assembly=GRCh37,length=16569,species=human>
+##contig=<ID=NC_007605,assembly=GRCh37,length=171823,species=human>
+##contig=<ID=GL000193.1,assembly=GRCh37,length=189789,species=human>
+##contig=<ID=GL000225.1,assembly=GRCh37,length=211173,species=human>
+##contig=<ID=20,assembly=GRCh37,length=63025520,species=human>
+##contig=<ID=10,assembly=GRCh37,length=135534747,species=human>
+##contig=<ID=GL000247.1,assembly=GRCh37,length=36422,species=human>
+##contig=<ID=11,assembly=GRCh37,length=135006516,species=human>
+##contig=<ID=GL000213.1,assembly=GRCh37,length=164239,species=human>
+##contig=<ID=GL000209.1,assembly=GRCh37,length=159169,species=human>
+##contig=<ID=GL000239.1,assembly=GRCh37,length=33824,species=human>
+##contig=<ID=GL000201.1,assembly=GRCh37,length=36148,species=human>
+##contig=<ID=GL000212.1,assembly=GRCh37,length=186858,species=human>
+##contig=<ID=GL000222.1,assembly=GRCh37,length=186861,species=human>
+##contig=<ID=GL000224.1,assembly=GRCh37,length=179693,species=human>
+##contig=<ID=X,assembly=GRCh37,length=155270560,species=human>
+##contig=<ID=GL000194.1,assembly=GRCh37,length=191469,species=human>
+##contig=<ID=GL000195.1,assembly=GRCh37,length=182896,species=human>
+##contig=<ID=GL000230.1,assembly=GRCh37,length=43691,species=human>
+##contig=<ID=GL000244.1,assembly=GRCh37,length=39929,species=human>
+##contig=<ID=12,assembly=GRCh37,length=133851895,species=human>
+##contig=<ID=GL000205.1,assembly=GRCh37,length=174588,species=human>
+##contig=<ID=15,assembly=GRCh37,length=102531392,species=human>
+##contig=<ID=GL000221.1,assembly=GRCh37,length=155397,species=human>
+##contig=<ID=GL000229.1,assembly=GRCh37,length=19913,species=human>
+##contig=<ID=GL000192.1,assembly=GRCh37,length=547496,species=human>
+##contig=<ID=GL000191.1,assembly=GRCh37,length=106433,species=human>
+##contig=<ID=19,assembly=GRCh37,length=59128983,species=human>
+##contig=<ID=GL000219.1,assembly=GRCh37,length=179198,species=human>
+##contig=<ID=GL000197.1,assembly=GRCh37,length=37175,species=human>
+##contig=<ID=GL000207.1,assembly=GRCh37,length=4262,species=human>
+##contig=<ID=GL000202.1,assembly=GRCh37,length=40103,species=human>
+##contig=<ID=hs37d5,assembly=GRCh37,length=35477943,species=human>
+##contig=<ID=GL000211.1,assembly=GRCh37,length=166566,species=human>
+##contig=<ID=GL000203.1,assembly=GRCh37,length=37498,species=human>
+##contig=<ID=2,assembly=GRCh37,length=243199373,species=human>
+##contig=<ID=17,assembly=GRCh37,length=81195210,species=human>
+##contig=<ID=1,assembly=GRCh37,length=249250621,species=human>
+##contig=<ID=GL000237.1,assembly=GRCh37,length=45867,species=human>
+##contig=<ID=GL000208.1,assembly=GRCh37,length=92689,species=human>
+##contig=<ID=GL000235.1,assembly=GRCh37,length=34474,species=human>
+##contig=<ID=GL000227.1,assembly=GRCh37,length=128374,species=human>
+##contig=<ID=GL000199.1,assembly=GRCh37,length=169874,species=human>
+##contig=<ID=14,assembly=GRCh37,length=107349540,species=human>
+##contig=<ID=GL000206.1,assembly=GRCh37,length=41001,species=human>
+##contig=<ID=GL000228.1,assembly=GRCh37,length=129120,species=human>
+##contig=<ID=GL000200.1,assembly=GRCh37,length=187035,species=human>
+##contig=<ID=GL000226.1,assembly=GRCh37,length=15008,species=human>
+##contig=<ID=GL000241.1,assembly=GRCh37,length=42152,species=human>
+##contig=<ID=22,assembly=GRCh37,length=51304566,species=human>
+##contig=<ID=GL000218.1,assembly=GRCh37,length=161147,species=human>
+##contig=<ID=GL000215.1,assembly=GRCh37,length=172545,species=human>
+##contig=<ID=GL000231.1,assembly=GRCh37,length=27386,species=human>
+##contig=<ID=13,assembly=GRCh37,length=115169878,species=human>
+##contig=<ID=6,assembly=GRCh37,length=171115067,species=human>
+##contig=<ID=GL000236.1,assembly=GRCh37,length=41934,species=human>
+##contig=<ID=GL000214.1,assembly=GRCh37,length=137718,species=human>
+##contig=<ID=3,assembly=GRCh37,length=198022430,species=human>
+##contig=<ID=GL000238.1,assembly=GRCh37,length=39939,species=human>
+##contig=<ID=GL000232.1,assembly=GRCh37,length=40652,species=human>
+##contig=<ID=9,assembly=GRCh37,length=141213431,species=human>
+##contig=<ID=8,assembly=GRCh37,length=146364022,species=human>
+##contig=<ID=4,assembly=GRCh37,length=191154276,species=human>
+##contig=<ID=GL000242.1,assembly=GRCh37,length=43523,species=human>
+##contig=<ID=GL000198.1,assembly=GRCh37,length=90085,species=human>
+##contig=<ID=GL000217.1,assembly=GRCh37,length=172149,species=human>
+##contig=<ID=5,assembly=GRCh37,length=180915260,species=human>
+##fileDate=20150325
+##reference=/workflows/Workflow_Bundle_SangerPancancerCgpCnIndelSnvStr_1.0.5_SeqWare_1.1.0-alpha.5/Workflow_Bundle_SangerPancancerCgpCnIndelSnvStr/1.0.5/data/reference/genome.fa.gz
+##source_20150325.1=pindel_2_combined_vcf.pl_v1.2.0
+##source_20150326.1=FlagVcf.pl
+##vcfProcessLog_20150325.1=<InputVCFSource=<Pindel>,InputVCFVer=<v01>>
+##vcfProcessLog_20150325.2=<InputVCFSource=<pindel_2_combined_vcf.pl>>
+##vcfProcessLog_20150326.1=<InputVCF=<c121de15-78f7-4698-91bf-fd0485c466c2_vs_eebc2429-9186-49de-9911-35feaa58187b.vcf.gz>,InputVCFSource=<FlagVcf.pl>,InputVCFVer=<1.2.0>,InputVCFParam=<unmatched=pindel_np.gff3.gz,simrep=simpleRepeats.bed.gz,rules=genomicRules.lst,annot=Human.GRCh37.codingexon_regions.indel.bed.gz>>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NORMAL	TUMOUR
+11	43379323	a4573c64-d34a-11e4-a975-b7d9e2c70944	G	GA	300	PASS	PC=I;RS=43379323;RE=43379334;LEN=1;S1=12;S2=250.308;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:35:17:35:17:0:0:3:0	./.:2:3:3:4:36:30:36:30:3:4:3:3
+11	131331941	0cea1eb2-d34c-11e4-a975-b7d9e2c70944	T	TA	360	PASS	PC=I;RS=131331941;RE=131331951;LEN=1;S1=16;S2=313.374;REP=8;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:26:18:26:18:0:0:3:0	./.:3:3:3:3:38:29:38:29:3:3:3:3
+2	172310273	3507934e-d350-11e4-9992-a2d9e2c70944	T	TA	300	PASS	PC=I;RS=172310273;RE=172310284;LEN=1;S1=12;S2=242.536;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:23:16:23:16:0:0:3:0	./.:2:3:2:3:24:27:24:27:2:3:3:2
+2	198652847	801b36fe-d34d-11e4-9992-a2d9e2c70944	AT	A	300	PASS	PC=D;RS=198652847;RE=198652857;LEN=1;S1=12;S2=269.027;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:21:16:21:16:0:0:3:0	./.:2:3:2:3:29:31:29:31:2:3:3:3
+3	34625118	bebfafde-d34d-11e4-aa4e-e7d9e2c70944	T	TA	300	PASS	PC=I;RS=34625118;RE=34625129;LEN=1;S1=10;S2=261.029;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:22:18:22:18:0:0:3:0	./.:1:4:2:5:37:42:37:42:2:5:3:4
+6	71675264	b65eba88-d348-11e4-82e6-cfd9e2c70944	GTAT	G	300	PASS	PC=D;RS=71675264;RE=71675284;LEN=3;S1=12;S2=267.219;REP=6;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:25:14:25:14:0:0:3:0	./.:2:3:3:4:29:24:29:24:3:4:3:4
+6	83374919	5294ac82-d349-11e4-82e6-cfd9e2c70944	GAC	G	300	PASS	PC=D;RS=83374919;RE=83374927;LEN=2;S1=10;S2=261.8;REP=3;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:18:17:18:17:0:0:3:0	./.:1:4:4:5:17:31:17:31:4:5:3:4
+8	5746131	c4cea798-d34a-11e4-9f2c-cad9e2c70944	GGTATGAATCTTTGTGTACAAG	GTTGGCTACTATAAATA	540	PASS	PC=DI;RS=5746131;RE=5746153;LEN=21;S1=28;REP=0;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:15:11:15:11:0:0:3:0	./.:3:6:0:0:24:19:24:22:3:6:3:3
+8	67476407	3e717e94-d34c-11e4-9f2c-cad9e2c70944	G	GA	300	PASS	PC=I;RS=67476407;RE=67476418;LEN=1;S1=10;S2=261.677;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:28:13:28:13:0:0:3:0	./.:4:1:5:1:35:22:35:22:5:1:3:3
+X	30153571	dbfa74a2-d349-11e4-82b2-c8d9e2c70944	C	CT	360	PASS	PC=I;RS=30153571;RE=30153582;LEN=1;S1=12;S2=315.513;REP=9;F017	GT:PP:NP:PB:NB:PD:ND:PR:NR:PU:NU:TG:VG	./.:0:0:0:0:20:22:20:22:0:0:3:0	./.:5:1:5:1:29:23:29:23:5:1:3:3

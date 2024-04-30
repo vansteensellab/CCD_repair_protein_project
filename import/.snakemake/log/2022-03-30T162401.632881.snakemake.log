@@ -1,0 +1,28 @@
+Building DAG of jobs...
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	1	compare_bw_rep
+	1	convert2gff
+	8	make_compare_bw
+	31
+
+rule bw_coverage:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam.bai, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw
+    jobid: 74
+    wildcards: bs=1kb, path=control, outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, name=SRR11657364, genome=hg38
+    threads: 20
+
+Waiting at most 5 seconds for missing files.
+MissingOutputException in line 624 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Missing files after 5 seconds:
+/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/coverage/control/1kb/SRR11657364.bw
+This might be due to filesystem latency. If that is the case, consider to increase the wait time with --latency-wait.
+Will exit after finishing currently running jobs.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-30T162401.632881.snakemake.log

@@ -1,0 +1,488 @@
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+1,1,,14.72,22.48,22.4,50.5,50.7,22.37,22.39,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:55:14 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+1,CTB_Ben_Optimised,0,349,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,56656,43857,33198,45301,35524,33276,29456,29995,26594,28969,28691,36101,
+B,49886,42947,35501,42148,37259,34427,29403,29439,24444,25182,27043,34680,
+C,39565,40242,35587,31795,31005,26397,29469,24753,23187,22664,24610,27826,
+D,50834,38874,27208,38487,27427,28895,24848,25125,23220,23377,27946,32458,
+E,46490,45148,35087,44698,32949,41821,52201,28366,21807,27808,28054,32585,
+F,54444,37464,32496,38307,25770,27279,24691,24012,24577,23108,28069,29334,
+G,57648,38284,34531,43923,33155,49954,51025,21904,23443,25147,30664,31768,
+H,62829,35480,41956,35487,28198,17041,29747,26584,25015,28271,28168,32448,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+2,1,,14.72,22.48,22.4,50.7,50.5,22.47,22.49,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:55:49 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+2,CTB_Ben_Optimised,0,355,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,44273,38172,41196,42275,37973,39105,28846,40951,41482,38890,35802,46860,
+B,36118,32908,32865,28811,33510,41474,29324,32195,30705,34959,30444,36636,
+C,30597,35535,37021,35017,31957,34871,31929,30687,29549,30912,30549,42511,
+D,40414,29408,26442,29249,27816,29464,26821,24774,26642,29194,33756,39582,
+E,40729,26318,27753,34270,27949,29180,32028,30499,27883,27042,35514,38871,
+F,31804,32170,27473,22877,24180,26678,27230,30120,27362,31043,28797,34387,
+G,31054,28718,27457,29739,27149,26978,31909,31014,26738,33739,28864,34338,
+H,33905,34408,34102,36267,36106,17092,33710,32039,34272,33581,32156,32159,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+3,1,,14.72,22.48,22.6,50.8,50.5,22.47,22.49,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:56:24 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+3,CTB_Ben_Optimised,0,350,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,43898,43021,35359,39172,32817,38153,33872,36660,39817,38852,41249,43400,
+B,34312,29462,33551,28989,33209,37680,37454,30528,29863,25238,35222,39372,
+C,34448,31255,28750,25897,25440,29073,30214,28410,28712,24221,29886,40543,
+D,30167,32975,23335,25711,23949,26926,26092,26492,28251,25473,36030,40009,
+E,33254,32281,27093,27376,25179,27453,24652,25829,26487,30788,28790,38473,
+F,30631,29090,26426,29565,22753,26211,26835,24104,24436,29870,28878,46204,
+G,30039,33024,28345,29719,28745,31330,29582,33616,29436,31407,32685,43176,
+H,34644,32756,32910,35999,37115,17139,34104,39850,32794,40470,35704,48150,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+4,1,,14.66,22.57,22.69,50.3,50.2,22.57,22.59,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:56:59 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+4,CTB_Ben_Optimised,0,346,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,56238,47654,43154,37676,42373,52399,43163,38577,43780,46471,42988,44765,
+B,47184,43243,41263,41583,38841,47825,41904,40237,30936,42029,37708,38676,
+C,60959,43970,36678,30315,31777,44656,36496,38997,29211,32539,36991,45057,
+D,48131,40029,23492,28839,35317,36088,30907,31319,31076,29680,39694,43564,
+E,47719,42807,32745,32402,25784,26861,29957,31162,33287,35376,35611,46523,
+F,53303,45406,26042,27000,26943,34167,32406,31896,37793,33594,37721,40646,
+G,49869,34402,25828,33919,34299,35603,31324,34217,28134,35711,36484,44980,
+H,47540,35655,36649,42732,35733,17288,38807,36942,44151,38154,37890,34081,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+5,1,,14.66,22.77,22.89,50.2,50.3,22.57,22.59,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:57:34 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+5,CTB_Ben_Optimised,0,345,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,46160,39064,41918,46924,39590,38092,34148,34250,36878,42318,40021,45969,
+B,43046,40611,34094,37813,35848,44939,40336,37353,29809,32528,32972,42468,
+C,38588,34962,24189,31568,29004,29822,30642,28113,27779,33236,34676,41150,
+D,38768,31993,24687,31898,25479,26479,27689,28953,25612,26671,31499,38318,
+E,43545,32377,25304,27834,26812,25454,25559,25788,28499,29343,29684,39322,
+F,37839,30231,26630,27030,27842,30360,24897,26532,25127,33950,32029,37895,
+G,41318,39772,25610,30866,30550,34105,28694,31183,32895,33152,36155,39721,
+H,42374,41282,33320,37511,37722,17064,38657,39971,32207,33842,41423,38202,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+6,1,,14.72,22.87,22.89,50.5,50.7,22.57,22.59,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:58:09 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+6,CTB_Ben_Optimised,0,345,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,42105,44872,38329,35021,41412,33097,34689,41194,36588,38358,41899,46936,
+B,39191,29691,27077,33363,32046,28391,29093,22106,28855,31937,32710,41116,
+C,35642,27844,26070,33138,31391,27849,34149,28991,26250,34018,34266,40831,
+D,36957,33429,25528,25885,29220,27113,29124,30805,30913,29193,31301,43615,
+E,39421,38462,28550,27965,24233,29183,26837,26057,24628,28460,36743,44118,
+F,35358,31115,24350,23253,26542,27480,25036,28904,27663,24015,31742,41670,
+G,36903,36750,26473,33230,32909,35374,28017,26360,30608,28029,33231,45729,
+H,40908,36835,29510,36779,42698,17193,35710,36192,34142,33257,36764,45613,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+7,1,,14.66,22.97,22.99,50.3,50,22.66,22.79,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:58:44 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+7,CTB_Ben_Optimised,0,356,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,27463,27751,27481,24836,35983,20818,22962,40549,31151,31858,30002,37299,
+B,24253,23783,25553,19190,22084,19797,19106,20262,22007,19447,19158,26438,
+C,19983,25980,19759,21638,18426,18687,18304,18505,18332,19867,18500,23768,
+D,23478,19333,17719,17652,18662,17740,18303,17947,18167,20005,19433,21065,
+E,22796,19489,18064,17742,17601,18274,18897,19065,17917,18803,19515,27020,
+F,21605,19949,18048,18570,17555,17662,17622,18562,18033,18116,18984,30412,
+G,19747,21027,18376,19161,20797,18153,18369,18598,18478,18525,19885,31242,
+H,20604,21416,19764,20509,20701,17056,25510,20751,21554,20522,26021,28198,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+8,1,,14.72,22.87,22.89,49.9,49.7,22.76,22.89,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:59:19 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+8,CTB_Ben_Optimised,0,344,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,46285,43403,41616,45642,42925,42348,33751,43874,42999,45152,41743,44678,
+B,41730,33999,33888,33095,34165,37462,32242,35141,31359,32309,35195,38508,
+C,38497,34840,30843,32340,28626,36200,36551,36713,33986,33350,31273,43265,
+D,32140,34470,27166,30168,28950,28481,26820,29671,34389,62664,28975,37973,
+E,42831,31374,29835,25031,30816,28289,29544,27899,30970,29892,34832,42646,
+F,35318,33442,29139,29187,29319,28442,30361,28879,29216,29996,30560,43148,
+G,34230,31395,29899,33568,28589,30926,34832,30973,29692,29856,32260,34461,
+H,34585,30665,32130,28477,39257,17507,33891,31919,29423,36245,34312,33204,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+9,1,,14.72,22.87,22.89,49.7,49.9,22.86,22.79,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 12:59:54 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+9,CTB_Ben_Optimised,0,347,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,40939,35325,38949,37645,41805,38976,38382,36862,40635,38549,37313,45866,
+B,40042,35391,35158,35344,33879,44451,34771,37600,32082,33587,36609,43770,
+C,37653,33509,33592,33702,29232,28693,36527,33838,32138,31071,32641,46202,
+D,35204,31905,27466,25754,25944,28313,31245,31309,31902,29660,36804,37989,
+E,35748,36327,26187,24886,27106,27030,28046,26965,27986,31219,31040,41655,
+F,38465,30852,28116,25021,28613,26146,28162,26814,25911,34832,35322,43098,
+G,35218,32622,27589,30931,30611,32673,33169,33532,31335,32046,35278,39371,
+H,32157,34148,31915,33156,44853,17125,32624,41749,35339,40577,38869,43536,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+10,1,,14.72,22.97,22.99,50.2,50.3,22.66,22.59,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:00:29 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+10,CTB_Ben_Optimised,0,354,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,46737,39648,39087,38733,42068,38878,38115,37164,41134,41435,43058,46419,
+B,32332,32596,33028,37551,34241,47553,33247,42340,28847,37207,40257,46934,
+C,34105,40363,32696,39521,35109,32699,41603,32348,31357,31581,38481,36856,
+D,32051,33318,31719,37262,27707,27390,28359,26331,29987,26283,33147,40484,
+E,41689,39358,31272,27016,26283,26291,31164,28955,29642,29841,35116,39179,
+F,37948,33992,26606,25634,24841,27380,25096,26878,28466,25188,34685,42826,
+G,31052,32202,30085,29658,28554,28439,31340,29731,31002,28648,36116,40450,
+H,29486,29646,32266,33378,34402,17127,36284,40168,35923,39052,41287,38060,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+11,1,,14.72,23.07,23.09,50,50,22.76,22.79,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:01:04 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+11,CTB_Ben_Optimised,0,353,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,39566,33325,40266,43925,42902,37002,39466,35141,39374,41442,37213,43366,
+B,35617,34220,29607,33994,36223,46557,31736,38351,37485,32767,38768,41696,
+C,31363,32751,28046,30797,29645,29151,30388,33738,28599,30155,33781,38742,
+D,36442,31741,26674,29365,33334,23829,27711,32900,31570,30809,30732,36837,
+E,32883,30686,29687,27121,31749,26896,28865,30414,29780,30424,34831,39173,
+F,37725,31971,30787,25722,27500,29315,25711,30251,25353,29274,35837,37354,
+G,39439,31496,28163,30380,31223,29911,31386,31201,30601,33040,39015,39031,
+H,31463,32816,31281,32649,39082,16989,34194,33124,32570,33648,40707,34187,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+12,1,,14.72,23.07,22.99,50,50.2,22.86,22.79,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:01:39 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+12,CTB_Ben_Optimised,0,351,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,43896,35587,38475,30663,40130,40957,28933,41726,33223,41151,28990,38257,
+B,45909,31563,31452,32964,30139,41378,33151,31007,27077,33529,30665,39351,
+C,33401,29913,29834,27376,30227,29657,27054,29620,26395,27708,31002,40449,
+D,30815,30761,32552,27211,27177,27977,25792,25344,25618,27535,28985,34399,
+E,34472,32361,28551,28880,28122,28998,28340,28075,29828,33429,34711,38702,
+F,35744,28003,24824,29461,28563,29030,29573,35800,26573,26501,30124,42659,
+G,33067,30964,28775,28115,28606,26442,33094,28529,31746,27602,27395,34328,
+H,34527,33284,39711,38200,44396,16859,38160,34947,31438,31646,30515,41499,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+13,1,,14.72,22.97,22.99,50.3,50.2,22.86,22.89,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:02:14 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+13,CTB_Ben_Optimised,0,344,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,38075,34537,28644,32471,30606,22753,22694,25097,28764,26069,25621,34480,
+B,30170,27669,27408,21726,21509,21721,20387,22412,20106,22869,19959,29140,
+C,25402,29710,20113,22539,19162,20788,21174,19388,19919,20353,19766,27264,
+D,25300,21894,18926,22155,19147,18654,18370,18758,19596,20536,20723,21882,
+E,28184,27190,20767,19255,18601,19738,20096,19751,19207,19191,20967,21993,
+F,22522,20931,20426,20571,18669,19953,18879,18839,18746,18378,18682,22165,
+G,24137,26100,22987,20779,19594,19228,19475,18883,19635,18985,19322,22907,
+H,22385,22202,21337,21448,22220,17944,21138,21311,19512,19688,23036,19610,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+14,1,,14.66,22.97,23.09,50.3,50.2,22.86,22.89,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:02:49 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+14,CTB_Ben_Optimised,0,353,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,42073,30240,32505,32871,36075,35741,35215,34838,30578,36257,34918,43043,
+B,31117,28468,33416,35564,32827,40146,29745,37463,34933,35276,32397,42184,
+C,33468,30000,26137,32331,29220,31256,34319,31312,33353,30872,33496,41339,
+D,33609,31532,25722,25727,25786,28505,27494,31978,50871,34753,30868,37713,
+E,34216,30890,29148,25727,25924,26909,26859,27332,27300,26880,30807,37822,
+F,36323,28684,28947,27060,27159,26307,26545,26452,28082,30725,32336,38965,
+G,33436,28824,27914,29169,25819,30136,30974,31276,30402,30533,37493,37377,
+H,35825,31885,29639,33941,36922,17403,35981,33716,32737,36238,36214,38555,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+15,1,,14.72,23.07,23.09,50.2,50.2,22.86,22.79,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:03:24 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+15,CTB_Ben_Optimised,0,360,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,43698,33363,34777,33142,37409,33277,31262,29431,33341,43845,31423,42592,
+B,34264,37390,26584,35817,33823,42978,36070,38228,34206,33546,32680,43593,
+C,46182,37942,31771,29243,26577,14066,29070,29526,34230,29774,32428,45005,
+D,40175,35186,25555,29715,25968,26530,23016,25926,26171,32555,33330,38295,
+E,41690,34685,23235,27151,25887,26098,27374,25404,24590,29321,30880,42457,
+F,33774,28043,25045,29025,25608,33968,27678,25690,25336,26493,29893,40347,
+G,36313,32124,25821,29108,28088,31216,16428,28133,27314,26765,27957,36427,
+H,40182,42057,28277,28905,32143,17690,28862,41151,38278,38007,34468,35788,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+16,1,,14.66,23.07,23.09,50.2,50.2,22.76,22.89,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:03:59 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+16,CTB_Ben_Optimised,0,350,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,48421,42833,49291,41956,44829,62938,36422,45251,38415,50869,40348,49283,
+B,42316,39625,46352,42685,39631,57924,34071,47010,30651,39103,34637,51203,
+C,45474,35651,37834,37357,36732,41328,35808,31456,37822,42283,35995,42931,
+D,39161,33252,30568,29442,30262,28421,30769,31995,28283,33521,40195,39691,
+E,38785,35588,36886,35331,27792,30222,32753,34678,30208,34653,35933,38947,
+F,37696,30164,31361,27647,29607,30710,28696,28606,27447,30748,31001,43083,
+G,37589,37837,31684,29761,32124,33941,35448,40991,34426,31815,44910,41853,
+H,31779,32909,31380,34455,39635,17708,39310,41319,38837,37079,42123,42204,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+17,1,,14.66,23.07,23.09,49.9,49.7,22.96,22.98,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:04:34 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+17,CTB_Ben_Optimised,0,351,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,51770,42757,44319,44388,48756,44734,44055,40284,48499,53788,43069,43654,
+B,43693,41126,43134,37343,43814,54072,39613,42504,49307,37862,42813,47830,
+C,40119,37641,33945,34829,36726,42209,37396,38664,38000,36219,45129,42606,
+D,46245,33593,32297,35175,35368,27225,36767,32478,32362,35871,33454,43935,
+E,43024,36731,35040,32841,31987,26920,32410,38753,32365,32924,41045,42752,
+F,47696,32808,30618,29140,31954,35516,33228,32614,30461,30554,37854,48276,
+G,45575,39207,33805,47511,38776,44741,38953,35263,35952,38114,38400,49117,
+H,41465,35240,30166,45096,43302,17260,37098,40029,37357,47322,43338,34528,
+
+Plate information 
+Plate,Repeat,Barcode,Measured height,Chamber temperature at start,Chamber temperature at end,Humidity at start,Humidity at end,Ambient temperature at start,Ambient temperature at end,Group,Label,ScanX,ScanY,Measinfo,Kinetics,Measurement date,
+18,1,,14.72,23.07,23.09,49.7,49.7,23.06,23.08,1,CTB_Ben_Optimised(1),0,0,De=1st Ex=Top Em=Top Wdw=N/A (14),0,2/14/2020 1:05:09 PM,
+
+Background information
+Plate,Label,Result,Signal,Flashes/Time,Meastime,MeasInfo,
+18,CTB_Ben_Optimised,0,358,6,00:00:00.000,De=1st Ex=Top Em=Top Wdw=N/A (14),
+
+Results for CTB_Ben_Optimised(1) - channel 1 (RFU)
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,45827,42155,39925,36732,40705,36106,34667,39881,37441,36924,41859,43962,
+B,37103,38228,33172,34944,31244,46042,37029,33338,38121,31427,34113,39952,
+C,35896,37068,31521,35316,33964,29657,28618,33503,29626,28287,30113,44918,
+D,42228,34534,31622,31064,32945,33977,30415,30707,28966,28055,31424,36992,
+E,41206,35188,29335,32878,26371,34534,30469,30376,27761,28109,27871,43963,
+F,38959,31624,29883,31029,28877,32010,27589,32903,27654,29496,28459,39078,
+G,40924,30146,31469,28745,29540,33186,28994,26363,28468,26570,28228,38782,
+H,46779,33747,35305,33893,41615,17271,33763,34035,31174,42105,36123,45781,
+
+
+Basic assay information 
+Assay ID: ,,,,17844
+Assay Started: ,,,,2/14/2020 12:54:56 PM
+Assay Finished: ,,,,2/14/2020 1:05:29 PM
+Assay Exported: ,,,,2/14/2020 1:06:56 PM
+Protocol ID: ,,,,100100
+Protocol Name: ,,,,CTB_96_Ben
+Serial#: ,,,,="1041071"
+
+
+
+Protocol information
+Protocol:
+Protocol name,,,,CTB_96_Ben
+Number of assay repeats,,,,1
+Start assay repeat each,,,,N/A
+Number of plate repeats,,,,1
+Start plate repeat each,,,,N/A
+Is label meas. height used,,,,Yes
+Height of measurement,,,,Defined in label
+Is gripper height used,,,,No
+Mode of measurement,,,,By Rows  bi-directional
+Rotated plate,,,,No
+Soft move,,,,No
+Protocol notes,,,, 
+
+Plate type:
+Name of the plate type,,,,96 Greiner microclear
+Number of rows,,,,8
+Number of columns,,,,12
+Number of the wells in the plate,,,,96
+Height of the plate,,,,14.37 mm
+
+Coordinates of corners:
+96 Greiner microclear + CTB_Ben_Optimised
+14.07 mm x------------------------------------------------------ x 113.23 mm
+11.42 mm                                                           11.12 mm
+
+14.05 mm x------------------------------------------------------ x 113.08 mm
+74.34 mm                                                           74.16 mm
+
+Platemap:
+Plate,,,,1
+Group,,,,1
+
+,01,02,03,04,05,06,07,08,09,10,11,12,
+A,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+B,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+C,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+D,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+E,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+F,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+G,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+H,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- ,- 
+
+ - - Undefined
+
+Calculations:
+No calculations.
+
+Auto export parameters:
+Export format,,,,Plate
+Include basic assay information,,,,Yes
+Place assay information at,,,,End of file
+Include basic plate information,,,,No
+Place plate information at,,,,Beginning of plate
+Include protocol information,,,,No
+Protocol info level,,,,No
+Include error and warning information,,,,No
+Include background information,,,,No
+Add plate number to the file name,,,,Yes
+Each plate to separate file,,,,No
+Field separator to use,,,,System
+File name format,,,,V:\beijersbergen groep\B Morris\Yoran\<Date>_<AssayID>.csv
+
+Operations:
+Plate 1
+  Group 1
+    Measurement
+      Label,,,,CTB_Ben_Optimised(1)
+
+Labels:
+CTB_Ben_Optimised,,,,4000096
+Top mirror,,,,General
+Bottom mirror,,,,N/A
+Exc. filter,,,,TAMRA 544
+Using of excitation filter,,,,Top
+2nd exc. filter,,,,N/A
+Using of 2nd excitation filter,,,,Top
+Ems. filter,,,,Rhodamine 590
+2nd ems. filter,,,,N/A
+Measurement height,,,,8.3 mm
+Number of flashes,,,,6
+Number of flashes integrated,,,,1
+PMT gain,,,,171
+Excitation light,,,,39%
+Reference excitation light,,,,100%
+Emission light,,,,100%
+Reference AD gain,,,,8
+Reference signal,,,,3803
+Last edited,,,,4/7/2017 11:48:00 AM
+Last edited by,,,,EnVision
+Factory preset,,,,No
+
+Filters:
+TAMRA 544,,,,117
+Filter type,,,,Excitation
+Description,,,,X544 CWL=544nm BW=15nm Tmin=60%
+Used with,,,,Absorbance DELFIA - Time-resolved Fluorescence Fluorescence Intensity Fluorescence Polarization LANCE - Time-resolved Fluorescence
+Last edited,,,,11/28/2012 12:40:27 PM
+Last edited by,,,,EnVision
+Factory preset,,,,Yes
+
+Rhodamine 590,,,,217
+Filter type,,,,Emission
+Description,,,,M590 CWL=590nm BW=20nm Tmin=60%
+Used with,,,,Absorbance DELFIA - Time-resolved Fluorescence Fluorescence Intensity Fluorescence Polarization LANCE - Time-resolved FluorescenceLuminescence DELFIA - Time-resolved Fluorescence Fluorescence Intensity LANCE - Time-resolved Fluorescence
+Last edited,,,,11/23/2012 5:12:35 PM
+Last edited by,,,,Installation
+Factory preset,,,,Yes
+
+Mirror modules:
+General,,,,401
+Used by,,,,Top
+Dual,,,,No
+Bias,,,,No
+Description,,,,BS50
+Used with,,,,Luminescence DELFIA - Time-resolved Fluorescence Fluorescence Intensity LANCE - Time-resolved Fluorescence
+Last edited,,,,11/23/2012 5:12:35 PM
+Last edited by,,,,Installation
+Factory preset,,,,Yes
+
+Instrument:
+Serial number,,,,1041071
+Nickname,,,,EnVision
+
+
+
+
+Assay notifications:
+WARNING: Warning while loading plate. Stacker out of plates. Plate 18 Plate Repeat 1 Well H01
+
+
+
+Exported with EnVision Workstation version 1.13.3009.1401

@@ -1,0 +1,508 @@
+---
+title: "xv20230817_mutations_analysis"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+I will explore the data that I received from Mathijs and proccess it as we did previously for BRCA2mut tumors
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+
+```
+
+## Libraries:
+```{r libraries}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+library(ggbeeswarm)
+```
+
+#Import indel data
+```{r pressure, echo=FALSE, message= F, warning=F}
+setwd(in.dir)
+
+#Both data-sets
+sporadic_mutation_dt <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/HNSC/BRASS/summary_shortened.txt")  %>%
+  mutate(driver_mut = "CTR", 
+         sample = `# sample`) %>%
+    select(-`# sample`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) #BRCA2 +/+ HNSCC
+BRCA2_mutation_dt <- read_delim("import/xv20220727_PCAWG_tumor_data/SV_Indels_PCAWG/BRCA2/BRASS/summary_shortened.txt") %>%
+  mutate(driver_mut = "BRCA2",
+         sample = `# sample`) %>%
+    select(-`# sample`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) #BRCA2 +/+ HNSCC) #BRCA2 -/- HNSCC
+
+# Generate data table with SV for all driver mutations
+#List of all driver mutations
+driver_mutations <- list.files(path = "/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/SV", full.names = T)
+
+
+#Function to create a data frame for all different genetic backgrounds
+SV_all_proteins <- map_dfr(driver_mutations, function(y) {
+  #Import all data for a single driver mutation
+protein_file_names <- list.files(path = y, full.names = T)
+one_protein_data <-map_dfr(protein_file_names, function(x) {
+  read_delim(file = x) %>% 
+    mutate(f = gsub(paste0("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/SV/"),"",x),
+           chr1 = as.numeric(`# chr1`)) %>%
+    select(-`# chr1`) %>%
+    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.numeric, as.factor) %>%
+    separate(f, into = c("driver_mut","sample"), sep = "/") %>%
+    mutate(sample = gsub(".bedpe","", sample))
+})
+})
+
+#Bind all dataframes
+SV_all_tumors <- sporadic_mutation_dt %>% bind_rows(SV_all_proteins, BRCA2_mutation_dt)
+```
+
+
+#Are there samples represented twice?
+```{r}
+#Indel data
+repeated_samples <- SV_all_tumors %>% 
+  select(sample) %>%
+  distinct() %>%
+  dplyr::group_by(sample) %>% 
+  dplyr::summarise(count = n())
+
+#filter repeated
+repeated_samples %>% filter(count > 1)
+
+print("There are not repeated tumors assigned twice")
+```
+
+#Summary of imported indel files
+```{r}
+#Summary text for nuber of indels
+print(paste("This script imported a total of", 
+            nrow(SV_all_tumors), 
+            "indels from", 
+            length(unique(SV_all_tumors$driver_mut)), 
+            "different genetic backgrounds and",
+            length(unique(SV_all_tumors$sample)),
+            "human tumor genomes."))
+```
+#CONCLUSION: Indel data can also be imported and merged with BRCA2 and CTR datasets
+
+#Plot number of indels per human genome
+```{r}
+#Plot indel summary per human genome
+SV_relative_to_human_genome <- SV_all_tumors %>%
+  dplyr::group_by(sample, driver_mut, svclass) %>%
+  dplyr::summarise(counts = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(driver_mut, svclass) %>%
+  dplyr::summarise(avg_SV = mean(counts))
+
+#Plot total SV summary of all tumors
+ggplot(SV_relative_to_human_genome) + 
+  geom_col(aes(svclass,avg_SV)) + 
+  facet_wrap(~ driver_mut) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5))
+```
+
+#Import qualitative data
+```{r}
+pcaw_TCGA_donor <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/pcawg_TCGA_to_donorID.txt")
+selection <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/selection.txt")
+
+#Combine them
+tumor_info <- left_join(pcaw_TCGA_donor,selection, c("TCGA_ID" = "sample_id")) %>% separate(ttype, into = c("tissue","type"), remove = F)
+```
+#CONCLUSION: Tumor info is combined in a single data table
+
+#Add tumor data to indel and summaryse number per driver, tumor type and tissue
+```{r}
+#Indel data
+SV_tumors_info <- left_join(SV_all_tumors, tumor_info, c("sample"="TCGA_ID"))
+
+#Summary table
+summary_table <- SV_tumors_info %>%
+  select(driver_mut, type, tissue, sample) %>%
+  distinct()
+
+#Number of samples per drivers
+drivers_summary <- summary_table %>%
+  dplyr::group_by(driver_mut) %>%
+  dplyr::summarise(driver_n = n()) %>%
+  arrange(desc(driver_n))
+
+#Pull vector type
+driver_desc_order <- drivers_summary %>% pull(driver_mut)
+
+#Number of samples per tumor type
+type_summary <- summary_table %>%
+  dplyr::group_by(type,tissue) %>%
+  dplyr::summarise(type_n = n()) %>%
+  arrange(desc(type_n))
+
+
+#Number of samples per tissue
+tissue_summary <- summary_table %>%
+  dplyr::group_by(tissue) %>%
+  dplyr::summarise(tissue_n = n()) %>%
+  arrange(desc(tissue_n))
+
+#Pull vector tissue
+tissue_desc_order <- tissue_summary %>% pull(tissue)
+
+#Summary table of total
+summary_table_indels <- summary_table %>%
+  left_join(drivers_summary) %>% #First drivers
+  left_join(type_summary) %>% #Then type
+  left_join(tissue_summary) #Third per tissue
+
+```
+
+#Plot tissue per driver mutation
+```{r}
+#Prepare data frame for this classification
+classifier_table <- summary_table %>% 
+  dplyr::group_by(driver_mut, tissue, type) %>%
+  dplyr::summarise(classifier_n = n())
+
+#Plot samples per tumor
+ggplot(classifier_table) +
+  geom_col(aes(fct_relevel(driver_mut, driver_desc_order),
+               classifier_n,
+               fill = tissue)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "top") +
+  ylab("Number of samples") + 
+  xlab("Driver mutated gene")
+
+```
+
+#Filter SV data used in the screen and plot total number
+```{r}
+#Filter deletions with MH
+MH_deletion_data <- SV_tumors_info %>%
+    filter(svclass == "deletion" & 
+             length(`micro-homology`) > 1 & 
+             `micro-homology` != "." & 
+             `non-template` == "." & 
+             `Brass Notation` != "_")
+```
+
+#Are there samples with no deletion?
+```{r}
+#Calculate number of total deletions per tumors
+MH_deletion_table <- MH_deletion_data %>%
+  dplyr::group_by(sample) %>%
+  dplyr::summarise(del_SV_count = n()) %>%
+  right_join(summary_table_indels)
+
+```
+
+#Calculate the number of indels per class and sample
+```{r}
+#How many empty values are here?
+print(paste("There are a total of",
+            sum(is.na(MH_deletion_table$del_SV_count)),
+            "samples that have no micro-homology SV"))
+
+#Transform NA into 0
+MH_deletion_table[is.na(MH_deletion_table$del_SV_count),]$del_SV_count <- 0
+
+#NOTE: I will not add a pseudocount here, because in principal I don't need a logaritmic metric (THIS MIGHT CHANGE!)
+```
+
+#First QC: How much deletion classes change per tissue?
+```{r, message = F, warning = F, fig.height=6,fig.width=4}
+#
+ggplot(MH_deletion_table,aes(reorder(tissue, dplyr::desc(tissue_n)),del_SV_count)) + 
+  stat_summary(geom = "bar",fun = "median") +
+  geom_quasirandom(alpha = 0.25) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5))
+```
+#CONCLUSION: There are very clear differences in the amount of SV per tissue, in some of them there are not that many of them
+
+#Calculate per driver gene
+```{r, message = F, warning = F, fig.height=4,fig.width=6}
+#Calculate MH CTR counts
+CTR_MH_counts <- MH_deletion_table %>% filter(driver_mut == "CTR") %>% pull(del_SV_count) %>% median()
+
+#Calculate statistical test to test for mean changes
+wilcox_test_tumor <- map_dfr(driver_desc_order, function(x){
+  single_prot <- MH_deletion_table %>% filter(driver_mut == x) %>% pull(del_SV_count)
+  ctr_prot <- MH_deletion_table %>% filter(driver_mut == "CTR") %>% pull(del_SV_count)
+  if (length(single_prot) > 2) {
+  wilcox.test(single_prot,ctr_prot) %>% broom::tidy() %>% mutate(driver_mut = x)
+  }
+}) %>%   filter(driver_mut != "CTR") %>%
+  mutate(fdr = p.adjust(p.value, method = "BH")) %>%
+  filter(fdr < 0.05)
+
+
+ggplot(MH_deletion_table,aes(reorder(driver_mut, dplyr::desc(driver_n)),del_SV_count)) + 
+  stat_summary(geom = "bar",fun = "median") + #I will use the median as a summary value, because of the outliers
+  geom_quasirandom(aes(color = tissue),alpha = 0.3) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "top") +
+  xlab("Driver mutation") +
+  geom_hline(yintercept = 17, linetype = 2)
+```
+#CONCLUSION: In log2 scale there are not big differences in the amount of mutations per tumor. This value is much more variable than log2 MMEJ/NHEJ. Not all behave as they should (only ATM, SETD2, MEN1, BRCA2) and some of them are significant.
+
+#####################################################################
+#####################################################################
+######### On the 21st August, I reached this point ##################
+#####################################################################
+#####################################################################
+#####################################################################
+
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+```
+
+#Map indel data to LAD status
+```{r}
+#Create function to call unique LADs
+LAD_atlas_ranges <- makeGRangesFromDataFrame(LAD_atlas, keep.extra.columns = T) #Make LADs into GR ranges
+
+#Function to map mutations in unique LADs or iLADs
+LADs_status_call_indel <- function(x) {
+  print(dim(x))
+  mutations_GR <- makeGRangesFromDataFrame(x, keep.extra.columns = T) #Make a GR object with the coordinated of the deletion
+  LAD_overlaps <- findOverlaps(LAD_atlas_ranges,mutations_GR) #Find overlaps between deletions and LAD states
+  LAD_overlaps_dt <- tibble(x[subjectHits(LAD_overlaps),], LAD_status =  LAD_atlas[queryHits(LAD_overlaps),6]) #Extract the LAD_status of the mapped deletion
+  LAD_counts <- LAD_overlaps_dt %>% dplyr::group_by(tumor_id, mutation_id, LAD_status) %>% dplyr::summarize(count = n()) #How many different overlaps a deletions has. count = 1 -> single map, if bigger means goes over border
+  single_LADs_iLADs <-LAD_counts %>% reshape2::dcast(tumor_id + mutation_id ~ LAD_status, fill = 0) #Filter these that are called only once
+  #LAD_overlaps_dt %>% right_join(single_LADs_iLADs) #Keep only uniquely called
+}
+
+#Prepare the data table for mapping
+mutation_location_all_tumor <- deletion_classified %>% #Sporadic HNSCC
+    mutate(chr = CHR, start = POSITION, end = POSITION + 1,mutation_id = 1:nrow(.)) %>% #change chr format
+  select(chr, start, end, tumor_id = sample, mutation_id, indelClass, indelSubClass, indelRepeats, CLASS, driver_mut) #select needed columns
+
+#Run function (table A)
+indel_LAD_maps <- LADs_status_call_indel(mutation_location_all_tumor) %>% 
+  left_join(mutation_location_all_tumor) #419991 uniquely mapped indels in all tumors
+
+```
+
+#Quick check of mutation accumulation per driver mutation
+```{r}
+#Calculate the number of indels per LAD class
+summary_table_driver <- indel_LAD_maps %>% dplyr::group_by(CLASS, driver_mut,tumor_id) %>% dplyr::summarise(tot_cLAD = sum(cLAD, na.rm = T),
+                                                                                     tot_ciLAD = sum(ciLAD, na.rm = T),
+                                                                                     tot_fLAD = sum(fLAD, na.rm = T),
+                                                                                     tot_fiLAD = sum(fiLAD, na.rm = T))
+
+#Transform data frame and select only constitutive LAD and iLAD
+plot_mutation_chromatin_state_tumor <- summary_table_driver %>% na.omit() %>% select(CLASS,sample = tumor_id, cLAD  = tot_cLAD, ciLAD = tot_ciLAD, driver_mut) %>% reshape2::melt() %>% left_join(summary_table_indels)
+
+#Print heat of mutation
+head(plot_mutation_chromatin_state_tumor)
+
+```
+
+#Control calculation: Number of mutations per sample. Are there enough mutations to calculate it per tumor
+```{r}
+#Dcast per LAD state
+samples_with_zeroes <- plot_mutation_chromatin_state_tumor %>% 
+  distinct() %>%
+  reshape2::dcast(driver_mut + variable + sample ~ CLASS)
+
+#How many are empty
+print(paste("In this data, frame there are a total of",
+            sum(samples_with_zeroes[c(4,5)] == 0, na.rm = T),
+            "chromatin-sample with no mutation out of a total of",
+            2*nrow(samples_with_zeroes[c(4,5)])))
+
+
+
+```
+#CONCLUSION: There is not enough data to calculate log2 MMEJ:NHEJ per sample and then average it. I have to calculate per driver mutation.
+
+
+#Calculate ratio per driver mutation (same as in paper)
+```{r}
+# Prepare data frame per driver mutation.
+LAD_values_driver <- plot_mutation_chromatin_state_tumor %>% 
+  reshape2::dcast(driver_mut + variable ~ CLASS, fun.aggregate = sum) %>%
+  mutate(ratio = log2(MMEJ/cNHEJ)) %>%
+  left_join(drivers_summary)
+```
+
+#Calculate control balances
+```{r,fig.width=2,fig.height=3}
+ggplot(LAD_values_driver %>% filter(driver_mut == "CTR")) +
+  geom_col(aes(variable, ratio)) +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n) +
+  theme_bw() + ylim(c(-1,4))
+```
+
+#Plot balances per chromatin type
+```{r,fig.height=7,fig.width=5, message = F}
+ggplot(LAD_values_driver) +
+  geom_col(aes(variable, ratio)) +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n) +
+  theme_bw() + ylim(c(-1,4))
+```
+
+#Plot total number of mutations
+```{r,fig.height=7,fig.width=5, message = F}
+#Total NHEJ deletions
+ggplot(LAD_values_driver) +
+  geom_col(aes(variable, cNHEJ)) +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n, scales = "free_y") +
+  theme_bw()+ ggtitle("Total cNHEJ mediated deletions in LAD and iLADs")
+
+#Total MMEJ deletions
+ggplot(LAD_values_driver) +
+  geom_col(aes(variable, MMEJ)) +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n, scales = "free_y") +
+  theme_bw() + ggtitle("Total MMEJ mediated deletions in LAD and iLADs")
+
+```
+
+#Calculate Fisher test for each driver mutation
+```{r, warning=F, message=F}
+#Calculate a fisher test per driver gene
+fisher_test <- map_dfr(driver_desc_order, function(x) {
+  LAD_values_driver %>% 
+  filter(driver_mut == x) %>% 
+  select(cNHEJ, MMEJ,variable) %>%
+  column_to_rownames(var = "variable") %>%
+  fisher.test() %>% broom::tidy() %>% mutate(driver_mut = x)
+}) %>% mutate(fdr = p.adjust(p.value, method = "fdr"), 
+                                             signif = fdr < 0.05)
+```
+#CONCLUSION: with this approach several of the proteins validate. But, we need to work on the statistics and get a nice negative control population. For this, it will be important to get bias measurements per sample.
+
+#Test pseudo-count addition
+```{r, message=F, warning=F}
+# Prepare data frame per driver mutation.
+LAD_values_sample_pseudo <- plot_mutation_chromatin_state_tumor %>% 
+  reshape2::dcast(driver_mut + variable + sample ~ CLASS, fun.aggregate = sum) %>%
+  mutate(pseudo_ratio = log2((MMEJ +1) /(cNHEJ + 1))) %>%
+  left_join(summary_table_indels)
+
+#with 
+LAD_values_sample <- plot_mutation_chromatin_state_tumor %>% 
+  reshape2::dcast(driver_mut + variable + sample ~ CLASS, fun.aggregate = sum) %>%
+  mutate(ratio = log2((MMEJ) /(cNHEJ))) %>%
+  left_join(summary_table_indels)
+
+#Merge for control
+control_pseudomut <- LAD_values_sample_pseudo %>%
+  left_join(LAD_values_sample)
+
+#quick control plot
+ggplot(control_pseudomut) + 
+  geom_point(aes(ratio, pseudo_ratio)) + 
+  facet_wrap(~ driver_mut)
+```
+#First control: Calculate by tissue
+```{r, message=F, warning=F,fig.width=4,fig.height=8}
+ggplot(LAD_values_sample_pseudo, aes(variable, pseudo_ratio)) +
+  stat_summary(geom = "bar", fun = "mean") + 
+  geom_quasirandom(alpha = 0.1) +
+  facet_wrap(~ reorder(tissue, dplyr::desc(tissue_n)) + tissue_n) +
+  theme_bw()
+```
+
+#Calculate control balances with pseudo-count
+```{r,fig.width=2,fig.height=3}
+ggplot(LAD_values_sample_pseudo %>% filter(driver_mut == "CTR"), aes(variable, pseudo_ratio)) +
+  stat_summary(geom = "bar") + 
+  geom_quasirandom() +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n) +
+  theme_bw() + ylim(c(-1,4))
+```
+
+
+#Plot all the rest
+```{r, message=F, warning=F,fig.width=4,fig.height=8}
+ggplot(LAD_values_sample_pseudo, aes(variable, pseudo_ratio)) +
+  stat_summary(geom = "bar", fun = "mean") + 
+  geom_quasirandom(alpha = 0.1) +
+  facet_wrap(~ reorder(driver_mut, dplyr::desc(driver_n)) + driver_n) +
+  theme_bw()
+```
+#CONCLUSION: Overall, there are not so many changes if you calculate per tumor with a pseudocount of total amoount of deletion. For z-score calculation, I think is better if we keep them separately and compare it to a null-distribution generated by permutation.

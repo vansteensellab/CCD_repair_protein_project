@@ -1,0 +1,487 @@
+---
+title: "xv20211121_epistasis_model_bas"
+output: html_document
+---
+
+In this document, I will go over different calculations of epistasis.4 different workflows:
+First decision is whether to use log2 MMEJscore or MMEJscore
+Second decision is comparing slopes or statistic differences between WT vs. KO slopes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+```
+
+# Import data tables
+
+```{r, include= FALSE}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+#Chromatin data
+clone5_chrom_tib <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200519_clone5_newdoms_chromatin.RDS")
+
+# Inhibitor experiment
+inhibitor.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210716_E1627_ATR_inhibitor/data/xv20210716_E1627_indel_script_ATRi.rds") %>% left_join(inhibitor.table)
+PARPi.data <- readRDS("~/XV_P3_ChromDSBScreen/xv20210922_E1664_PARPi_follow_up/rmarkdown/xv20210922_E1664_indel_script_PARPi.rds")
+
+
+```
+
+# Data processing
+```{r}
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+# Get heatmap by chromatin type (4 types, but maybe it's better to make 4 "same as RS paper")
+clasification.4.chroms <- clone5_chrom_tib %>% select(chromatin,barcode) %>% dplyr::mutate(chrom.4 = case_when(chromatin %in% c("euchromatin-transcription","other-euchromatin","transcription") ~ "euchromatin", T ~ chromatin)) %>% select(-chromatin)
+
+#Number of IPRs per chromatin
+summary.4chroms <- clasification.4.chroms %>% dplyr::group_by(chrom.4) %>% dplyr::summarise(counts = n())
+
+# Compute score per 4 chromatin types
+both.screen.detail.4chrom <- both.screen.detail %>% 
+  left_join(clasification.4.chroms, by = "barcode") %>% 
+  select(barcode,chrom.4, mmej.z.score,t.rep,ID_gene)
+
+score.per.4chrom.rep <- both.screen.detail.4chrom %>%
+  dplyr::group_by(chrom.4,t.rep,ID_gene) %>%
+  dplyr::summarise(chrom4score = mean(mmej.z.score, na.rm = T))
+
+score.per.4chrom <- score.per.4chrom.rep %>%
+  dplyr::group_by(chrom.4,ID_gene) %>%
+  dplyr::summarise(screen.score = sum(chrom4score, na.rm = T)/sqrt(n()))
+
+combined.data.screen <- left_join(score.per.4chrom,score.per.4chrom.rep)
+
+# Process inhibitors data
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+# Create a dt with all the descriptive variables
+sample.table.PARPi <- read.table("/home/x.vergara/XV_P3_ChromDSBScreen/xv20210922_E1664_PARPi_follow_up/data/xv20210922_E1664_sample_file.txt", header = T)
+
+PARPi.data.processed <- PARPi.data %>% mutate(MMEJscore = pct_del_7 / (pct_del_7 + pct_ins_1),
+                                                  NHEJscore = pct_ins_1 / (pct_del_7 + pct_ins_1),
+                                                  freqMMEJ = pct_del_7,
+                                                  freqNHEJ = pct_ins_1,
+                                                  freqCut = 1 - pct_wt,
+                                                  NHEJMMEJratio = ins_1 / del_7
+                                                  ) %>%
+                                select(-grep("pct", colnames(.)), -grep("ins",colnames(.)),-grep("del",colnames(.)), -c("wt","Inf","ssODN")) %>% distinct()%>% left_join(sample.table.PARPi)
+
+# Without vorinostat data
+PARPi.data.processed.DMSO <- filter(PARPi.data.processed, is.na(Vorinostat))
+
+#Combine with log2.inhibitor 
+
+```
+
+#Example with three genes (POLL, FANCM, POLQ) & I will use "H3K4me1" as example
+1st step = Compare POLL, FANCM, POLQ and WT data points vs. H3K4me1 (in lin or log space)
+
+step 1 = plot 
+
+```{r}
+# Data table and compute log2MMEJ
+log2.inhibitors <- log2.inhibitor.data  %>% select(replicate, MMEJ_score, drug,barcode, DMSO_freq) %>% mutate(log2MMEJ = log2(MMEJ_score), DMSO.log2MMEJ = log2(DMSO_freq))
+
+# Plot differences
+data.for.plotting.inhibitors <- log2.inhibitors %>% dplyr::group_by(drug,barcode) %>% dplyr::summarise(m.log2MMEJ = mean(log2MMEJ, na.rm = T)) %>% left_join(clone5_chrom_tib)
+
+# Plot in log2 space
+ggplot(data.for.plotting.inhibitors %>% filter(drug != "GFP"), aes(H3K4me1,m.log2MMEJ, color = drug)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(method = "spearman") +
+  theme_bw()
+
+```
+
+
+# 2nd step check compute distances and plot them
+```{r}
+# Each replicate has a different value (compute differences by replicate)
+log2.distance.mmej.inhibitors <- log2.inhibitors %>% mutate(log2.dist = sqrt((log2MMEJ - DMSO.log2MMEJ)^2)) 
+mean.log2.distance.mmej.inhibitors <- log2.distance.mmej.inhibitors %>% dplyr::group_by(barcode,drug) %>% dplyr::summarise(m.log2.dist = mean(log2.dist, na.rm = T)) %>% left_join(clone5_chrom_tib) %>% filter(drug != "GFP")
+
+#Plot slopes
+ggplot(mean.log2.distance.mmej.inhibitors %>% 
+         filter(drug != "GFP"),
+       aes(H3K4me1,m.log2.dist, color = drug)) + 
+  geom_point() + 
+  stat_cor(method = "spearman") + 
+  geom_smooth(method = "lm") + 
+  theme_bw()
+
+ggplot(mean.log2.distance.mmej %>% 
+         filter(gene %in% c("POLL","POLQ","FANCM")),
+       aes(H3K4me1,m.lin.dist, color = gene)) + 
+  geom_point() + 
+  stat_cor(method = "spearman") + 
+  geom_smooth(method = "lm") + 
+  theme_bw()
+
+```
+# Extract slopes for all genes
+```{r}
+# Perform analysis across all features for three test genes
+chromatin.features <- colnames(mean.log2.distance.mmej.inhibitors)[7:31]
+
+slope.protein.features.inhibitors <- tibble(drug = NA, feature = NA, slope.log2 = NA, term = NA)
+
+for (i in unique(mean.log2.distance.mmej.inhibitors$drug)) {
+  for (j in colnames(mean.log2.distance.mmej.inhibitors)[7:31]) {
+    model.dt <- mean.log2.distance.mmej.inhibitors %>% filter(drug == i)
+    model.epistasis.log2 <- lm(formula = m.log2.dist ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+    slope.protein.features.inhibitors <- slope.protein.features.inhibitors %>% add_row(drug = i, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis %>% pull(term))
+  }
+}
+
+# Plot matrix without scaling
+# log2 space
+ggplot(slope.protein.features.inhibitors %>% filter(term != "(Intercept)" & complete.cases(.))) + geom_tile(aes(drug,feature, fill = slope.log2)) + scale_fill_gradient2() + theme_bw() +theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+
+slope.prot.features.scale.dcast.inhibitors <- slope.protein.features.inhibitors %>% filter(term == "unlist(model.dt[j])") %>% reshape2::dcast(drug ~ feature, value.var = "slope.log2") %>% column_to_rownames(var = "drug")
+
+```
+
+# Plot matrix as a tile but clustered (scaling doesn't work properly)
+```{r}
+#Heatmap for slope differences
+heatmap.slope.diff.inhibitors <- pheatmap(slope.prot.features.scale.dcast.inhibitors, cell_height = 8, cellwidth = 8)
+heatmap.gene.order.slope.diff.inhibitors <- rownames(slope.prot.features.scale.dcast.inhibitors[heatmap.slope.diff.inhibitors$tree_row[["order"]],])
+heatmap.chromatin.order.slope.diff.inhibitors <- colnames(slope.prot.features.scale.dcast.inhibitors[,heatmap.slope.diff.inhibitors$tree_col[["order"]]])
+
+#Plot correlations (As a heatmap with corrected pvalues)
+ggplot(slope.protein.features.inhibitors %>% filter(term != "(Intercept)" & complete.cases(.) & drug != "DMSO")) + 
+  geom_tile(aes(fct_relevel(feature, heatmap.chromatin.order.slope.diff.inhibitors),fct_relevel(drug,heatmap.gene.order.slope.diff.inhibitors), fill = slope.log2)) +
+  scale_fill_gradient2( low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e")  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank())
+
+
+```
+# Correlation between DNAPKi and POLL & ATRi and ATR KO
+```{r}
+# POLL & DNA PKi
+POLL <- slope.protein.features %>% filter(term != "(Intercept)" & gene == "POLL") %>% select(feature, slope.log2, perturbation = gene)
+DNAPKi <- slope.protein.features.inhibitors %>% filter(term != "(Intercept)" & complete.cases(.) & drug == "DNAPKi") %>% select(feature, slope.log2, perturbation = drug)
+
+combined.POLL <- DNAPKi %>% bind_rows(POLL) %>% reshape2::dcast(feature ~ perturbation, value.var = "slope.log2")
+
+# Genetic interaction correlations between POLL and DNA PKi
+ggplot(combined.POLL, aes(POLL,DNAPKi)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw() + geom_text_repel(aes(label = feature))
+
+chrom.class <- tibble(feature = combined.ATR$feature, axis = c("Others","Accesible-TH","Accesible-TH","Transcription-Polycomb","Accesible-TH","Accesible-TH","Transcription-Polycomb","Transcription-Polycomb","Accesible-TH","Accesible-TH","Accesible-TH","Transcription-Polycomb","Accesible-TH","Accesible-TH","Accesible-TH","Others","Others","Others","Accesible-TH","Accesible-TH","Accesible-TH","Transcription-Polycomb","Accesible-TH","Others","Transcription-Polycomb"))
+
+# ATRi & ATR
+ATR <- slope.protein.features %>% filter(term != "(Intercept)" & gene == "ATR") %>% select(feature, slope.log2, perturbation = gene)
+ATRi <- slope.protein.features.inhibitors %>% filter(term != "(Intercept)" & complete.cases(.) & grepl("ATR", drug)) %>% select(feature, slope.log2, perturbation = drug)
+
+combined.ATR <- ATRi %>% bind_rows(ATR) %>% reshape2::dcast(feature ~ perturbation, value.var = "slope.log2") %>% left_join(chrom.class)
+
+# Genetic interaction correlations between POLL and DNA PKi
+ggplot(combined.ATR, aes(ATRi_VE822,ATRi_VE821)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw() + facet_wrap(~ axis)
+ggplot(combined.ATR, aes(ATR,ATRi_VE822)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw() + geom_text_repel(aes(label = feature)) + facet_wrap(~ axis)
+ggplot(combined.ATR, aes(ATR,ATRi_VE821)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw() + geom_text_repel(aes(label = feature)) + facet_wrap(~ axis)
+```
+# Compare ATM/ATR phoshpotargets to not phosphorylated (Matsuoka 2008)
+```{r}
+# Make a list of proteins
+ATM_ATR_targets <- c("ATM","BID","BRCA1","BRCA2","CHEK1","CLSPN","CREB1","SMC3","EIF4EBP1","FANCA","FANCD2","FOXO1A","H2AFX","HUWE1","MCM2","MCM3","MCM7","MDC1","MRE11","MSH2","MSH3","MSH6","NBN","PRKDC","PNKP","RAD18","RAD23A","RAD50","RAD52","RENT1","RIF1","RPA1","SMC1L1","SMG1","TERF2","TERF2IP","TOPBP1","TP53","TP53BP1","TRIM28","USP1","USP28","VCP","WRN","XPA","XPC","XRCC2","XRCC3","YAP1")
+
+
+# filter all genes and re-run this
+ATM.ATR.targets.gen.inter <-slope.protein.features %>% filter(term != "(Intercept)" & gene == "FANCM")
+ATM.ATR.inhibitor.interaction <- slope.protein.features.inhibitors %>% filter(term != "(Intercept)" &  drug == "ATRi_VE821")
+
+ggplot(ATM.ATR.targets.gen.inter ) +
+  geom_line(aes(fct_relevel(feature,heatmap.features.epistasis),slope.log2, group = gene), alpha = 0.2) +
+  stat_summary(aes(fct_relevel(feature,heatmap.features.epistasis), slope.log2, group = "1"), fun = mean, na.rm = T, geom = "line") + 
+  geom_line(data = ATM.ATR.inhibitor.interaction, aes(fct_relevel(feature,heatmap.features.epistasis),slope.log2, group = drug), alpha = 1, color = "blue") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = 2)
+
+ggplot() +
+  geom_line(data = ATM.ATR.inhibitor.interaction, aes(fct_relevel(feature,heatmap.features.epistasis),slope.log2, group = drug), alpha = 0.2) +
+  stat_summary(aes(fct_relevel(feature,heatmap.features.epistasis), slope.log2, group = "1"), fun = mean, na.rm = T, geom = "line") + 
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = 2)
+
+
+```
+
+
+
+
+##Option two, compare wt vs. KO slopes directly
+```{r}
+# Combine both dataframes
+wt.inh.log2MMEJscreen <-log2.inhibitors  %>% left_join(clone5_chrom_tib) %>% filter(drug != "GFP")
+
+test.data.inh <- wt.inh.log2MMEJscreen 
+
+slope.diff.inh.dt <- tibble(drug = NA, feature = NA, slope = NA, term = NA, replicate = NA)
+
+for (i in unique(test.data.inh$drug)) {
+  for (j in colnames(test.data.inh)[19:42]) {
+    for (k in unique(test.data.inh$replicate)) {
+    model.dt <- test.data.inh %>% filter(replicate == k & drug == i)
+    if (nrow(model.dt) < 1) {
+      next
+    }
+    model.epistasis <- lm(formula = log2MMEJ ~ unlist(model.dt[j]), data = model.dt) %>% tidy()
+    slope.diff.inh.dt <- slope.diff.inh.dt %>% add_row(drug = i, feature = j,replicate = k, slope = model.epistasis %>% pull(estimate), term = model.epistasis %>% pull(term))
+    }
+  }
+}
+
+slope.diff.dt.bis.inh <- slope.diff.inh.dt %>% filter(term != "(Intercept)")
+
+
+inh.test <- slope.diff.dt.bis.inh %>% filter(drug != "DMSO") %>% pull(drug) %>% unique()
+ 
+# test for differences in slope
+test.t.slope.inh <- tibble()
+
+
+for (i in unique(slope.diff.dt.bis.inh$drug)) {
+    if (i == "DMSO") {
+      next
+    }
+  for (k in unique(slope.diff.dt.bis$feature)) {
+    t.test.dt<-slope.diff.dt.bis.inh%>%
+    filter(drug %in% c(i, "DMSO") & feature == k)
+     if (nrow(t.test.dt) < 6){
+      next
+     }
+    t.test <- t.test.dt %>%
+    t.test(slope ~ drug,paired = T, data = .) %>%
+    tidy() %>%
+    mutate(drug = i, feature = k)
+    test.t.slope.inh<-bind_rows(test.t.slope.inh,t.test)
+    }
+  }
+
+
+ test.tmp.slope.inh<- test.t.slope.inh %>% mutate(p.cor = p.adjust(p.value, method = "BH"))
+
+wt.slope.per.feature.inh <- slope.diff.dt.bis.inh %>% filter(drug == "DMSO") %>% select(feature,wt.slope = slope,replicate)
+slope.for.plot.inh <- slope.diff.dt.bis.inh %>% left_join(wt.slope.per.feature) %>% mutate(diff.slope = slope - wt.slope) %>% dplyr::group_by(drug,feature) %>% dplyr::summarise(m.slope = mean(diff.slope,na.rm = T))
+slope.dt.corr.inh <- test.t.slope.inh %>% mutate(p.cor = p.adjust(p.value, method = "fdr")) %>% select(p.cor, drug, feature,p.value) %>% left_join(slope.for.plot.inh)
+
+# Plot this
+ggplot(slope.dt.corr.inh) + 
+  geom_point(aes(m.slope,-log10(p.value), color = p.value < 0.003)) + 
+  geom_text_repel(data = subset(slope.dt.corr.inh,p.value < 0.003), aes(m.slope, -log10(p.value), label = paste(drug,feature,sep = "_"))) +
+  theme_bw()
+
+```
+# Common epistasis analysis
+```{r}
+### Compute epistasis for all genes and domains (for plotting) per IPR and pool later for testing
+
+# Prepare all the data tables that I will need for the loop
+# mean dt
+mean.mmej.inh.dt <- log2.inhibitor.data %>% filter(drug != "GFP") %>% filter(drug== "DMSO") %>% dplyr::group_by(replicate) %>% dplyr::summarise(WT_mean = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+# mean dt per chromatin domain
+#Merge with barcodes and get values per chromatin type
+chrom.mmej.dt.inh <- log2.inhibitor.data %>% filter(drug == "DMSO") %>% select(barcode,MMEJ_score,replicate) %>%  dplyr::group_by(replicate,barcode) %>% dplyr::summarise(WT_chrom = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+#Create a dt per gene
+gene.mmej.dt.inh <- log2.inhibitor.data %>% filter(drug != "GFP") %>% select(drug,barcode,MMEJ_score,replicate) %>% dplyr::group_by(replicate,drug) %>% dplyr::summarise(KO_mean = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+#Create a dt per gene & chromatin
+gene.chrom.mmej.dt.inh <- log2.inhibitor.data%>% filter(drug != "GFP") %>% dplyr::group_by(replicate,barcode,drug) %>% dplyr::summarise(KO_chrom = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+
+# Empty data table to add all columns in the right order
+epistasis.mmej.dt.inh <- tibble()
+
+# Loop to iterate over gene & chromatin feature (This takes very long to run)
+for (i in unique(gene.mmej.dt.inh$drug)){
+  for (j in unique(chrom.mmej.dt.inh$barcode)) {
+    #Remove IPR from mean effect
+    wt.dt <-log2.inhibitor.data %>% filter(drug == "DMSO" & barcode != j) %>% dplyr::group_by(replicate) %>% dplyr::summarise(WT_mean = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+    # Compute KO mean effect without the IPR
+    KO.effect <- log2.inhibitor.data%>% filter(drug != "GFP") %>% filter(drug == i & barcode !=j) %>% select(drug,barcode,MMEJ_score,replicate) %>% dplyr::group_by(drug,replicate) %>% dplyr::summarise(KO_mean = mean(log2(MMEJ_score), na.rm = T)) %>% distinct() %>% ungroup()
+    
+  tmp <- gene.chrom.mmej.dt.inh %>% 
+  filter(barcode == j & drug == i) %>% 
+  left_join(wt.dt,by = c("replicate")) %>%
+  left_join(chrom.mmej.dt.inh, c("replicate", "barcode")) %>%
+  left_join(KO.effect, c("replicate", "drug"))
+  
+  epistasis.mmej.dt.inh <- bind_rows(epistasis.mmej.dt.inh,tmp)
+  
+  }
+}
+
+# Keeping three replicates separated
+calc.epistasis.mmej.dt.inh <- epistasis.mmej.dt.inh %>% select(-replicate) %>% dplyr::group_by(barcode,drug) %>% dplyr::summarise_all(mean, na.rm = T) %>% mutate(KO_diff = KO_mean - WT_mean, chrom_diff = WT_chrom - WT_mean, add_eff = KO_diff + chrom_diff, KO_chrom_diff = KO_chrom - WT_mean, tmp_res =(abs(KO_chrom_diff) - abs(add_eff)))
+
+# Simple t-test
+tmp.t.test.trip_het_dom.inh <- calc.epistasis.mmej.dt.inh %>% left_join(clasification.4.chroms) %>% mutate(euchr = case_when(chrom.4 == "euchromatin" ~ "euchromatin", T ~ "heterochromatin"))
+
+#make empty tibble
+tmp.test.euchr.heterochromatin.inh <-tibble()
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(tmp.t.test.trip_het_dom.inh$drug)) {
+  for(j in unique(tmp.t.test.trip_het_dom.inh$euchr)){
+  gene.filt<-tmp.t.test.trip_het_dom.inh%>%
+  filter(drug==i & euchr ==j)
+  
+  t.test <- t.test(gene.filt$KO_chrom_diff,gene.filt$add_eff, paired = T) %>% tidy() %>% mutate(drug = i, euchr = j)
+ 
+  tmp.test.euchr.heterochromatin.inh<-tmp.test.euchr.heterochromatin.inh%>%
+  bind_rows(t.test)
+}}
+
+tmp.inh <- tmp.test.euchr.heterochromatin.inh %>% distinct() %>% mutate(p.cor = p.adjust(p.value, method = "fdr"))
+
+# Pooling replicates together
+mean.calc.epistasis.mmej.dt.inh <- calc.epistasis.mmej.dt.inh %>% left_join(clasification.4.chroms) %>% mutate(euchr = case_when(chrom.4 == "euchromatin" ~ "euchromatin", T ~ "heterochromatin")) %>% left_join(tmp.inh %>% select(p.cor,p.value, drug, euchr))
+
+epistasis.for.plot.inh <- mean.calc.epistasis.mmej.dt.inh %>% ungroup() %>% select(-barcode, -chrom.4) %>% dplyr::group_by(euchr,drug) %>% dplyr::summarise_all(mean, na.rm = T)
+
+# Plot for epistasis (heterochromatin vs. euchromatin)
+ggplot(epistasis.for.plot.inh) + 
+  geom_point(aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), color = p.cor < 0.05))+
+  facet_wrap(~ euchr) + 
+  theme_bw() +
+  geom_text_repel(data = subset(epistasis.for.plot.inh, p.cor < 0.05), aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), label = drug))
+
+```
+
+```{r}
+#make empty tibble
+tmp.test.heterochromatin <-tibble()
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(tmp.t.test.trip_het_dom$gene)) {
+  for(j in unique(tmp.t.test.trip_het_dom$chrom.4)){
+  gene.filt<-tmp.t.test.trip_het_dom%>%
+  filter(gene==i & chrom.4 ==j)
+  if (nrow(gene.filt) < 3) {
+    next
+  }
+  
+  t.test <- t.test(gene.filt$KO_chrom_diff,gene.filt$add_eff, paired = T) %>% tidy() %>% mutate(gene = i, chrom.4 = j)
+ 
+  tmp.test.heterochromatin<-tmp.test.heterochromatin%>%
+  bind_rows(t.test)
+}}
+
+heterochromatin.corr <- tmp.test.heterochromatin %>% filter(chrom.4 != "euchromatin") %>% distinct() %>% mutate(p.cor = p.adjust(p.value, method = "fdr"))
+
+# Pooling replicates together
+mean.calc.epistasis.mmej.dt.het <- calc.epistasis.mmej.dt  %>% select(-t.rep,-library) %>% dplyr::group_by(barcode, gene) %>% dplyr::summarise_all(mean) %>% left_join(clasification.4.chroms) %>% filter(chrom.4 != "euchromatin") %>% left_join(heterochromatin.corr %>% select(p.cor,p.value, gene, chrom.4))
+
+epistasis.for.plot.het <- mean.calc.epistasis.mmej.dt.het %>% ungroup() %>% select(-barcode) %>% dplyr::group_by(chrom.4,gene) %>% dplyr::summarise_all(mean, na.rm = T)
+
+# Plot for epistasis (heterochromatin vs. euchromatin)
+ggplot(epistasis.for.plot.het) + 
+  geom_point(aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), color = p.cor < 0.1))+
+  facet_wrap(~ chrom.4) + 
+  theme_bw() +
+  geom_text_repel(data = subset(epistasis.for.plot.het, p.cor < 0.1), aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), label = gene))
+
+```
+# Test differences in euchromatin
+```{r}
+# Simple t-test
+tmp.t.test.euchr <- calc.epistasis.mmej.dt %>% left_join(clone5_chrom_tib) %>% filter(euchromatin == 1)
+
+#make empty tibble
+tmp.test.euchromatin <-tibble()
+ 
+#loop over identity of enhancers and do aov test per enhancer
+for (i in unique(tmp.t.test.euchr$gene)) {
+  for(j in unique(tmp.t.test.euchr$transcription)){
+  gene.filt<-tmp.t.test.euchr%>%
+  filter(gene==i & transcription ==j)
+  if (nrow(gene.filt) < 3) {
+    next
+  }
+  
+  t.test <- t.test(gene.filt$KO_chrom_diff,gene.filt$add_eff, paired = T) %>% tidy() %>% mutate(gene = i, transcription = j)
+ 
+  tmp.test.euchromatin<-tmp.test.euchromatin%>%
+  bind_rows(t.test)
+}}
+
+euchromatin.corr <- tmp.test.euchromatin %>% distinct() %>% mutate(p.cor = p.adjust(p.value, method = "fdr"))
+
+# Pooling replicates together
+mean.calc.epistasis.mmej.dt.euchr <- calc.epistasis.mmej.dt  %>% select(-t.rep,-library) %>% dplyr::group_by(barcode, gene) %>% dplyr::summarise_all(mean) %>% left_join(clone5_chrom_tib) %>% filter(euchromatin == 1) %>% left_join(euchromatin.corr %>% select(p.cor,p.value, gene, transcription))
+
+epistasis.for.plot.euchr <- mean.calc.epistasis.mmej.dt.euchr %>% ungroup() %>% select(KO_chrom_diff,add_eff,p.cor,p.value,gene,transcription) %>% dplyr::group_by(transcription,gene) %>% dplyr::summarise_all(mean, na.rm = T)
+
+# Plot for epistasis (heterochromatin vs. euchromatin)
+ggplot(epistasis.for.plot.euchr) + 
+  geom_point(aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), color = p.cor < 0.1))+
+  facet_wrap(~ transcription) + 
+  theme_bw() +
+  geom_text_repel(data = subset(epistasis.for.plot.euchr, p.cor < 0.1), aes(abs(KO_chrom_diff) - abs(add_eff), -log10(p.cor), label = gene))
+```
+

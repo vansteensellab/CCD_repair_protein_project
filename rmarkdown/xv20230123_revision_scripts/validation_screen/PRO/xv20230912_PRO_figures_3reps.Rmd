@@ -1,0 +1,204 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim: In this file, I will explore some of the possible plots, where I get general conclusions from K562 and RPE1wt data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+#Proteins_validation
+proteins_gRNA <- tibble(gRNA = c("36","38","40","42","44","46","48","50","52","54","56","58","60","62","64","66","68","70","72","74"),
+                        gene = c("ATM","ATR","BLM","BOD1L1","BRCA2","BRCC3","CHAF1A","CHEK2","FAAP24","FANCD2","FANCG","FANCM","MDC1","PARP1","POLL","RAD50","RBBP8","RMI2","SMC5","TOPBP1"))
+
+#Processed data
+PRO_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230912_CCD_analysis_summary_PRO_freq_0.0025_n3.rds") %>% left_join(proteins_gRNA) %>% mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature))
+K562_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220819_Table_S7_DR_screen_results.rds") %>% left_join(proteins_gRNA)
+RPE1_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230831_CCD_summary_table_RPE1wt.rds") %>% left_join(proteins_gRNA) %>% mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature))
+
+#All log2_values
+PRO_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230912_log2_balance_chromatin_PRO.rds") %>% left_join(proteins_gRNA)
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% left_join(proteins_gRNA)
+
+#K562 data on proteins in the validation screen
+K562_validation_prots <- K562_CCD %>% na.omit() %>% filter(chrom_feature %in% c("H3K4me1","H3K36me3","LMNB1","H3K27me3","H3K27ac","H3K4me2","H3K4me3","H3K9me3","H3K9me2","late_replicating"))
+
+```
+
+#Plot correlation of global effects
+```{r pressure, echo=FALSE}
+#Global effect correlation data
+global_effect_correlation <- PRO_CCD %>% 
+  select(gene,gRNA,PRO_global = global_diff) %>% 
+  left_join(K562_validation_prots %>% 
+              select(gene,gRNA, K562_global = global_diff)) %>%
+  left_join(RPE1_CCD %>% 
+              select(gene,gRNA, RPE1_global = global_effect)) %>%
+  distinct()
+
+#Plot this global effect
+ggplot(global_effect_correlation,aes(PRO_global,K562_global)) + 
+  geom_smooth(method = "lm", se = F) +
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  theme_bw() + 
+  geom_abline(linetype = 2) +
+  coord_fixed()
+
+#Plot this global effect
+ggplot(global_effect_correlation,aes(RPE1_global,PRO_global)) + 
+  geom_smooth(method = "lm", se = F) +
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  theme_bw() + 
+  geom_abline(linetype = 2) +
+  coord_fixed()
+
+
+
+```
+
+#Plot M- / N- synergies
+```{r, fig.width=2.5,fig.height=2.5}
+#Create a table to plot total M- & N-synergies
+M_N_synergy_summary <- PRO_CCD %>% 
+  select(gRNA, cell_line, fdr, pathway, gene) %>%
+  distinct() %>%
+  dplyr::group_by(pathway, cell_line) %>%
+  dplyr::summarise(fdr_0.1 = sum(fdr < 0.1),
+                   ns = sum(fdr > 0.1)) %>%
+  reshape2::melt()
+
+#Which proteins have M- N-synergies & both synergies
+ggplot(M_N_synergy_summary) +
+  geom_col(aes(fct_relevel(pathway,c("MMEJ","NHEJ","both")),value, fill = variable)) +
+  facet_wrap(~ variable) + theme_bw() +
+  theme(legend.position = "none") + 
+  ylab("Numbef of proteins") +
+  xlab("Type of CCD") +
+  scale_fill_manual(values = c("coral", "grey70"))
+
+```
+
+#Calculate cosine distance for all proteins
+```{r}
+all_validation <- PRO_CCD %>%
+  select(gene,gRNA,chrom_feature,PRO_CCD = CCD_score) %>% 
+  left_join(K562_CCD %>% 
+              select(gene,gRNA,chrom_feature, K562_CCD = CCD_synergy_score)) %>%
+  left_join(DEF_CCD %>%
+  select(gene,gRNA,chrom_feature,DEF_CCD = CCD_score)) %>%
+  na.omit()
+
+#Calculate cosine distance per gene
+K562_RPE1_distance_all <- map_dfr(unique(all_validation$gene), function(x){
+  CCD_table <- all_validation %>%
+    filter(gene == x) %>%
+    select(PRO_CCD, K562_CCD) 
+  
+  #calculate concordance
+  cosine_value <- cosine(as.matrix(CCD_table))[1,2]
+  tibble(gene = x, cosine_dist = cosine_value)
+})
+
+#Join CCD_scores
+K562_RPE_distances <- K562_RPE1_distance_all %>% dplyr::left_join(PRO_CCD %>% select(gene, gRNA,fdr)) 
+
+ggplot(K562_RPE_distances %>% distinct()) +
+  geom_col(aes(reorder(gene, dplyr::desc(cosine_dist)),cosine_dist, fill = fdr < 0.1)) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype =2) +
+  xlab("Protein") + 
+  theme_bw() + 
+  theme(axis.text.x =  element_text(angle = 90,
+                                    hjust = 1,
+                                    vjust = 0.5)) +
+  ggtitle("CCD pattern similarity", 
+          subtitle = "Comparison between RPE1-hTERT p53 KO & K562") +
+  ylab("Cosine similarity score") + 
+  scale_fill_manual(values = c("grey70", "coral"))
+```
+
+
+#Conclusion: DEF data is good quality, I should check the same filtering strategy for RPE1.
+
+
+#Plot some examples
+```{r, fig.width=4,fig.height=4}
+
+PRO_modified <- PRO_log2 %>% 
+  filter(binsize == 2000) %>%
+  select(barcode,gRNA, gene, mean_diff, H3K4me1 = chip_H3K4me1, H3K36me3 = chip_H3K36me3, H3K27me3 = dam_H3K27me3, LMNB1 = dam_LMNB1, H3K9me3 = dam_H3K9me3, H3K4me3 = chip_H3K4me3, late_replicating) %>% 
+  mutate(cell_line = "PRO")
+
+#K562_modified_data
+K562_modified <- K562_log2 %>% 
+  select(barcode,gRNA, gene, mean_diff=mean.log2foldchange, H3K4me1, H3K36me3, H3K27me3, LMNB1, H3K9me3, H3K4me3, late_replicating) %>% 
+  mutate(cell_line = "K562")
+
+#Generate a data frame for both
+combined <- bind_rows(RPE1_modified, K562_modified, PRO_modified)
+
+#Plot ATM-KO vs. LMNB1
+#PARP1 and H3K4me3
+ggplot(combined %>% filter(gene == "PARP1" & cell_line != "RPE1"),aes(H3K4me3, mean_diff, color = fct_relevel(cell_line,c("PRO","K562")))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  ylab("∆log2 MMEJ::NHEJ PARP1-KO") +
+  theme(legend.position = "top")  +
+  labs(color = "Cell line")
+
+
+#ATR and H3K9me3
+ggplot(combined %>% filter(gene == "ATR" & cell_line != "RPE1"),aes(H3K9me3, mean_diff, color = fct_relevel(cell_line,c("PRO","K562")))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  ylab("∆log2 MMEJ::NHEJ ATR-KO") +
+  theme(legend.position = "top") +
+  labs(color = "Cell line")
+
+#FANCD2 and late_replicating
+ggplot(combined %>% filter(gene == "FANCD2" & cell_line != "RPE1"),aes(H3K9me3, mean_diff, color = fct_relevel(cell_line,c("PRO","K562")))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  ylab("∆log2 MMEJ::NHEJ ATR-KO") +
+  theme(legend.position = "top") +
+  labs(color = "Cell line")
+
+```
+
+
+#Global effects
+```{r, fig.width=6, fig.height = 3}
+#Gene order based on K562 data
+combined_order <- combined %>% filter(cell_line == "PRO") %>% na.omit() %>% dplyr::group_by(gene,gRNA) %>% dplyr::summarise(mean = mean(mean_diff)) %>% arrange(mean) %>% pull(gene) 
+
+ggplot(combined %>% na.omit() %>% filter(cell_line != "RPE1")) +
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_diff,fill = fct_relevel(cell_line, c("PRO","K562"))),  position = position_dodge2(preserve = "single"), geom = "bar", fun.data = "mean_sd") + 
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_diff, group = fct_relevel(cell_line, c("PRO","K562"))), position = position_dodge2(preserve = "single"), geom = "errorbar", fun.data = "mean_sd",width = 0.5) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "top",
+        axis.title.x = element_blank()) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("∆log2 MMEJ::NHEJ") +
+  labs(fill = "Cell line")
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

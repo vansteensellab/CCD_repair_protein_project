@@ -1,0 +1,22 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Job counts:
+	count	jobs
+	1	align_control
+	1
+Error in rule align_control:
+    jobid: 0
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657364.bam.tmp
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/control/SRR11657364.txt
+
+RuleException:
+CalledProcessError in line 796 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Command ' set -euo pipefail;  bowtie2 --no-unal -p 10 --met-file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/control/SRR11657364.txt -x /DATA/data/human/hg38/index/bowtie2/hg38_1-22_XYM -U /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364.fastq.gz | sambamba view -S -F "mapping_quality >= 30" -f bam --compression-level=0 /dev/stdin  | sambamba sort -o /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657364.bam.tmp --compression-level=0 /dev/stdin ' returned non-zero exit status 127.
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 907, in __rule_align_control
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 796, in run_align
+  File "/home/x.vergara/miniconda3/envs/trip/lib/python3.6/concurrent/futures/thread.py", line 55, in run
+Removing output files of failed job align_control since they might be corrupted:
+/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657364.bam.tmp
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-29T190715.901884.snakemake.log

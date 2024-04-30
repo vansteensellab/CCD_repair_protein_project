@@ -1,0 +1,339 @@
+---
+title: "Figure 2 and supplemental 1-2"
+author: "Ruben Schep"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# knitr document van Steensel lab
+```{r}
+StartTime <-Sys.time()
+Date <- substr(gsub("-","",Sys.time()),1,8)
+library(knitr)
+
+## Select outdir
+out.dir = paste0("figures/rs", Date, "/")
+dir.create(out.dir)
+opts_chunk$set(dev=c('png', 'pdf'), fig.path = file.path(out.dir))
+pdf.options(useDingbats = FALSE)
+```
+
+# Introduction
+
+## Description of Data
+
+# Data processing
+
+## Path, Libraries, Parameters and Useful Functions
+
+```{r setup, message=FALSE, warnings=FALSE}
+# 6-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),3,8)
+
+# libraries:
+library(ggplot2)
+library(ggbeeswarm)
+library(ggpubr)
+library(reshape)
+library(reshape2)
+library(data.table)
+library(dplyr)
+library(tidyr)
+#library(ggpmisc)
+library(pheatmap)
+library(RColorBrewer)
+library(broom)
+#library(report)
+
+
+in.dir.date = 20210311
+in.dir = paste0("/DATA/projects/DSBrepair/data/R/rs", in.dir.date, "/")
+
+
+# Color codes
+colore <- c("wt" = "#808184", "other" = "black", "NHEJ" = "#e1251b", "MMEJ" = "#26419a", "SSTR" = "#007A4C")
+colores <- c("wt" = "#808184", "other" = "black", "NHEJ" = "#e1251b", "MMEJ" = "#26419a", "SSTR" = "#007A4C")
+colori  <- c("other_indels" = "black", "NHEJ" = "#e1251b", "MMEJ" = "#26419a", "SSTR" = "#007A4C") 
+colora <- c("0" = "#808184", "1" = "#e1251b", "-7" = "#26419a", "ssODN" = "#007A4C") 
+```
+
+## Custom functions
+Functions used thoughout this script.
+```{r, message=FALSE, warnings=FALSE}
+changeLevels <- function(object, column = "chr_r", levels = c(paste0("chr", 1:22), "chrX")) {
+  object[, column] <- as.character(object[, column])
+  object[, column] <- factor(object[, column], levels)
+  object
+}
+```
+
+# Data import
+```{r, message=FALSE, warnings=FALSE}
+trip_tib_mut_2000 = readRDS(paste0(in.dir, "RSTP2_Indel_Chromatin_2kb.RDS"))
+trip_tib_2000 = readRDS(paste0(in.dir, "RSTP2_IndelRatios_Chromatin_2kb.RDS"))
+
+chromsizes<-read.table("/home/r.schep/mydata/data/genomes/GRCh38/hg38_chromsizes2.txt",header=F, stringsAsFactors = F)
+names(chromsizes)<-c("chr_r","pos_r")
+
+load(paste0(in.dir, "Analyis_Mapping_RSTP2_2000.RData"))
+
+clone5barcodes <- c("AGGGCGTAAAATATTT.B",
+                    "TATGGCTGTCGGGTAG.B",
+                    "TGTCCCTTAGTACTTT.B",
+                    "AGAAAATAATATGACG.B",
+                    "CGGCCTGAAGGTCAGG.B",
+                    "TTGAACGCGGGCTCGG.B",
+                    "GCTAACATCACGAATC.B",
+                    "GCGCACCCTTTAATTG.B",
+                    "ACTGTCGAGTTGTCCG.B",
+                    "CCGGGGACGTATGCAC.B",
+                    "TCTTTTGAGGAGCTGA.B",
+                    "ATATCGTTGCTGGAGA.B",
+                    "CATCCACCACACTTCA.B",
+                    "ACCCCTAAAGGCGCTG.B",
+                    "ATACTATATTTAACGG.B",
+                    "CATTTCTGATCAATAA.B",
+                    "GAGCGCGTCACCGGGT.B",
+                    "GTACCTCTCGATAGTG.B",
+                    "TGGCCAATATTTGTCT.B")
+
+clone5_domains <- readRDS("/DATA/projects/DSBrepair/data/R/cl20200310_domains_clone5.RDS")
+```
+
+## Data processing
+```{r preprocess experiments}
+trip_tib_mut_all <- copy(trip_tib_2000)
+trip_tib_2000 <- trip_tib_2000 %>% distinct(barcode, exp_pool, .keep_all = TRUE)
+trip_lbr2_DMSO_tib <- trip_tib_2000 %>%
+  filter(exp_pool=="mean_RSTP2_2000_LBR2_DMSO_64")
+
+trip_tib <- trip_tib_2000 %>%
+  filter(exp_pool %in% c("mean_RSTP2_2000_LBR2_DMSO_64", "mean_RSTP2_2000_LBR2_64"))
+trip_tib_mut <- trip_tib_mut_2000 %>%
+  filter(exp_pool %in% c("mean_RSTP2_2000_LBR2_DMSO_64", "mean_RSTP2_2000_LBR2_64", "mean_RSTP2_2000_LBR2_NU7441_64"))
+
+trip_tib_mut_all_selection <- trip_tib_mut_all %>%
+  filter(exp_pool %in% c("mean_RSTP2_2000_LBR2_DMSO_64", "mean_RSTP2_2000_LBR2_64", "mean_RSTP2_2000_LBR2_NU7441_64"))
+
+mean_trip_tib_2000 <- trip_tib_2000 %>%
+  gather(NHEJ, MMEJ, other_indels, key = "pathway", value = 'ratios') %>%
+  distinct(barcode, exp_pool, pathway, .keep_all = TRUE)
+
+mean_trip_tib_2000$pathway <- factor(mean_trip_tib_2000$pathway, levels=c("other_indels", "MMEJ", "NHEJ"))
+mean_trip_tib_2000 <- mean_trip_tib_2000[!is.na(mean_trip_tib_2000$ratios), ]
+
+
+mutation_barcodes <- trip_tib_2000 %>% 
+  filter(exp_pool=="mean_RSTP2_2000_LBR2_64", nexp > 1) %>% 
+  distinct(barcode, exp_pool, .keep_all = TRUE)
+
+
+mutationintegrations <-na.omit(analysis.mapped.integrations.df[c("barcode", "seqname","start")])
+colnames(mutationintegrations) <- c("barcode", "chr_r","pos_r")
+dim(mutationintegrations)
+mutationintegrations$mapping <- "mapped"
+mutationintegrations[mutationintegrations$barcode %in% c(mutation_barcodes$barcode, clone5barcodes) , ]$mapping <- "filtered"
+
+mutationintegrations <- changeLevels(mutationintegrations)
+chromsizes <- changeLevels(chromsizes)
+chromsizes <- chromsizes[!is.na(chromsizes$chr_r), ]
+mutationintegrations <- mutationintegrations[!is.na(mutationintegrations$chr_r), ]
+chromsizes$pos_r <- as.numeric(chromsizes$pos_r)
+
+
+chrom.mods.cols <- seq(grep("binsize", names(trip_tib))+1, grep("H3K27me3_domain", names(trip_tib))-1)
+```
+
+## Panel S2G
+```{r FigS2G pathways with HR siRNA, fig.height=5, fig.width=7}
+siRNA_HR_exps <- trip_tib_mut_all %>% 
+  filter(replicate %in% c('mean'), 
+         drug == "Shield", 
+         siRNA %in% c("siNT", "siPolQ", 
+                      "siRad51", "siBRCA1", 
+                      "siBRCA2"), 
+         cell_line == "RSTP2_clone5", 
+         plasmid == "LBR2", 
+         time == 72) %>% 
+  pull(exp_pool) %>% 
+  unique()
+
+trip_lbr2_siRNA_HR <- trip_tib_2000 %>%
+  filter(exp_pool %in% c(siRNA_HR_exps))
+
+trip_mut_lbr2_all_siRNA_HR <- trip_tib_mut_all %>%
+  filter(exp_pool %in% c(siRNA_HR_exps))
+# 
+trip_mut_lbr2_all_siRNA_HR_sep <- trip_tib_mut_all %>%
+   filter(exp_pool %in% c(siRNA_HR_exps_sep))
+
+#Select columns for analysis
+HR_columns_select_mean <- trip_mut_lbr2_all_siRNA_HR %>% select(siRNA, barcode, reads_MMEJ, reads_NHEJ) %>% distinct()
+HR_columns_select_sep <- trip_mut_lbr2_all_siRNA_HR_sep %>% select(siRNA, barcode, reads_MMEJ, reads_NHEJ, replicate) %>% distinct()
+
+#Calculate ∆log2MMEJNHEJ
+HR_columns_mean_computed <- HR_columns_select_mean %>%
+  mutate(log2MMEJNHEJ = log2(reads_MMEJ/reads_NHEJ))
+
+HR_columns_mean_sep_computed <- HR_columns_select_sep %>%
+  mutate(log2MMEJNHEJ = log2(reads_MMEJ/reads_NHEJ))
+
+#ggplot per replicate
+ggplot(HR_columns_mean_sep_computed) +
+  geom_quasirandom(aes(replicate, log2MMEJNHEJ)) +
+  facet_wrap(~ siRNA)
+
+#ggplot per replicate
+ggplot(HR_columns_mean_computed) +
+  geom_quasirandom(aes(siRNA, log2MMEJNHEJ)) + 
+  theme_bw()
+```
+
+#Calculate global effects on K562 cells (on mean)
+```{r}
+#Extract control data
+siNT_experiment <- HR_columns_mean_computed %>%
+  filter(siRNA == "siNT") %>%
+  select(barcode, control_bal = log2MMEJNHEJ)
+
+#Calcualte ∆log2 MMEJ:NHEJ balance
+HR_columns_mean_computed_delta <- HR_columns_mean_computed %>%
+  left_join(siNT_experiment) %>%
+  mutate(delta_bal = log2MMEJNHEJ - control_bal)
+
+#Global differences in the screen
+screen_data <- tibble(siRNA = c("siNT","siBRCA1","siBRCA2","siPolQ","siRad51"),
+                      screen_global = c(0,-0.006,0.12,-0.72,-0.15))
+
+#Calculate global balance
+global_balance_mean <- HR_columns_mean_computed_delta %>%
+  dplyr::group_by(siRNA) %>%
+  dplyr::summarise(global_delta = mean(delta_bal)) %>%
+  left_join(screen_data)
+
+#Plot global balance
+ggplot(HR_columns_mean_computed_delta) +
+  geom_quasirandom(aes(siRNA, delta_bal)) +
+  theme_bw()
+
+#correlation between them
+ggplot(global_balance_mean %>% filter(siRNA != "siNT"), aes(global_delta, screen_global)) +
+  geom_point() +
+  stat_cor(method = "pearson") +
+  geom_smooth(method = "lm", se = F) +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+#Underestimation of the phenotype
+effect_size_calculation <- global_balance_mean %>%
+  reshape2::melt(id.vars = "siRNA")
+
+#Calculate
+ggplot(effect_size_calculation %>% filter(siRNA != "siNT")) +
+  geom_quasirandom(aes(fct_relevel(variable, c("screen_global","global_delta")),abs(value))) +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+ggplot(effect_size_calculation %>% filter(siRNA != "siNT")) +
+  geom_col(aes(fct_relevel(variable, c("screen_global","global_delta")),abs(value))) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  facet_wrap(~ siRNA)
+
+```
+
+# Step5: Identification of repair proteisn with CCDs: three-step linear modeling
+
+#Substep A: I will skip it, I only have mean values
+```{r}
+#Filter genes that do not significantly perturb balance and add chromatin info
+siRNA_CCD_dt <- HR_columns_mean_computed_delta %>%
+  filter(siRNA != "siNT") %>%
+  left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) #Join chromatin info
+
+#Create an empty dt with CCDs of DDR proteins
+siRNA_CCDs_dt <- tibble(siRNA = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(siRNA_CCD_dt$siRNA)){
+gene.library.dt <- filter(siRNA_CCD_dt, siRNA == i)
+set.seed(1)
+PCR_model_DDR_test <- pcr(delta_bal~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV") #Run principal component regression
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+combined.dt <- tibble(measured = gene.library.dt$delta_bal, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+siRNA_CCDs_dt <- siRNA_CCDs_dt %>% add_row(siRNA = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+}
+
+```
+
+#Sub-step C: Linear modeling to identify individual DR proteins - chromatin feature links
+```{r}
+#Create empty dataframe to calculate synergy scores
+siRNA_slopes <- tibble(siRNA = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+#Loop to run linear models on the values
+for (h in unique(siRNA_CCD_dt$siRNA)) {
+  for (j in colnames(siRNA_CCD_dt)[10:34]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- siRNA_CCD_dt %>% filter(siRNA == h) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = delta_bal ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   siRNA_slopes <- siRNA_slopes %>% add_row(siRNA = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+}
+
+#Retain slopes that 
+siRNA_all_values <- siRNA_slopes %>% 
+  reshape2::dcast(siRNA + feature ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(siRNA ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  mutate(CCD_value = case_when(pathway_signif == "MMEJ" & slope < 0 ~ slope, pathway_signif == "MMEJ" & slope > 0 ~ 0, pathway_signif == "NHEJ" & slope > 0 ~ slope, pathway_signif == "NHEJ" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+
+#How many M-, N- and no synergies
+synergy_per_gene <- DR_KO_CCD_all_values %>% 
+  filter(model_p.adj < 0.05) %>% 
+  dplyr::group_by(gene) %>% 
+  dplyr::summarise(M_synergy = sum(CCD_value < 0),
+                   N_synergy = sum(CCD_value > 0)) %>%
+  distinct() %>% 
+  mutate(CCD_effect = case_when(M_synergy > 0 & N_synergy == 0 ~ "M_synergy",
+                                N_synergy > 0 & M_synergy == 0 ~ "N_synergy",
+                                N_synergy > 0 & M_synergy > 0 ~ "both", T ~ "none"))
+
+synergy_summaries <- synergy_per_gene %>% dplyr::group_by(CCD_effect) %>% dplyr::summarise(c = n())
+```
+
+
+# Substep B: Principal component regression to identify repair proteins with CCDs
+```{r}
+#Filter genes that do not significantly perturb balance and add chromatin info
+DDR.KO.CCD.dt <- log2.distance.ratio %>%
+  filter(sample == "KO") %>%
+  left_join(clone5_z.score_chrom_tib, by = c("barcode" = "ID")) %>% #Join chromatin info
+  left_join(fit.z.scores.ratio.IPR.filtered, by = c("gene", "well", "plate","sample")) %>% na.omit() #Filter genes that do not perturb MMEJ:NHEJ balance
+
+#Create an empty dt with CCDs of DDR proteins
+DDR_KO_CCDs_dt <- tibble(gene = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(DDR.KO.CCD.dt$gene)){
+gene.library.dt <- filter(DDR.KO.CCD.dt, gene == i)
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3+H3K4me1+H3K4me2+H3K4me3+H3K79me2+H3K9me2+H3K9me3+H4K5acK8ac+HDAC1+HDAC2+HDAC3+POL2+POL2AS2+SMC3+LMNB1+Dam+DNAse+m5C+late_replicating+TTseq, data=gene.library.dt , validation="CV") #Run principal component regression
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+combined.dt <- tibble(measured = gene.library.dt$mean.log2foldchange, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+DDR_KO_CCDs_dt <- DDR_KO_CCDs_dt %>% add_row(gene = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+}
+
+```

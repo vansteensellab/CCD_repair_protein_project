@@ -1,0 +1,92 @@
+---
+title: "xv20210512_lm_modelling_screening"
+output: html_document
+---
+#Try modelling data in the screening
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(broom)
+```
+
+#Import data tables
+```{r}
+screen.score <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+screen.detail <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+screen.score.totals <-  readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+
+screen.controls <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+```
+
+#Select KDM6A, SUPT5H, RBBP5 and KDM3A
+
+```{r}
+#Plot data table
+tmp.genes <- screen.detail %>% filter(gene %in% c("KDM6A","SUPT5H","RBBP5","KDM3A","ASH2L","ING1","JARID2")) %>% select(barcode,gene,chromatin,MMEJscore,b.rep,t.rep)
+tmp.control <- screen.controls %>% filter(gene == "WT") %>% select(barcode,gene,chromatin,MMEJscore,b.rep,t.rep)
+tmp.dt.lm <- bind_rows(tmp.genes, tmp.control)
+
+#transform into factors
+tmp.dt.lm[sapply(tmp.dt.lm, is.character)] <- lapply(tmp.dt.lm[sapply(tmp.dt.lm, is.character)], 
+                                                                                        as.factor)
+
+#Set reference to WT
+tmp.dt.lm$gene <- relevel(tmp.dt.lm$gene, ref = "WT")
+
+#
+tmp.lm <- broom::tidy(lm(MMEJscore ~ gene, tmp.dt.lm %>% filter(chromatin == "H3K27me3")))
+
+```
+
+#Run lm for every gene
+```{r}
+#Plot data table
+tmp.all <- screen.detail %>% select(barcode,gene,chromatin,MMEJscore,b.rep,t.rep)
+tmp.control <- screen.controls %>% filter(gene == "WT") %>% select(barcode,gene,chromatin,MMEJscore,b.rep,t.rep)
+tmp.all.lm <- bind_rows(tmp.all, tmp.control)
+
+#transform into factors
+tmp.all.lm[sapply(tmp.all.lm, is.character)] <- lapply(tmp.all.lm[sapply(tmp.all.lm, is.character)], 
+                                                                                        as.factor)
+
+#Set reference to WT
+tmp.all.lm$gene <- relevel(tmp.all.lm$gene, ref = "WT")
+
+#
+all.lm.k27 <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "H3K27me3"))) %>% mutate(gene = gsub("gene","",term), k27_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.th <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "late_replicating-LAD-H3K9me2"))) %>% mutate(gene = gsub("gene","",term), th_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.et <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "euchromatin-transcription"))) %>% mutate(gene = gsub("gene","",term), et_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.t <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "transcription"))) %>% mutate(gene = gsub("gene","",term), t_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+all.lm.oh <- broom::tidy(lm(MMEJscore ~ gene + barcode, tmp.all.lm %>% filter(chromatin == "other-heterochromatin"))) %>% mutate(gene = gsub("gene","",term), oh_pvalue = p.adjust(p.value, method = "fdr")) %>% filter(grepl("gene",term))
+
+p.value.summ <- all.lm.k27 %>% select(gene, k27_pvalue) %>% bind_cols(all.lm.th$th_pvalue,all.lm.et$et_pvalue, all.lm.oh$oh_pvalue, all.lm.t$t_pvalue) %>% column_to_rownames(var = "gene")
+colnames(p.value.summ) <- c("k27_pvalue","th_pvalue","et_pvalue","oh_pvalue","t_pvalue")
+
+# Correlate with z-scores
+correlation.z.p <- all.lm.th %>% mutate(gene = gsub("gene","",term), diff = 0.450 + estimate) %>% left_join(screen.detail %>% filter(chromatin == "late_replicating-LAD-H3K9me2") %>% select(gene,barcode,mmej.SCscore,MMEJscore)) %>% distinct() %>% mutate(hit.p.value = p.value < 0.05, hit.z.score = abs(mmej.SCscore) > 1.65, discrepant = abs(mmej.SCscore) > 1.65 & p.value > 0.05) %>% mutate(adj.p.value = p.adjust(p.value, method = "fdr"))
+
+```
+
+#UMAP with p.values
+
+```{r}
+#UMAP plot
+  
+
+#Plot data
+p.value.data.umap <- umap(p.value.summ)
+
+#plot UMAP data in 19 locations
+ggplot(as.tibble(p.value.data.umap$layout)) + geom_point(aes(V1,V2, color = p.value.summ$k27_pvalue < 0.1))
+
+p.value.mix <- p.value.summ %>% rowwise() %>% add_tally()
+
+tmp <- p.value.summ < 0.05 
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

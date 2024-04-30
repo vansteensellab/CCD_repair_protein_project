@@ -1,0 +1,92 @@
+Building DAG of jobs...
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	5	align_chip
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	5	call_domains
+	1	compare_bam_replicates
+	1	compare_bw_rep
+	5	convert2gff
+	5	filter_blackgrey
+	5	filter_blackgrey_ctrl
+	1	generate_greylist
+	6	idxstats
+	10	index
+	8	make_compare_bw
+	5	markdup
+	1	plot_correlation
+	79
+
+rule filter_blackgrey_ctrl:
+    input: /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657374-grey.bed, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657374.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657374.bam
+    jobid: 44
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657374, genome=hg38
+
+rule filter_blackgrey_ctrl:
+    input: /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657348-grey.bed, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657348.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657348.bam
+    jobid: 65
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657348, genome=hg38
+
+rule generate_greylist:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657315.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-greystats.csv, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-greydepth.tsv, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-grey.bed
+    jobid: 78
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38, srr=SRR11657315
+
+
+rule idxstats:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362.bam.bai, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363.bam.bai, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam.bai
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/BICR78_GSE149670.txt
+    jobid: 13
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, celltype=HNSCC, genome=hg38, sample=GSE149670, target=BICR78, experiment=Farhangdoost2021
+
+
+rule align_chip:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657373.fastq.gz
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373.bam.tmp
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/HNSCC/Farhangdoost2021/SKN3_GSE149670_r1_SRR11657373.bam.tmp
+    jobid: 104
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, celltype=HNSCC, genome=hg38, sample=GSE149670, rep=r1, target=SKN3, srr_id=SRR11657373, experiment=Farhangdoost2021
+    threads: 10
+
+rule filter_blackgrey_ctrl:
+    input: /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657369-grey.bed, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657369.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657369.bam
+    jobid: 32
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657369, genome=hg38
+
+rule filter_blackgrey_ctrl:
+    input: /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657285-grey.bed, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657285.bam
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657285.bam
+    jobid: 27
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657285, genome=hg38
+
+Error in rule idxstats:
+    jobid: 13
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/BICR78_GSE149670.txt
+
+RuleException:
+CalledProcessError in line 410 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Command ' set -euo pipefail;  /DATA/scratch/usr/c.leemans/projects/chip_snake/scripts/idxstats.R --exp /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r1_SRR11657362.bam /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/HNSCC/Farhangdoost2021/BICR78_GSE149670_r2_SRR11657363.bam                                --input /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/filtered/control/SRR11657364.bam                               --out /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/idxstats/HNSCC/Farhangdoost2021/BICR78_GSE149670.txt ' returned non-zero exit status 1
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 410, in __rule_idxstats
+  File "/home/x.vergara/miniconda3/envs/chip/lib/python3.5/concurrent/futures/thread.py", line 55, in run
+Will exit after finishing currently running jobs.
+Terminating processes on user request.
+Error in rule generate_greylist:
+    jobid: 78
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-greystats.csv, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-greydepth.tsv, /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-grey.bed
+
+RuleException:
+CalledProcessError in line 707 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Command ' set -euo pipefail;  chipseq-greylist --outdir /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/ /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657315.bam ' returned non-zero exit status 1
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 707, in __rule_generate_greylist
+  File "/home/x.vergara/miniconda3/envs/chip/lib/python3.5/concurrent/futures/thread.py", line 55, in run
+Removing output files of failed job generate_greylist since they might be corrupted:
+/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/greylist/SRR11657315-greydepth.tsv
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-30T131248.967966.snakemake.log

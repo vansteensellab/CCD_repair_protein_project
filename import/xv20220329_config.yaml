@@ -1,0 +1,174 @@
+chip_out:
+    /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps
+
+experiment:
+    HNSCC:
+        Farhangdoost2021:
+            CAL27:
+                GSE149670:
+                    treatment:
+                        [SRR11657282]
+                    control:
+                        [SRR11657285]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769 
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+
+            DET562:
+                GSE149670:
+                    treatment:
+                        [SRR13764822]
+                    control:
+                        [SRR11657315]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769 
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+                    
+                    
+            FADU:
+                GSE149670:
+                    treatment:
+                        [SRR11657347]
+                    control:
+                        [SRR11657348]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+                                        
+                    
+            BICR78:
+                GSE149670:
+                    treatment:
+                        [SRR11657362,SRR11657363]
+                    control:
+                        [SRR11657364]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+                    
+                    
+                    
+            SCC4:
+                GSE149670:
+                    treatment:
+                        [SRR11657368]
+                    control:
+                        [SRR11657369]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+                                        
+                    
+            SKN3:
+                GSE149670:
+                    treatment:
+                        [SRR11657373]
+                    control:
+                        [SRR11657374]
+                    source: GEO
+                    control_type: Input
+                    SOFA: H3K27me3
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1016/j.celrep.2021.108769
+                    PMID: 33626351
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+                    hmmr: [10000]
+                    
+
+forge:
+    /DATA/scratch/usr/c.leemans/data/forge/
+
+
+
+macs2_gsize: 'hs'
+
+blacklist:
+    hg38: /DATA/scratch/usr/c.leemans/data/tracks/hg38/hg38_blacklist_ENCFF419RSJ.bed.gz
+    hg19: /DATA/scratch/usr/c.leemans/data/tracks/hg19/hg19_blacklist_ENCFF055QTV.bed.gz
+
+replicate_cor_method:
+    'pearson'
+
+min_mapq:
+    30
+
+chrom_sizes:
+    hg38: /DATA/data/human/hg38/genome/chromSizes_hg38_LP180129.txt
+    hg19: /DATA/data/genomes/hg19/hg19.chrom.sizes
+
+aligner_index:
+    bowtie2:
+        hg38: '/DATA/data/human/hg38/index/bowtie2/hg38_1-22_XYM'
+        hg19: '/DATA/data/bowtie2/hg19_ch1-22_XYM'
+    bwa:
+        hg38: '/DATA/scratch/usr/c.leemans/data/hg38/hg38_1-22_XYM.fa'
+
+chip_genome:
+    - hg38
+
+# domain_means:
+#     LMNB1.5kb: /DATA/usr/t.v.schaik/proj/3D_nucleus/results/ts180110_4DN_DataProcessing/results/HMM/bin-5kb/K562_LMNB1-5kb-combined_HMM.txt.gz
+
+encode_http:
+    https://www.encodeproject.org/files/{enc_id}/@@download/{enc_id}.fastq.gz

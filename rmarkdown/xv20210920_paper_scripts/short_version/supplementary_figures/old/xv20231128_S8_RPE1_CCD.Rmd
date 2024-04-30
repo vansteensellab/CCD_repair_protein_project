@@ -1,0 +1,78 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim:Figure supplmentary 7 - Add legend
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+proteins_gRNA <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","gRNA_gene") #gRNA gene conversion
+
+#Processed CCD data (4 cell lines)
+PRO_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","PRO_CCD")
+DEF_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","DEF_CCD")
+
+#Bind all table together
+RPE1_cell_lines_CCD <- bind_rows(PRO_CCD, DEF_CCD)
+
+#Calculate a toxicity score
+viability_data <- readRDS(file= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230908_dna_quantification_viability.rds")
+
+
+#Manual order
+gene_list_order <- c("POLL","BRCC3","BRCA2","CHAF1A","BOD1L1","ATM","FANCD2","MDC1","RAD50","CHEK2","SMC5","FANCG","FAAP24","RMI2","BLM","PARP1","FANCM","ATR","RBBP8","TOPBP1")
+
+```
+
+# Figure S6A: Viability data
+```{r, fig.height=3, fig.width=7}
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S5_RPE1_data_controls/xv20231102_S5D_DNA_recovery.pdf", width= 7,height = 2.5)
+ggplot(viability_data %>% left_join(proteins_gRNA) %>% filter(!cell_line %in%  c("U2OS","RPE1")) %>% na.omit(), aes(fct_relevel(gene,gene_list_order),log2(dna_score), fill = mean_DNA_loss < 0.5)) + 
+  stat_summary(geom = "col") +
+    facet_wrap(~ fct_relevel(cell_line, c("PRO","DEF","RPE1"))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_fill_manual(values = c("grey70","coral")) +
+  geom_hline(yintercept = -1, linetype = 2)
+dev.off()
+
+```
+
+#Fig S5B: Number of IPRs per cell line
+```{r, fig.height=3, fig.width=7}
+IPR_n_cell_line <- RPE1_cell_lines_CCD %>%
+  filter(cell_line != "K562") %>%
+  select(gene, cell_line, gene, n) %>%
+  distinct()
+
+pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S5_RPE1_data_controls/xv20231102_S5A_IPR_n_RPE1.pdf", width= 7,height = 2.5)
+ggplot(IPR_n_cell_line) +
+  geom_col(aes(fct_relevel(gene,gene_list_order), n, fill = n > 9)) +
+  facet_wrap(~ fct_relevel(cell_line, c("PRO","DEF"))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_fill_manual(values = c("grey70","coral")) +
+  geom_hline(yintercept = 9, linetype = 2)
+dev.off()
+
+#Mean per cell line
+mean_IPR_cell_line <- IPR_n_cell_line %>%
+  dplyr::group_by(cell_line) %>%
+  dplyr::summarise(mean_IPR = mean(n))
+
+#15.6 and 10.6
+
+```
+

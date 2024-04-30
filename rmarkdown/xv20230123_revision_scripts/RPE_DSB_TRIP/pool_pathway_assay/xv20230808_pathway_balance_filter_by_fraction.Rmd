@@ -1,0 +1,653 @@
+---
+title: "xv20230329_RPE1_pool_pathway assay"
+author: "Xabier Vergara"
+date: "2023-07-26"
+output:
+  html_document: default
+  pdf_document: default
+---
+#Date: 26th July 2023
+#Author: Xabier Vergara
+#Aim: The aim of this file is to wrap up the filtering strategy and measure if pathway balance in control samples has chromatin biases.
+
+#Load libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("exp_n","sample_ID","cell_line","condition","bio_rep","t_rep"))
+})
+```
+
+
+#Number of mapped IPRs
+```{r}
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Import barcode sequences
+#RPE cells
+RPE_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+U2OS_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+#Bind both
+all_IPRs <- bind_rows(RPE_IPR, U2OS_IPR) %>% mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% filter(pool %in% selected_pools)
+```
+
+
+#Test different filtering strategies: How many reads you need for reliable pathway balance measurement.
+I decided that I will do this by filter x amount of reads of -7_del and 1_ins. I tried to do this by total amount of reads, but then the readout becomes very noisy in the sense that there are some IPRs where I have 1000 reads of ins_1 and 0 del_-7. This also happens the other way around. 
+NOTE: I will also add a pseudocount here, this is not necessary for this first analysis, but will be needed for ATM and DNAPKi comparison.
+```{r, message=F, warning=F}
+#Filter by replicate
+indel_data <- clone_pools_pathway_assay %>% 
+  dplyr::group_by(barcode,outcome, exp_n, cell_line, condition, bio_rep) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F) +1) %>% left_join(all_IPRs) %>% na.omit()
+
+#Filter out rep (This replicate doesn't correlate with the rest)
+filter_out_rep <- tibble(cell_line = "RPEDef",bio_rep = "R4")
+indel_data_clean <- indel_data %>% anti_join(filter_out_rep)
+
+
+#Only look at LBR2 vs. tracr
+control_balance_bio <- indel_data_clean %>% filter(condition %in% c("LBR2","tracr") & outcome %in% c("ins_1","del_-7","wt_0"))
+
+#Look at read numbers
+control_balance_bio_dcast <- control_balance_bio %>% reshape2::dcast(barcode + cell_line + condition + bio_rep ~ outcome, value.var = "counts", fun.aggregate = mean, fill = 1) %>% left_join(total_read_barcode)
+
+#Control_measurements (bio_rep)
+pathway_metric_control_bio <- control_balance_bio_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1),
+         TIF = 1 - (wt_0/(`del_-7`+ins_1+wt_0))) %>%
+  na.omit()
+
+#Filter by read number and plot noise level
+read_count <- c(1,5,10,25,50,75,100,200,300)
+
+filter_read_count_test <- map_dfr(read_count , function(x) {
+  pathway_metric_control_bio %>%
+    filter(`del_-7` >= x & ins_1 >= x) %>%
+    mutate(read_filter = x)
+})
+
+#Number of IPRs in each
+IPR_summary <- filter_read_count_test %>% 
+  dplyr::group_by(cell_line, condition, read_filter, bio_rep) %>% 
+  dplyr::summarize(IPR_n = n()) 
+
+IPR_summary_dcast <- IPR_summary %>% 
+  reshape2::dcast(cell_line + condition + bio_rep ~ read_filter, value.var  = "IPR_n")
+
+#Plot loss of IPRs by each read_count filter
+
+ggplot(IPR_summary %>% 
+         filter(condition ==  "LBR2")) + 
+  geom_col(aes(x = bio_rep,
+               y = IPR_n,
+               fill = fct_relevel(as.character(read_filter),as.character(read_count))),
+           position = "dodge") +
+  labs(fill = "read_filter") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw()
+```
+#Conclusion: In RPE1 cells there seem to be ~20 reporters that are always there. The rest of cell line we gradually lose IPRs as we increase the filtering strength
+
+#Plot relation between total read number and filtering steps
+```{r}
+ggplot(filter_read_count_test) + 
+  geom_point(aes(log10(`del_-7`),log10(total_reads), color = total_reads > 1000)) +
+  facet_grid(cell_line ~ read_filter) + geom_abline() +
+  theme_bw()
+
+
+```
+
+#Do I find the same IPRs in all replicates? Or these are different from replicate to replicate. 
+```{r}
+#Calculate co-ocurrence per replicate
+replicates_IPR <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  dplyr::group_by(barcode,cell_line, read_filter) %>%
+  dplyr::summarise(rep_n = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(cell_line, read_filter,rep_n) %>%
+  dplyr::summarise(capture_IPR = n())
+
+total_IPR_rep <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  select(cell_line, barcode, read_filter) %>% 
+  distinct() %>%
+  dplyr::group_by(cell_line,read_filter) %>%
+  dplyr::summarise(total_IPR = n())
+
+#Calculate frequency
+freq_IPR_capture <- replicates_IPR %>% 
+  left_join(total_IPR_rep) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Absolute_numbers
+IPR_reps <- replicates_IPR %>% reshape2::dcast(cell_line + rep_n ~ read_filter)
+
+#IPRs in multiple reps
+ggplot(replicates_IPR) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = capture_IPR,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+#Frequency
+ggplot(freq_IPR_capture) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+
+```
+#Conclusion: Data in RPE1 is very sparce
+
+#Calculate frequency in absolute number of IPRs
+```{r}
+#Total mapped IPR per pool
+summary_mapped <- all_IPRs %>% 
+  dplyr::group_by(iPCR_cell) %>% 
+  dplyr::summarise(total_IPR = n()) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(cell_line, total_IPR)
+
+#Calculate frequency out of all IPRs mapped
+freq_IPR_capture_total <- replicates_IPR %>% 
+  left_join(summary_mapped) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Frequency
+ggplot(freq_IPR_capture_total) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line) + 
+  theme_bw() + labs(x = "read_filter")
+
+#How many IPRs have at least n=2
+n2_IPRs <- freq_IPR_capture_total %>% 
+  filter(rep_n > 1) %>%
+  dplyr::group_by(cell_line, read_filter) %>%
+  dplyr::summarise(IPR_n = sum(capture_IPR)) %>%
+    left_join(summary_mapped) %>%
+  mutate(freq_capture_n2 = IPR_n/total_IPR)
+
+#Frequency
+ggplot(n2_IPRs) + 
+  geom_col(aes(x = cell_line,
+               y = freq_capture_n2,
+               fill = fct_relevel(as.character(read_filter),as.character(read_count))),
+           position = "dodge") +
+  labs(fill = "read_filter") +
+  theme_bw()
+```
+#Conclusion: We capture, with at least n=2, a good proportion of all pools in DEF, PRO and U2OS. But, this is much lower in RPE1 cells.
+
+#Is pathway balance reproducible among replicates?
+```{r,fig.height = 5, fig.width = 12, warning= F, message=F}
+read_counts_filter_reprod <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  reshape2::dcast(barcode + cell_line + condition + read_filter ~ bio_rep, value.var = "balance")
+
+#Calculate mean & sd
+read_counts_filter_reprod_summary <- read_counts_filter_reprod %>% 
+  rowwise() %>% 
+  mutate(mean_bal = mean(c(R1,R2,R3,R4),na.rm = T),
+         sd_bal = sd(c(R1,R2,R3,R4), na.rm = T),
+         reps = 4 - sum(is.na(c(R1,R2,R3,R4))))
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R1,R2)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm", se = F) +
+  ggpubr::stat_cor(method = "pearson",size = 2.5) +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "top") + labs(fill = "replicate number")
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R2,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm", se = F) +
+  ggpubr::stat_cor(method = "pearson",size = 2.5) +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "top") + labs(fill = "replicate number")
+
+#R1 vs. R3
+ggplot(read_counts_filter_reprod_summary, aes(R1,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm", se = F) +
+  ggpubr::stat_cor(method = "pearson",size = 2.5) +
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "top") + labs(fill = "replicate number")
+```
+#Conclusion: The correlation improves as we increase the amount of reads, but the measurements are quite noisy. The RPEDef have the worst correlation score.
+
+#Plot summary correlation coefficients
+```{r, message=F,fig.width=10, fig.height=9}
+#Test with U2OS & 50
+analysis_pair <- read_counts_filter_reprod_summary %>% select(cell_line, read_filter) %>% distinct()
+
+replicate_comparisons <- tidyr::crossing(c(1:4),c(1:4))
+
+tmp_f <- map2_dfr(analysis_pair$cell_line,analysis_pair$read_filter, function(x,y){
+  #Filter_data
+  data_sel <- read_counts_filter_reprod_summary %>%
+    filter(cell_line == x & read_filter == y) %>%
+    select(R1, R2, R3, R4)
+  
+  #Correlation analyis
+cor_data <- cor(data_sel, use = "pairwise.complete.obs", method = "spearman") %>%
+  as_tibble(rownames = NA) %>% 
+  rownames_to_column(var = "rep_1") %>% 
+  reshape2::melt(value.name = "coefficient") %>%
+  select(rep_1, "rep_2" = variable, coefficient) %>%
+  na.omit() %>% 
+  mutate(cell_line = x,
+         read_filter = y)
+
+#Number of IPRs per each data table
+
+IPR_n_cor <- map2_dfr(as.vector(as.matrix(replicate_comparisons[1])), as.vector(as.matrix(replicate_comparisons[2])), function(j,i) {
+  IPR_count <- data_sel %>% select(j,i) %>% na.omit() %>% nrow()
+  tibble(rep_1 = paste0("R",j), rep_2 = paste0("R",i), IPR_n = IPR_count)
+})
+
+left_join(cor_data, IPR_n_cor)
+  
+})
+
+#Plot with data_points in comparison
+ggplot(tmp_f) + 
+  geom_tile(aes(rep_1, rep_2, fill = coefficient)) + 
+  geom_text(aes(rep_1, rep_2, label = IPR_n)) + 
+  scale_fill_gradient2() + 
+  facet_grid(cell_line ~ read_filter, scales = "free") +
+  theme_bw() +
+  theme(legend.position = "top")
+
+```
+
+#Calculate TIF per replicate
+```{R}
+read_counts_filter_reprod_TIF <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  reshape2::dcast(barcode + cell_line + condition + read_filter ~ bio_rep, value.var = "TIF")
+
+#Calculate mean & sd
+read_counts_filter_reprod_summary_TIF <- read_counts_filter_reprod_TIF %>% 
+  rowwise() %>% 
+  mutate(mean_TIF = mean(c(R1,R2,R3,R4),na.rm = T),
+         sd_TIF = sd(c(R1,R2,R3,R4), na.rm = T),
+         reps = 4 - sum(is.na(c(R1,R2,R3,R4))))
+```
+
+#How does data look in this filter
+```{R}
+#Balance data
+filtered_balance <- read_counts_filter_reprod_summary %>%
+  filter(reps > 1) %>%
+  select(barcode, cell_line, mean_bal, sd_bal, reps, read_filter)
+
+#TIF data
+filtered_balance_TIF <- read_counts_filter_reprod_summary_TIF %>%
+  filter(reps > 1) %>%
+  select(barcode, cell_line, mean_TIF, sd_TIF, reps, read_filter)
+
+#Number of IPRs per cell line and read_filter
+IPR_number <- filtered_balance %>% dplyr::group_by(cell_line,read_filter) %>% dplyr::summarise(counts = n())
+
+ggplot(IPR_number) + 
+  geom_col(aes(cell_line,
+               counts, 
+               fill = fct_relevel(as.character(read_filter), as.character(read_count))), 
+           position = "dodge") +
+  theme_bw() +
+  labs(fill = "read_filter")
+
+#I will filter on 75 reads
+filtered_balance_75 <- filtered_balance %>% left_join(filtered_balance_TIF) %>% filter(read_filter == 300)
+
+```
+
+#How does pathway balance look independent of chromatin marks
+```{r}
+cells <- c("RPE1","RPEPro","RPEDef","U2OS")
+
+#Plot TIF frequency across cell lines
+ggplot(filtered_balance_75) + 
+  ggbeeswarm::geom_quasirandom(aes(fct_relevel(cell_line,cells), mean_TIF, size = sd_TIF)) +
+  theme_bw() + xlab("Cell lines")
+
+#Plot balance across cell lines
+ggplot(filtered_balance_75) + 
+  ggbeeswarm::geom_quasirandom(aes(fct_relevel(cell_line,cells), mean_bal, size = sd_bal)) +
+  theme_bw() + xlab("Cell lines")
+
+#Correlation of TIF and balance
+ggplot(filtered_balance_75, aes(mean_TIF, mean_bal)) + 
+  geom_point(aes(color = as.character(reps))) +
+  geom_smooth(method = "lm", se =F) +
+  ggpubr::stat_cor(method = "spearman") +
+  theme_bw() + xlab("TIF") +
+  facet_wrap(~ cell_line)
+
+```
+#All looks good, U2OS has a very weird relationship between editing frequency and pathway balance. 
+But, it is very weird as the endogenous LBR2 locus has a 25% of editing frequency.
+
+#Add chromatin info for RPE1 cells
+#Load chromatin info of the IPRs in RPE cells
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = scale((ratio_r1 + ratio_r2)/2)) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity)
+```
+
+#Load chromatin info of the IPRs in U2OS cells
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_U2OS_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip_",str_extract(x, "(?<=2018_).*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+
+#Bind both
+chromatin_features_pools_U2OS <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity)
+
+#bind U2OS and RPE data: The chromatin features are different from cell line to cell line
+chromatin_features_pools_all <- bind_rows(chromatin_features_pools_U2OS, chromatin_features_pools)
+```
+
+#Load chromatin info of the IPRs in RPE cells (binary call)
+```{r, warning=F}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip_bin <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    mutate(bin = case_when(z_score > 0.5 ~ 1,
+                           T ~ 0)) %>%
+    na.omit() %>%
+    mutate(file = paste0("bin_",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "bin")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam_bin <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    mutate(bin = case_when(z_score > 0.5 ~ 1,
+                 T ~ 0)) %>%
+    na.omit() %>%
+    mutate(file = paste0("bin_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "bin")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe_bin <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(repliseq = scale((ratio_r1 + ratio_r2)/2)) %>%
+    mutate(bin_repli = case_when(repliseq > 0.5 ~ 1,
+                 T ~ 0)) %>%
+    dplyr::select("ID" = barcode, bin_repli)
+})
+
+#Bind both
+chromatin_features_pools_bin <-  left_join(chromatin_features_pools_chip_bin, chromatin_features_pools_dam_bin, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe_bin) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity) %>%
+  mutate(chrom_type = case_when())
+
+
+#Calculate triple heterochromatin
+
+```
+
+
+#Join with balances and calculate the correlation (do this for all marks)
+```{r, warning=F}
+values_chromatin <- left_join(filtered_balance_75, chromatin_features_pools_all)
+
+#Calculate spearman correlation for all chromatin features
+chromatin_analysis_pair <- analysis_pair
+
+spearman_coefficients <- map_dfr(chromatin_analysis_pair$cell_line, function(x){
+  filter_data <- values_chromatin %>% filter(cell_line == x)
+  rho_table <- map_dfr(colnames(values_chromatin[9:19]), function(j){
+      balance <- filter_data$mean_bal
+      feature <- as.numeric(as.matrix(filter_data[j]))
+      cor.test(x = balance, y = feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+
+})
+  rho_table %>% mutate(cell_line = x) %>% distinct()
+})
+
+#chromatin feature order
+chromatin_order <- c("dam_H3K9me3","dam_H3K9me2","late_replicating","dam_LMNNB2","dam_LMNB1","dam_H3K27me3","chip_H3K4me3","chip_H3K4me2","chip_H3K4me1","chip_H3K27ac","chip_H3K36me3")
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% distinct()) + 
+  geom_col(aes(fct_relevel(chromatin,chromatin_order),estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+#Conclusion: Filtering at 75 reads gives us a very similar mutation biases in RPE1 wild types. RPE p53null & RPE p53/BRCA1 null cells the biases are not so clear.
+
+#Join with balances and calculate the correlation (do this for all marks): With binary data
+```{r, warning=F}
+values_chromatin_bin <- left_join(filtered_balance_75, chromatin_features_pools_bin)
+
+#Calculate spearman correlation for all chromatin features
+chromatin_analysis_pair <- analysis_pair %>% filter(cell_line != "U2OS")
+
+spearman_coefficients <- map_dfr(chromatin_analysis_pair$cell_line, function(x){
+  filter_data <- values_chromatin %>% filter(cell_line == x)
+  rho_table <- map_dfr(colnames(values_chromatin[9:19]), function(j){
+      balance <- filter_data$mean_bal
+      feature <- as.numeric(as.matrix(filter_data[j]))
+      cor.test(x = balance, y = feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+
+})
+  rho_table %>% mutate(cell_line = x) %>% distinct()
+})
+
+#chromatin feature order
+chromatin_order <- c("dam_H3K9me3","dam_H3K9me2","late_replicating","dam_LMNNB2","dam_LMNB1","dam_H3K27me3","chip_H3K4me3","chip_H3K4me2","chip_H3K4me1","chip_H3K27ac","chip_H3K36me3")
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients %>% distinct()) + 
+  geom_col(aes(fct_relevel(chromatin,chromatin_order),estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(~ fct_relevel(cell_line, c("RPE1","RPEPro","RPEDef")))
+```
+
+
+#Plot individual correlations: To check how they look
+```{r, fig.height=3, fig.width=10, message=F}
+#Plot correlations (These are significant correlations)
+ggplot(values_chromatin, aes(dam_H3K9me3, mean_bal)) + 
+  geom_point(aes(size =sd_bal, color = as.character(reps))) + 
+  facet_grid(~ cell_line) + 
+  geom_smooth(method = "lm",se = F)+ 
+  ggpubr::stat_cor(method = "spearman") +
+  theme_bw()
+
+#Plot correlations (These are significant correlations)
+ggplot(values_chromatin, aes(chip_H3K36me3, mean_bal)) + 
+  geom_point(aes(size =sd_bal, color = as.character(reps))) + 
+  facet_grid(~ cell_line) + 
+  geom_smooth(method = "lm",se = F)+ 
+  ggpubr::stat_cor(method = "spearman") +
+  theme_bw()
+
+```
+
+#Quick call of triple heterochromatin
+```{r}
+triple_het_call <- values_chromatin %>% 
+  mutate(H3K9me3_bin = case_when(dam_H3K9me3 > 0 ~ 1))
+
+```
+
+#As a control: are these biases consistent at different filtering steps
+```{r, warning=F}
+values_chromatin_all_filter <- left_join(filtered_balance, chromatin_features_pools) %>% filter(cell_line != "U2OS")
+
+#Calculate spearman correlation for all chromatin features
+chromatin_analysis_pair <- analysis_pair %>% filter(cell_line != "U2OS")
+
+spearman_coefficients_all <- map2_dfr(chromatin_analysis_pair$cell_line, chromatin_analysis_pair$read_filter, function(x,y){
+  filter_data <- values_chromatin_all_filter %>% filter(cell_line == x & read_filter == y)
+  rho_table <- map_dfr(colnames(values_chromatin_all_filter[7:16]), function(j){
+      balance <- filter_data$mean_bal
+      feature <- as.numeric(as.matrix(filter_data[j]))
+      cor.test(x = balance, y = feature, method = "spearman", use = "pairwise.complete.obs") %>% broom::tidy() %>% mutate(chromatin = j)
+
+})
+  rho_table %>% mutate(cell_line = x, read_filter = y) %>% distinct()
+})
+
+#Plot correlation coefficients
+ggplot(spearman_coefficients_all %>% distinct()) + 
+  geom_col(aes(reorder(chromatin,estimate),estimate, fill = p.value < 0.05)) + 
+  coord_flip() +
+  theme_bw() + 
+  xlab("Chromatin features") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(cell_line, c("RPE1","RPEDef","RPEPro")) ~ read_filter)
+```
+
+#Spearman correlation over different filters
+```{r, fig.width=15, fig.height=5}
+ggplot(spearman_coefficients_all %>% distinct()) + 
+  geom_col(aes(fct_relevel(as.character(read_filter), as.character(read_count)), estimate, fill = cell_line)) + 
+  theme_bw() + 
+  xlab("Read filter") +
+  ylab("Spearman's correlation coefficient of MMEJfreq.") + 
+  facet_grid(fct_relevel(cell_line, c("RPE1","RPEDef","RPEPro")) ~ chromatin) + theme(legend.position = "top", axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+```
+
+#Export data for barcodes of high confidence
+```{r}
+#Extract barcodes and replicates with high confidence
+write_rds(filter_read_count_test %>% filter(read_filter == 75), file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230726_high_confidence_IPR_set.rds")
+```

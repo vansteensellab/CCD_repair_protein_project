@@ -1,0 +1,257 @@
+---
+title: "xv20211230_6_epistasis_complexes"
+output: html_document
+---
+
+# Script to generate figure #6 in the paper. This figures explores chromatin and DNA repair factor epistatis interactions. Figure outline:
+A- Effect of proteins to perturb pathway balance
+B- Barplot showing that interactions are conserved
+C- DNAPKi vs POLL correlation
+D- RNF8-RNF168 correlation
+E- Model
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 7:
+A- MMEJ:NHEJ balance of proteins that regulate ubiquitin ligase
+
+This script generates the plots for figure 6 and S7
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_epistasis.rds")
+
+```
+
+# Figure 6A: Pathway balance of proteins
+```{r}
+# Complex. effect effect of eacah gene
+data.plot.balance <- both.screen.gene.value %>% separate(ID_gene, into = "gene", remove = T) %>% right_join(complexes)
+ggplot(data.plot.balance, aes(fct_relevel(complex, c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168")),comb.data)) + geom_quasirandom() + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + geom_hline(yintercept = 0, linetype = 2)
+
+```
+
+# Figure 6B: Interactions of proteins
+```{r}
+# Diifferent complexes to plot
+NHEJ <- tibble(gene = c("POLL","LIG4"), complex = "NHEJ")
+FANC <- tibble(gene = c("FANCA","FANCB","FANCM","FANCG","FANCF","FANCE","FANCL","FANCL","FAAP24"), complex = "FANC_core_complex")
+MRN.complex <- tibble(gene = c("NBN","RAD50","MRE11"), complex = "MRN_complex")
+RNF8.RNF168 <- tibble(gene = c("RNF8","RNF168"), complex = "RNF8_RNF168")
+
+# filter all genes and re-run this
+complex.gen.inter <- slope.proteins.all %>% right_join(complexes) %>% select(-term) %>% bind_rows(mean.slope.protein.featurese.inh %>% filter(drug == "DNAPKi") %>% select(gene = drug, feature, slope.log2) %>% mutate(complex = "NHEJ")) %>% mutate(gc = paste(gene,complex, sep = "_")) %>% filter(complete.cases(.)) 
+
+ggplot(complex.gen.inter) +
+  stat_summary(aes(fct_relevel(feature,heatmap.chromatin.order.slope.diff.hits),slope.log2, group = complex, fill = complex), fun = mean, na.rm = T, geom = "bar") + geom_quasirandom(aes(fct_relevel(feature,heatmap.chromatin.order.slope.diff.hits),slope.log2,group = gene), alpha = 0.5) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  geom_hline(yintercept = 0, linetype = 2) + facet_wrap(~ fct_relevel(complex, c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168")), nrow = 1, scales = "free_x") + theme(legend.position = "none") + coord_flip() + scale_fill_manual(values = c("#EA3442","#EA5C68","#2E358F","#EA717A"))
+```
+
+#Figure 6C: DNAPKi vs POLL correlation
+```{r}
+#Prepare for dcast
+mean.slope.protein.featurese.inh <- slope.protein.features.inhibitors %>% filter(term == "unlist(model.dt[j])" & drug != "DMSO") %>% dplyr::group_by(drug,feature) %>% dplyr::summarise(slope.log2 = mean(slope.log2, na.rm = T))
+
+#dcast epistatic interactions
+slope.prot.features.scale.dcast.inhibitors <- mean.slope.protein.featurese.inh %>% reshape2::dcast(drug ~ feature, value.var = "slope.log2") %>% column_to_rownames(var = "drug")
+
+# olaparib vs PARP1
+genes <- slope.protein.features.all %>% filter(term != "(Intercept)" & gene %in% c("PARP1","ATM","ATR","PRKDC","POLL")) %>% reshape2::dcast(feature ~ gene, value.var = "slope.log2")
+
+#dcast for plotting
+inhibitors.dcast <- as.data.frame(t(slope.prot.features.scale.dcast.inhibitors)) %>% rownames_to_column(var = "feature")
+
+gene.drug.perturbation <- left_join(inhibitors.dcast , genes)
+
+ggplot(gene.drug.perturbation, aes(DNAPKi, POLL)) + geom_point() + geom_smooth(method = "lm") + stat_cor() + theme_bw()
+
+```
+
+# Figure 6D: Ubiquitination RNF8/RNF168
+```{r}
+# RNF8-RNF168 and other ubq ligases
+RNF8.RNF168 <- tibble(gene = c("RNF8","RNF168"), complex = "RNF8_RNF168")
+H2A.ub <- tibble(gene = c("UIMC1","BRCC3"), complex = "H2AK15ub")
+H1.ub <- tibble(gene = c("UBE2N"), complex = "H1ub")
+KAT5 <- tibble(gene = c("KAT5"), complex = "H2AK15ac")
+
+#Ub complex
+ub.complex <- bind_rows(RNF8.RNF168,H2A.ub,H1.ub,KAT5)
+
+#Categories
+feature.class <- tibble(feature = unique(slope.proteins.all$feature)) %>% 
+  mutate(feat_class = case_when(grepl("H3K4", feature) ~ "H3K4_methylation",
+                                feature %in% c("EZH2","H3K27me3") ~ "polycomb",
+                                feature %in% c("H3K79me2","TTseq","POL2","H3K36me3") ~ "transcription",
+                                feature %in% c("LMNB1","late_replicating","H3K9me2","H3K9me3") ~ "triple_het",
+                                T ~ "others"))
+
+#Bind 
+ub.complex.data <- ub.complex %>% left_join(slope.protein.features.all %>% filter(term != "(Intercept)"), by = "gene") %>% select(-term) %>% left_join(feature.class)
+
+#plot
+ggplot(ub.complex.data %>% filter(feat_class != "others"),aes(fct_relevel(complex, unique(ubq.response.colors$label)),slope.log2, fill = complex)) +
+  stat_mean(geom = "bar") +
+  geom_quasirandom() +
+  facet_wrap(~ feat_class, nrow = 2) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.position = "top") +
+  scale_fill_manual(values = rev(unique(ubq.response.colors$color)))
+
+```
+
+# Number in text
+
+#NOTE: This will change, but every number that I refer in the text will available in this chunk
+```{r}
+
+```
+
+#Supplementary figures
+
+#Figure S7A: Genes perturbation
+```{r}
+#Ub complex
+ub.complex <- bind_rows(RNF8.RNF168,H2A.ub,H1.ub,KAT5)
+
+# Filter proteins highlighted 
+ggplot(per_19IPR_data %>% right_join(ub.complex) %>% filter(!(gene == "KAT5" & library == "DNA_repair"))) +
+  geom_quasirandom(aes(gene,IPR.z.score)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme_bw()
+```

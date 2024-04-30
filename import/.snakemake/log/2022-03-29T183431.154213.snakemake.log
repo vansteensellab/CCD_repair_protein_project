@@ -1,0 +1,165 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	7	align_chip
+	6	align_control
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	7	call_domains
+	1	chrom_sizes
+	1	compare_bam_replicates
+	1	compare_bw_rep
+	7	convert2gff
+	12	download_single_sra
+	7	filter_blackgrey
+	6	filter_blackgrey_ctrl
+	6	generate_greylist
+	6	idxstats
+	13	index
+	8	make_compare_bw
+	7	markdup
+	6	markdup_ctrl
+	1	plot_correlation
+	12	prefetch_sra
+	135
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657362_prefetch
+    jobid: 131
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657362
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657315_prefetch
+    jobid: 128
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657315
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657348_prefetch
+    jobid: 134
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657348
+
+
+rule chrom_sizes:
+    input: /DATA/data/human/hg38/genome/chromSizes_hg38_LP180129.txt
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/hg38/chrom_sizes.txt
+    jobid: 24
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, genome=hg38
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657364_prefetch
+    jobid: 130
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657364
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657363_prefetch
+    jobid: 132
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657363
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657368_prefetch
+    jobid: 126
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657368
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657373_prefetch
+    jobid: 135
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657373
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657374_prefetch
+    jobid: 136
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657374
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657285_prefetch
+    jobid: 124
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657285
+
+Finished job 24.
+1 of 135 steps (0.74%) done
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657347_prefetch
+    jobid: 133
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657347
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657282_prefetch
+    jobid: 125
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657282
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657369_prefetch
+    jobid: 127
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657369
+
+Finished job 130.
+2 of 135 steps (1%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657364_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657364.fastq.gz
+    jobid: 117
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657364
+    threads: 5
+
+Finished job 131.
+3 of 135 steps (2%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657362_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657362.fastq.gz
+    jobid: 118
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, srr_id=SRR11657362
+    threads: 5
+
+Finished job 132.
+4 of 135 steps (3%) done
+Error in rule prefetch_sra:
+    jobid: 136
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657374_prefetch
+
+RuleException:
+CalledProcessError in line 993 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+Command ' set -euo pipefail;  prefetch SRR11657374; touch /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657374_prefetch ' returned non-zero exit status 3.
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 993, in __rule_prefetch_sra
+  File "/home/x.vergara/miniconda3/envs/trip/lib/python3.6/concurrent/futures/thread.py", line 55, in run
+Finished job 134.
+5 of 135 steps (4%) done
+Finished job 128.
+6 of 135 steps (4%) done
+Finished job 133.
+7 of 135 steps (5%) done
+Finished job 127.
+8 of 135 steps (6%) done
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657362_prefetch.
+Finished job 118.
+9 of 135 steps (7%) done
+Finished job 124.
+10 of 135 steps (7%) done
+Finished job 125.
+11 of 135 steps (8%) done
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/raw_data/SRR11657364_prefetch.
+Finished job 117.
+12 of 135 steps (9%) done
+Finished job 126.
+13 of 135 steps (10%) done
+Finished job 135.
+14 of 135 steps (10%) done
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-29T183431.154213.snakemake.log

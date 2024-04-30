@@ -1,0 +1,213 @@
+---
+title: "xv20220915_number_of_mutations"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+#Count the number of deletions with microhomologies
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+library(ggbreak)
+library(patchwork)
+library(ggbeeswarm)
+```
+
+# Import data tables
+```{r}
+setwd(in.dir)
+
+#List all files from HNSC mut
+HNSC_files <- list.files(path = "import/xv20220915_INDEL_data_mathijs/INDEL/HNSC/COUNT", include.dirs = T, full.names = T)
+
+#List all files from BRCA2
+BRCA2_files <- list.files(path = "import/xv20220915_INDEL_data_mathijs/INDEL/BRCA2/COUNT", include.dirs = T, full.names = T)
+
+```
+
+# Read_files
+```{r}
+## BRCA2 files
+BRCA2_vector <- map_int(BRCA2_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>%
+    filter(grepl("microhomology", type) & repeats > 1) %>%
+    pull(counts) %>% sum()
+})
+
+## HNSC files
+HNSC_vector <- map_int(HNSC_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>%
+    filter(grepl("microhomology", type) & repeats > 1) %>%
+    pull(counts) %>% sum()
+})
+
+#Make a table for plotting
+tumor_MH_indel <- tibble(type = c(rep("HNSC", 22), rep("BRCA2mut", 41)), counts = c(HNSC_vector,BRCA2_vector))
+
+#Make plot
+ggplot(tumor_MH_indel) + geom_quasirandom(aes(type, counts)) + theme_bw()
+
+```
+#Select indel signatures that go up with BRCA2mut
+```{r}
+## 
+## BRCA2 files
+BRCA2_table <- map_dfr(BRCA2_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>% mutate(sample = x, type = "BRCA2")
+})
+
+## HNSC files
+HNSC_table <- map_dfr(HNSC_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>% mutate(sample = x, type = "HNSC")
+})
+
+##Merge
+merged_table <- bind_rows(BRCA2_table, HNSC_table) %>% mutate(indel_class = paste(class, subclass, repeats, sep = "_"))
+
+##test indels that increase
+test_indels <- merged_table %>% dplyr::group_by(indel_class) %>% t_test(counts ~ type, alternative = "greater") %>% mutate(p.adj = p.adjust(p))
+
+## Plot geom_quasirandom with increased
+# Create data table for this
+plot_table <- left_join(merged_table, test_indels)
+
+ggplot(plot_table) + geom_quasirandom(aes(type,counts, color = p.adj < 0.05)) + facet_wrap(~ indel_class, scale = "free_y") + theme_bw()
+
+ggplot(plot_table %>% filter(p.adj < 0.05)) + geom_quasirandom(aes(type,counts)) + facet_wrap(~ indel_class, scale = "free_y") + theme_bw()
+
+```
+
+#First criteria points that MMEJ increase when BRCA2 is mutated
+-- Eyeballing the data from repair-seq, BRCA2-KD increases the frequency of deletion with MH > 1 and deletions that are larger than few bp.
+
+# Read_files
+```{r}
+## BRCA2 files
+BRCA2_vector <- map_int(BRCA2_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>%
+    filter(grepl("microhomology", type) & repeats > 1 & subclass == "5+") %>%
+    pull(counts) %>% sum()
+})
+
+## HNSC files
+HNSC_vector <- map_int(HNSC_files, function(x) {
+  read.delim(paste0(in.dir, x)) %>%
+    filter(grepl("microhomology", type) & repeats > 1 & subclass == "5+") %>%
+    pull(counts) %>% sum()
+})
+
+#Make a table for plotting
+tumor_MH_indel <- tibble(type = c(rep("HNSC", 22), rep("BRCA2mut", 41)), counts = c(HNSC_vector,BRCA2_vector))
+
+#Make plot
+ggplot(tumor_MH_indel) + geom_quasirandom(aes(type, counts)) + theme_bw()
+
+ggplot(tumor_MH_indel) + geom_quasirandom(aes(type, log10(counts))) + theme_bw()
+
+```
+
+#The fraction of the genome that is cLAD and ciLAD
+#Import LADs data
+```{r}
+setwd(in.dir)
+# LAD domains
+LAD_atlas <- as.data.frame(read.table("import/xv20220329_LAD_atlas_OSF.bed.gz",header = FALSE, sep="\t",stringsAsFactors=FALSE, quote=""))
+colnames(LAD_atlas) <- c("chr","start","end","length","strand","LAD_class")
+
+#LAD_length plot control
+LAD_length_tibble <- LAD_atlas %>% mutate(LAD_length = end - start)
+
+#Fraction of the genome with constitutive LADs or iLADs
+summary_LAD_coverage <- LAD_length_tibble %>%
+  dplyr::group_by(LAD_class) %>%
+  dplyr::summarise(sum_length = sum(LAD_length))
+
+total_number_mapped <- sum(summary_LAD_coverage$sum_length)
+
+#summary_table
+summary_LAD_coverage_summary <- summary_LAD_coverage %>% mutate(percentage = (sum_length/total_number_mapped)*100)
+
+```
+
+#Calculate estimation of number of indels in LAD and iLAD
+```{r}
+#Mutate estimation
+estimate_indels_in_cLAD_ciLAD <- tumor_MH_indel %>% mutate(estim_cLAD = counts*0.202, estim_ciLAD = counts*0.235)
+
+#Plot estimated number of indels
+ggplot(estimate_indels_in_cLAD_ciLAD) + geom_quasirandom(aes(type, log10(estim_cLAD))) + theme_bw()
+
+ggplot(estimate_indels_in_cLAD_ciLAD) + geom_quasirandom(aes(type, log10(estim_ciLAD)))
+
+```

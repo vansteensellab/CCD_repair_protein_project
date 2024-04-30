@@ -1,0 +1,4 @@
+FileNotFoundError in line 13 of /DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake:
+[Errno 2] No such file or directory: '~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/xv20220329_config.yaml'
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_coverage.snakemake", line 9, in <module>
+  File "/DATA/scratch/usr/c.leemans/projects/chip_snake/chip_align.snakemake", line 13, in <module>

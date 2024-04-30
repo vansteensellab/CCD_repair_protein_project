@@ -1,0 +1,208 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+library(broom)
+library(scales)
+```
+
+## Import data: Balance data and some other details
+```{r, warning=F}
+# Import data for high confidence reporters and calculate mean
+high_confidence_IPR <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230830_pathway_balance_5reads_per_indel.rds") %>% 
+  filter(!gRNA %in% c("LBR2","halfLBR2","empty") & cell_line == "RPE1")
+
+#Pools used in the experiment
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Cell_line 
+cells <- c("RPE1","PRO","DEF","U2OS")
+
+```
+#Calculate differentials per replicate
+```{r}
+dmso_balance <- high_confidence_IPR %>% filter(gRNA == "NTC") %>% select(barcode, cell_line, bio_rep, dmso_bal = log2_bal)
+```
+
+#Calculate diff for these the high_confidence barcodes
+```{R}
+RPE1_high_confidence_reps <- high_confidence_IPR %>% 
+  filter(cell_line == "RPE1")
+
+#Calculate differential
+diff_gRNA_RPE1 <- high_confidence_IPR %>% 
+  filter(cell_line == "RPE1") %>%
+  left_join(dmso_balance) %>%
+  mutate(gRNA_diff = log2_bal - dmso_bal) %>%
+  filter(!gRNA %in% c("empty","halfLBR2","LBR2")) %>%
+  na.omit()
+
+#Average perturbation
+mean_gRNA_effect <- diff_gRNA_RPE1 %>%
+  dplyr::group_by(barcode, gRNA) %>%
+  dplyr::summarise(mean_diff = mean(gRNA_diff),
+                   reps = n()) %>%
+  filter(reps == 3)
+
+```
+
+#Conclusion: Data processing is done slightly differently than in clone 5. Because it is a pool and the MMEJ frequency is so low, I need to pay extra attention to number of reads per barcode.
+
+#Step 4: Identification of DR proteins with global effects on MMEJ:NHEJ balance
+```{r}
+#Compute mean MMEJ:NHEJ differential over all IPRs
+mean.diff.balance <- mean_gRNA_effect %>% 
+  filter(gRNA != "NTC") %>%
+  group_by(gRNA) %>% 
+  dplyr::summarise(mean.fc = mean(mean_diff, na.rm = T),
+                   IPR_n = n())
+
+#Run t.test with all the data
+test.mean.diff.balance <- mean_gRNA_effect %>% 
+  filter(gRNA != "NTC") %>%
+  dplyr::group_by(gRNA) %>% 
+  t_test(mean_diff ~ 0) %>% 
+  mutate(p.adj = p.adjust(p, method = "BH")) %>% 
+  left_join(mean.diff.balance, by = "gRNA")
+
+#Prepare data frame for export
+mean.diff.balance.export <- test.mean.diff.balance %>%
+  dplyr::select(gRNA,p,p.adj,mean.balance.diff = mean.fc, IPR_n)
+
+#Significant MMEJ
+mean_significant_MMEJ <- filter(mean.diff.balance.export, p.adj < 0.05 & mean.balance.diff < 0) %>% nrow() #11 proteins favor MMEJ
+mean_significant_NHEJ <- filter(mean.diff.balance.export, p.adj < 0.05 & mean.balance.diff > 0) %>% nrow() #1 proteins favor NHEJ
+
+#Print
+print(paste("A total of", mean_significant_MMEJ, "drug favor MMEJ globally with an FDR < 0.05"))
+print(paste("A total of", mean_significant_NHEJ, "drug favor NHEJ globally with an FDR < 0.05"))
+```
+
+#Conclusion: There are some changes compared to experiment in K562. BRCA2 favor MMEJ instead of NHEJ for instance.Most of the proteins favor MMEJ or NHEJ, except for CHEK2. I will continue with proteins that favor either MMEJ or NHEJ only.
+
+#Plot pathway balance changes
+```{R}
+ggplot(mean_gRNA_effect) +
+  ggbeeswarm::geom_quasirandom(aes(gRNA, mean_diff)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+```
+
+#Check the amount of measurements per KO and filter everything below
+```{r}
+#Summary
+summary_IPR_KO <- inhibitor_effect_chromatin_RPE1 %>%
+  dplyr::group_by(gRNA) %>%
+  dplyr::summarise(IPR_n = n())
+
+#Plot 
+ggplot(summary_IPR_KO) + 
+  geom_col(aes(gRNA,IPR_n)) +
+  theme_bw()
+
+#Filter only proteins with more than 8 IPRs
+prots_with_5_IPR <- summary_IPR_KO %>%
+  filter(IPR_n > 5 & !gRNA %in% c("NTC")) %>%
+  pull(gRNA) %>%
+  unique() 
+
+```
+
+#NOTE: I will only run the CCD analysis for proteins with at least 5 IPR. This is already extremely low, but the data is very sparce to say much about it otherwise. For the chromatin data, I will also select only a chromatin mark per main feature: LMNB1 (triple_het), H3K27me3 (Polycomb), H3K36me3 (euchromatin-transcription) and H3K4me1 (euchromatin-regulatory elements).
+
+
+#Join chromatin data
+```{r}
+#Create RPE1 dataframe
+inhibitor_effect_chromatin_RPE1 <- mean_gRNA_effect %>%
+#  filter(gRNA %in% prots_with_5_IPR) %>%
+  left_join(high_confidence_IPR_chromatin_RPE1 %>% filter(cell_line == "RPE1" & binsize == "2000") ) %>% distinct()
+```
+
+
+#Run PCA analysis in 
+```{r}
+#Create an empty dt with CCDs of DDR proteins
+RPE1_wt_CCDs_dt <- tibble(gRNA = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+
+for (i in unique(inhibitor_effect_chromatin_RPE1$gRNA)){
+gene.library.dt <- filter(inhibitor_effect_chromatin_RPE1, gRNA == i)
+set.seed(1)
+PCR_model_DDR_test <- pcr(mean_diff ~chip_H3K36me3+chip_H3K4me1+dam_H3K27me3+dam_LMNB1, data=gene.library.dt, ncomp = 3) #Run principal component regression, I need to remove validation because the amount of data is very low
+
+pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+combined.dt <- tibble(measured = gene.library.dt$mean_diff, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+RPE1_wt_CCDs_dt <- RPE1_wt_CCDs_dt %>% add_row(gRNA = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+}
+
+#Adjust p-value
+RPE1_wt_CCDs_dt_adj <- RPE1_wt_CCDs_dt %>%
+  mutate(CCD_p.adj = p.adjust(p.value, method = "BH"))
+
+#Number of proteins with CCD with fdr < 0.1
+RPE1_CCDs_summary <- RPE1_wt_CCDs_dt_adj %>% 
+  left_join(mean.diff.balance.export) %>% 
+  na.omit() %>% mutate(CCD_type = case_when(CCD_p.adj < 0.1 & mean.balance.diff > 0 ~ "N-synergy",
+                                            CCD_p.adj < 0.1 & mean.balance.diff < 0 ~ "M_synergy",
+                                            T ~ "No_CCD"))
+
+
+
+#Summary text
+print("A total of 8 out of 16 tested proteins have CCDs with an FDR < 0.1")
+```
+
+#CONCLUSION: For the samples with enough data to say something 16 proteins. All of them show certain CCD score (p-value < 0.05). After adjusting for p-value, we can confirm with confidence that 8 out 16 proteins have significant CCDs with fdr of 0.1. Taken into consideration the sparcity of the data, this is a very good validation. We can confirm that cells with p53 wildtype also exhibit chromatin context dependencies.
+
+#Sub-step C: Linear modeling to identify individual DR proteins - chromatin feature links
+```{r}
+#Create empty dataframe to calculate synergy scores
+gRNA_CCD_slopes_RPE1_wt <- tibble(gRNA = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA)
+
+#Loop to run linear models on the values
+for (h in unique(inhibitor_effect_chromatin_RPE1$gRNA)) {
+  for (j in c("chip_H3K36me3","chip_H3K4me1","dam_H3K27me3","dam_LMNB1")) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- inhibitor_effect_chromatin_RPE1 %>% filter(gRNA == h) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean_diff ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   gRNA_CCD_slopes_RPE1_wt <- gRNA_CCD_slopes_RPE1_wt %>% add_row(gRNA = h, feature = j, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+}
+
+#Retain slopes that 
+gRNA_CCD_slopes_RPE1_wt_all_values <- gRNA_CCD_slopes_RPE1_wt %>% 
+  reshape2::dcast(gRNA + feature ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(gRNA ,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  left_join(RPE1_wt_CCDs_dt_adj %>% 
+              dplyr::select(gRNA, CCD_p.value = p.value, CCD_p.adj), by = "gRNA") %>% #Join with CCDs p_value data table and change some names
+  left_join(mean.diff.balance.export %>% select(gRNA, global_effect = mean.balance.diff, global_p.value = p, global_p.adj = p.adj), by = "gRNA") %>% #Join with individual IPR significance calls (z-test)
+  mutate(CCD_value = case_when(global_effect < 0 & slope < 0 ~ slope, global_effect < 0  & slope > 0 ~ 0, global_effect > 0  & slope > 0 ~ slope, global_effect > 0  & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+
+#How many M-, N- and no synergies
+synergy_summaries_RPE1_wt <- gRNA_CCD_slopes_RPE1_wt_all_values %>% filter(CCD_p.adj < 0.1) %>% dplyr::group_by(gRNA) %>% dplyr::summarise(M_synergy = sum(CCD_value < 0), N_synergy = sum(CCD_value > 0)) %>% distinct() %>% mutate(synergy_class = case_when(N_synergy == 0 ~ "M_synergy", M_synergy == 0 ~ "N_synergy", T ~ "both")) %>% dplyr::group_by(synergy_class) %>% dplyr::summarise(c = n())
+```
+#Conclusion: 8 proteins show M-synergies and none shows significant N-synergy (we might show POLL, even if it's not significant)
+
+
+#Export data table with this data
+```{r}
+#Export processed data
+write_rds(gRNA_CCD_slopes_RPE1_wt_all_values, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230831_CCD_summary_table_RPE1wt.rds")
+
+#Export raw delta log2 balance
+write_rds(inhibitor_effect_chromatin_RPE1, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230831_delta_log2_balance_RPE1wt.rds")
+
+```

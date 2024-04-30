@@ -12,9 +12,9 @@ output:
   editor_options:
     chunk_output_type: console
 ---
-# Script to generate figure S3 in the short version of the paper.
+# Script to generate Supplementary Figure 2
 
-Fig. S3: Principal component regression analysis. A) Principal Component Regression workflow. First, a principal component analysis (PCA) was run with 25 chromatin feature values for each IPR. Second, exploration of the PCA revealed that the first three PCs recapitulate most of the chromatin feature variance. Third, a linear model with three principal components was ran for each protein and the performance was assessed by predicted vs. measured comparison. B) Percentage of variance ex-plained by the first five PCs. C) Bar graph showing the weight of each chromatin feature for PC1, PC2 and PC3. Bars are colourded according to the chromatin context they represent: Triple heterochroma-tin (purple), H3K27me3 heterochromatin (pink), transcription (light orange) and enhancers/promoters (orange).
+Fig. S3: Principal component regression analysis.
 
 ```{r functions, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
@@ -102,7 +102,7 @@ heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9m
 clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
 ```
 
-#Calculate PCR for a single protein RAD50
+# Calculate PCR for a single protein RAD50
 ```{r}
 # Filter RAD50 data
 RAD50_data_diff <- filter(diff_KO_chromatin, gene == "RAD50")
@@ -114,12 +114,8 @@ PCR_example <- pcr(mean.log2foldchange~CTCF+EZH2+H2AFZ+H3K27ac+H3K27me3+H3K36me3
 RAD50_pred <- predict(PCR_example, RAD50_data_diff, ncomp = 3) 
 ```
 
-#Supplementary Figures
 
-#Figure S3A: Cartoon
-
-A) Principal Component Regression workflow. First, a principal component analysis (PCA) was run with 25 chromatin feature values for each IPR. Second, exploration of the PCA revealed that the first three PCs recapitulate most of the chromatin feature variance. Third, a linear model with three principal com-ponents was ran for each protein and the performance was assessed by predicted vs. measured com-parison.
-
+# Figure S3A: Cartoon
 ```{r, warning=FALSE, message=FALSE}
 # PC1 vs PC2 plot
 PC_plot <- PCR_example$scores[,c(1,2)] %>% as.data.frame()
@@ -145,9 +141,10 @@ ggplot(pred_vs_measured, aes(predicted,measured)) +
   coord_cartesian()
 
 ```
+A) Principal Component Regression workflow after averaging three replicates in the screen. First, a principal component analysis (PCA) was run with 25 chromatin feature values for each IPR. Second, exploration of the PCA revealed that the first three PCs recapitulate most of the chromatin feature var-iance. Third, a linear model with three principal components was ran for each protein and the perfor-mance was assessed by predicted vs. measured comparison. In the graph the Pearson’s R and two-sided p-value is shown. 
 
-#Figure S3B:
-B) Percentage of variance explained by the first five PCs. 
+
+# Figure S3B
 ```{r, warning=FALSE, message=FALSE}
 #Accumulated variance explained
 acc_var <- c(0,37.37,62.36,72.95,79.09,83.93)
@@ -164,8 +161,9 @@ ggplot(var_plot_tib) +
   geom_col(aes(pc, var)) +
   theme_bw()
 ```
-#Figure S3C
-C) Bar graph showing the weight of each chromatin feature for PC1, PC2 and PC3. Bars are colourded according to the chromatin context they represent: Triple heterochromatin (purple), H3K27me3 hetero-chromatin (pink), transcription (light orange) and enhancers/promoters (orange).
+B) Percentage of variance explained by the first five PCs. 
+
+# Figure S3C
 ```{r}
 #Axis orientation
 PC1_3_projections <- PCR_example$projection[,c(1:3)] %>% as.data.frame() %>% 
@@ -179,5 +177,5 @@ ggplot(PC1_3_projections) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 ```
-
+C) Bar graph showing the weight of each chromatin feature for PC1, PC2 and PC3. Bars are coloured according to the chromatin context they represent: Triple heterochromatin (purple), H3K27me3 hetero-chromatin (pink), transcription (light orange) and enhancers/promoters (orange).
 

@@ -1,0 +1,126 @@
+---
+title: "xv20210314_Reanalysis_BA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+## load data to start analysis
+# Read RDS file and processs
+```{r}
+#Read RDS files: R1 & R2
+setwd("~/XV_P3_ChromDSBScreen/XV20200221_E962_ChromDSBScreenR1/data/")
+tmp.screen.tib.B1 <- readRDS(file = "xv20200320_screen_R1_indel_data.rds")
+
+setwd("~/XV_P3_ChromDSBScreen/XV20200417_ChromDSBScreenR2/data/")
+tmp.screen.tib.B2 <- readRDS(file = "xv20200421_screen_R2_indel_data.rds")
+
+#Merge both data sets
+tmp.screen.tib <- bind_rows(tmp.screen.tib.B1,tmp.screen.tib.B2)
+```
+
+# Arrange plate 4
+This plate was problematic in B1, I repeated the PCR in these plates again and added in the second sequencing run. I will need to pool counts of some of them and recalculate percentages. To do so, I will filter them out and
+```{r}
+#Call indel columns
+indel_cols <- colnames(tmp.screen.tib)[grep("^del|^ins|^ssODN|^Inf|^wt", colnames(tmp.screen.tib))]
+# Filter plate 4 out and arrange it to get two values for each well
+screen.tib.p4 <- tmp.screen.tib %>% 
+                  filter(grepl("P4", .$exp) & !grepl("^B1",.$exp)) %>% 
+                  dplyr::select(exp, barcode, indel_cols) %>% 
+                  mutate(rep = str_extract(.$exp,"R."), 
+                         well = case_when(str_length(str_extract(.$exp, "(?<=P._).*$")) == 3 ~ str_extract(.$exp, "(?<=P._).*$"),
+                                          TRUE ~ paste0(str_extract(.$exp, "(?<=P._)."),"0",str_extract(.$exp, ".$")))) %>% 
+                  dplyr::select(-exp) %>%
+                  dplyr::group_by(rep,well,barcode) %>%
+                  dplyr::summarise_at(indel_cols, sum) %>% ungroup()
+
+screen.tib.p4.pct <- screen.tib.p4 %>% mutate(total = rowSums(.[,-c(1:3)], na.rm = T)) %>% 
+                  mutate_at(indel_cols, funs(./total)) %>%
+                  rename_at(indel_cols, list(~paste("pct", indel_cols, sep = "_")))
+
+screen.tib.p4.b <- left_join(screen.tib.p4,screen.tib.p4.pct, by = c("rep","well","barcode")) %>% filter(del_7 + ins_1 > 30) %>% dplyr::group_by(well,barcode) %>% dplyr::mutate(cn = n()) %>% ungroup()
+
+p4.null <- screen.tib.p4.b %>% filter(cn < 3) %>% dplyr::select(well,barcode,rep,cn) %>% reshape2::dcast(well + barcode ~ rep, value.var = "cn") %>% mutate(null = case_when(is.na(.$R1) ~ "R1", is.na(.$R2) ~ "R2", TRUE ~ "R3")) %>% dplyr::select(well,barcode,null)
+ 
+p4.arrange <- screen.tib.p4.b %>% filter(cn < 3) %>% left_join(p4.null, by = c("well","barcode")) %>% dplyr::select(-cn) %>% mutate(b.rep = case_when(rep == "R1" ~ "R1",rep == "R2" ~ "R2", rep == "R3" ~ null)) 
+
+screen.tib.p4.c <- screen.tib.p4.b %>% filter(cn == 3 & rep %in% c("R1","R2")) %>% mutate(b.rep = case_when(rep == "R1" ~ "R1",rep == "R2" ~ "R2")) %>% bind_rows(p4.arrange) %>% mutate(exp = paste("B2",b.rep,"P4",well, sep = "_")) %>% dplyr::select(-rep,-b.rep,-well, -total)
+
+
+```
+
+
+# Clean data-set remove unnecessary columns: 
+```{r}
+#Import and modify Library info
+ChromDSB.library <- read.table("~/XV_P3_ChromDSBScreen/xv20200223_ChromDSBLibrary.txt", sep = "\t", header = TRUE)
+colnames(ChromDSB.library) <- c("gene","dest","well")
+ChromDSB.library <- ChromDSB.library %>% 
+                    mutate(plate = paste0("P",ChromDSB.library$dest)) %>% 
+                    dplyr::select(-dest) %>% 
+                    distinct()
+ChromDSB.library$well <- gsub("06","12",ChromDSB.library$well)
+
+#Merge initial screen + plate_4
+screen.tib.wrangled <- tmp.screen.tib %>% filter(!grepl("P4", .$exp) | grepl("^B1",.$exp)) %>% bind_rows(screen.tib.p4.c)
+
+# Remove unnecesary columns and add gene info - Filter out wells with less that 30 mutation reads
+tmp.screen.data.tib <- screen.tib.wrangled %>% 
+                                  mutate(b.rep = case_when(str_detect(.$exp, "B1_") ~ "B2",
+                                                                    str_detect(.$exp, "B2") ~ "B1",
+                                                                    TRUE ~ "B1"),
+                                                  t.rep = case_when(str_detect(.$exp, "B1_") ~ "R3",
+                                                                    str_detect(.$exp, "B2") ~ str_extract(.$exp, "R."),
+                                                                    TRUE ~ str_extract(.$exp, "R.")),
+                                                  plate = str_extract(.$exp, "P."), 
+                                                  well = case_when(str_length(str_extract(.$exp, "(?<=P._).*$")) == 3 ~ str_extract(.$exp, "(?<=P._).*$"),
+                                                                   TRUE ~ paste0(str_extract(.$exp, "(?<=P._)."),"0",str_extract(.$exp, ".$")))) %>% 
+                                    mutate(sample = case_when(well %in% c("D06","E06","F06","G06") | (plate == "P7" & (str_detect(.$well, "G")|str_detect(.$well, "H"))) ~ "WT",
+                                                                     well == "C06" ~ "POLQ", 
+                                                                     TRUE ~ "KO")) %>%
+                                left_join(ChromDSB.library, by = c("plate","well")) %>%
+                                dplyr::select(grep("pct",colnames(.)), "b.rep","t.rep","plate","well","sample","gene","barcode") %>% distinct()
+
+
+
+```
+
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+#plot WT averages
+tmp.plot.replicates <- tmp.screen.data.tib %>% filter(sample == "WT") %>% select(-gene,-t.rep,-b.rep) %>% group_by(plate,well,barcode) %>% dplyr::summarize_all(mean) %>% reshape2::melt(id.vars = c("plate","well","barcode"))
+wt.freq.norm <- tmp.plot.replicates %>% filter(variable == "pct_wt") %>% select(-variable) %>% right_join(tmp.plot.replicates %>% filter(variable != "pct_wt"), by = c("plate","well","barcode")) %>% mutate(norm.mutation = value.y / (1 - value.x)) 
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+#correlation heatmap
+plot.genes <- t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)'))
+
+#Correlation matrix
+corr.genes <- cor(plot.genes)
+pheatmap(corr.genes)
+
+#Statistics
+test.corr.genes <- rcorr(plot.genes)
+pheatmap(-log10(test.corr.genes$P))
+
+#Translate to binary matrix
+tmp.atrix <- as.matrix((-log10(test.corr.genes$P) > 2) + 0) %>% reshape2::melt() %>% filter(complete.cases(.))
+
+#save file
+write.table(tmp.atrix, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210315_perturbation_correlation.txt")
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,58 @@
+---
+title: "xv20210429_follow_up_QC"
+output: html_document
+---
+
+# I will use this file to check read numbers and see what wells didn't have enough reads
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(broom)
+library(ggbeeswarm)
+```
+
+## Load log.file and turn it into tibble with number of reads
+
+```{r}
+log.file = read_log("/DATA/projects/DSBrepair/data/raw/6423_follow_up_screening/bc_demux.log") %>% separate(X1,sep = "\t", into = c("ID","reads","file")) %>% filter(str_detect(ID, "P.*")) %>% separate(ID, sep = "_", into = c("plate","bio.rep","t.rep","well"), remove = F)
+log.file$well = gsub("(?<![0-9])([0-9])(?![0-9])", "0\\1", log.file$well, perl = TRUE)
+#Upload random position file
+position.key = read.csv("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210209_E1383_plate_random.csv", header = T) %>% mutate(plate = paste0("P",plate))
+#Paste both tibbles
+met.data=left_join(log.file,position.key, by = c("plate","well" = "random_pos"))
+```
+
+## Plot read number dispersion
+```{r}
+#Plot read dispersion
+ggplot(met.data) + 
+  geom_quasirandom(aes(t.rep, log10(as.numeric(reads)), color = targets == "PAO")) + 
+  facet_grid(plate ~ bio.rep) + 
+  geom_hline(aes(yintercept = log10(5000)), color = "grey", linetype = 2) + 
+  ylab("log10(reads)") + 
+  theme_bw()
+
+#Conclusion: Everything fits as expected. The last plate I transfected, might not have been properly transfected based on PAO killing (pipetting didn't work properly on that well). P1B2R1 as expected shows a half plate of wells with very little reads (I didn't pipete cells in the first transfection).
+
+#Is there any plate that has in average less reads
+avg.met.data <- met.data %>% dplyr::group_by(well,plate,targets) %>% dplyr::summarise(m.reads = median(as.numeric(reads)))
+#Plot
+ggplot(avg.met.data) + 
+  geom_quasirandom(aes(plate, log10(m.reads), color = targets == "PAO")) + 
+  geom_hline(aes(yintercept = log10(5000)), color = "grey", linetype = 2) + 
+  ylab("Median log10(reads)") + 
+  theme_bw()
+
+#The only well that drops out is the PAO, there are a couple of them in P2 that also drop, but they are not many
+drop.out.wells <- filter(avg.met.data, m.reads < 20000) 
+```
+
+## Create metadata file
+```{r}
+# Headings
+# No	ID	PCR_type	Replicate	Pool	Plasmid	Drug	ssODN	siRNA	Time	index_length	Run	GCF	file
+meta.data = met.data %>% mutate(No = 1:nrow(met.data), PCR_type = "indelPCR", index_length = 10, GCF = "6423")
+write.table(meta.data, "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210429_meta_file_follow_up.txt", row.names = F, sep="\t", quote = FALSE)
+```
+
+

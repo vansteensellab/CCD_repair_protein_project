@@ -1,0 +1,634 @@
+---
+title: "xv20230227_follow_up_library"
+author: "Xabier Vergara"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Follow up library design
+in this markdown, I will design a library to validate the main findings on the screen.
+Potential candidate list for genes to target
+NHEJ_factors <- POLL, BRCA2, CHAF1A ('D'), BABAM2, UIMC1, BRCC3.
+MMEJ_factors_TH <- RBBP8 ('D'), ATM, FANCD2, TOPBP1 ('E'), MDC1, RAD50, ATR ('E')
+MMEJ_factors_K27 <- CHEK2, FANCM ('D'), FANCG, FAAP24, SMC5 ('E')
+MMEJ_factors_euch <- RMI2 ('D'), BLM, PARP1
+Dual <- BOD1L1
+
+
+```{r libraries}
+library(tidyverse)
+library(ggbeeswarm)
+```
+#Functions
+```{r}
+#Function find reference kgID
+kgID_reference_finding <- function(x) {
+  #Select the kgID to use: If overlap is big take one randomly
+    kgID_summary <- x %>% 
+  select(kgID, Exon.number) %>%
+  distinct() %>%
+  dplyr::group_by(kgID) %>% 
+  dplyr::summarise(exon_counts = n()) %>%
+  top_n(kgID_summary, 1, exon_counts) %>% pull(kgID)
+}
+
+#Summary gene table calculation (x = high_quality)
+make_summary_table <- function(x,y) {
+  #Number of gRNAs per exon
+summary_gRNA_hs <- x %>% 
+  dplyr::group_by(kgID, Exon.number) %>%
+  dplyr::summarise(gRNA_n = n(),
+                   common_gRNA_n = sum(gRNA %in% y),
+                   Exon.length = Exon.end - Exon.start) %>%
+  ungroup() %>%
+  distinct()
+
+}
+
+#Function to add one more exons
+  add_exon_gRNA <- function(x,y){
+    targetted_area <- x %>%
+      filter(Exon.number == y)
+    targetted_prev <- 0
+    i <- 1
+    while (targetted_prev < 5000){
+      #Set_counter
+      exon <- y - i
+      #Add previous 
+      previous_exon <- x %>% 
+        filter(Exon.number == exon)
+      #Bind columns
+      targetted_area <- targetted_area %>% bind_rows(previous_exon)
+      #Check if the condition is met
+      targetted_prev <- sum(targetted_area$Exon.length) + sum(targetted_area$Dist.prev.exon)
+      if (targetted_area$Dist.prev.exon[1] != 0) {
+        #Add one to the counter
+        i <- i + 1
+      } else {
+      break
+      }
+    }
+    targetted_area
+  }
+```
+
+#Import data tables: mouse and human
+```{r pressure, warning=F, message=F}
+#Write a long function that I could use to run iteratively
+analysis_gRNA_indelPhi <- function(x,y) {
+
+  #Load data
+  print(paste("This is the summary of ",x,"gene for the first",y,":"))
+  human_gRNA <- read.delim(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/",x,"_hg38.csv"), sep = ",")
+  mouse_gRNA <- read.delim(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_mouse/",x,"_mm10.csv"), sep = ",")
+  
+  gRNAs_both_species <- intersect(human_gRNA$gRNA,mouse_gRNA$gRNA)
+  
+  #Filter by size and not exon number
+  full_length <- human_gRNA %>%
+    mutate(exon.length = Exon.end - Exon.start) %>%
+    dplyr::group_by(kgID) %>%
+    dplyr::summarise(coding_length = sum(exon.length, na.rm = T),
+                     coding_start = min(Exon.start),
+                     coding_end = max(Exon.end)) %>%
+    dplyr::mutate(intron_length = coding_end - (coding_start + coding_length)) %>%
+    ungroup()
+  
+    #Select_reference kgID
+  reference_kgID <- human_gRNA %>% 
+  select(kgID, Exon.number) %>%
+  distinct() %>%
+  dplyr::group_by(kgID) %>% 
+  dplyr::summarise(exon_counts = n()) %>%
+  arrange(desc(exon_counts)) %>%
+  pull(kgID)
+  
+  #High quality gRNAs (Frameshift > 80%)
+  if (unique(human_gRNA$Exon.strand) == "+") {
+  high_quality_gRNAs <- human_gRNA %>%
+  left_join(full_length, by = "kgID") %>%
+  dplyr::group_by(kgID) %>%
+  dplyr::mutate(rel_coordinate = (Cutsite.coordinate - coding_start)/abs(coding_end - coding_start)) %>%
+  ungroup() %>%
+  filter(rel_coordinate < y) %>%
+  distinct()
+  } else {
+      high_quality_gRNAs <- human_gRNA %>%
+  left_join(full_length, by = "kgID") %>%
+  dplyr::group_by(kgID) %>%
+  dplyr::mutate(rel_coordinate = (coding_end - Cutsite.coordinate)/abs(coding_end - coding_start)) %>%
+  ungroup() %>%
+  filter(rel_coordinate < y) %>%
+  distinct()
+  }
+  
+  print(paste("For this analysis, we will use the gRNAs targetting the gene build",reference_kgID[1],"."))
+  
+  high_quality_gRNAs <- high_quality_gRNAs %>% filter(kgID == reference_kgID[1])
+  
+  write.table(high_quality_gRNAs,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_",y,"_complete.txt"),
+            row.names = F, quote = F)
+  
+  #Creat bins and select bin with highest gRNA
+  first_gRNA <- min(high_quality_gRNAs$Cutsite.coordinate)
+  last_gRNA <- max(high_quality_gRNAs$Cutsite.coordinate)
+  if (last_gRNA - first_gRNA > 4025) {
+  start_vector <- seq(first_gRNA,(last_gRNA -4000), by = 25)
+  end_vector <- seq((first_gRNA +4000),last_gRNA, by = 25)
+  
+  summary_table <- map2_dfr(start_vector,end_vector,function(x,y){
+    gRNAs_range <- high_quality_gRNAs %>% filter(Cutsite.coordinate >= x & Cutsite.coordinate < y)
+    tibble(start = x,
+           end = y,
+           gRNA_n = nrow(gRNAs_range),
+           common_gRNA = sum(gRNAs_range$gRNA %in% gRNAs_both_species))
+  })
+  } else {
+   summary_table <- tibble(start = first_gRNA,
+           end = last_gRNA,
+           gRNA_n = nrow(high_quality_gRNAs),
+           common_gRNA = sum(high_quality_gRNAs$gRNA %in% gRNAs_both_species))
+  }
+  
+  write.table(summary_table,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/summary_ranges_",x,"_",y,".txt"),
+            row.names = F, quote = F)
+
+  
+#Select range to maximize gRNA
+ range_to_select <- summary_table %>% 
+     filter(gRNA_n == max(gRNA_n)) %>%
+     filter(start == min(start))
+ 
+# Filter high quality gRNAs in targetted regions (save as txt file)
+gRNA_to_select <- high_quality_gRNAs %>% 
+  filter(Cutsite.coordinate >= range_to_select$start & Cutsite.coordinate < range_to_select$end) %>%
+  mutate(common_gRNA = gRNA %in% gRNAs_both_species)
+
+#Export all steps
+write.table(gRNA_to_select,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_",y,"_complete.txt"),
+            row.names = F, quote = F)
+
+#Export FASTA for off targets
+write.table(unique(gRNA_to_select$gRNA),
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_",y,"_off_targets.txt"),
+            row.names = F, quote = F, col.names = F)
+
+#Printed summary
+print(paste("There are a total of", sum(range_to_select$gRNA_n), "gRNAs in the selected region and",sum(range_to_select$common_gRNA), "target both species."))
+print("===============================================")
+
+#Create log file
+if (!file.exists(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))){
+log.file <- file(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))
+} else {
+  log.file <- paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt")
+}
+
+write(c("Author: Xabier Vergara",
+        paste("Date:",date()),
+        "Step: Indelphi analysis",
+        paste("This is the summary of",x,"gene for the first",y,":"),
+        paste("For this analysis, we will use the gRNAs targetting the gene build",reference_kgID,"."),
+        paste("There are a total of", sum(range_to_select$gRNA_n), "gRNAs in the selected region and",sum(range_to_select$common_gRNA), "target both species."),
+        "==============================================="),
+        log.file, append = T)
+
+
+return(sum(range_to_select$gRNA_n))
+
+}
+
+#Perform a loop
+files <- list.files("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/")
+gene_names <- gsub("_hg38.csv","",files)
+
+for (i in gene_names) {
+  a <- 0
+   for(fr in c(0.2)){
+    a <- analysis_gRNA_indelPhi(i,fr)
+    if (a >= 5){
+      break
+    }
+  }
+}
+
+
+```
+
+#Plot all gRNAs in a gene format
+```{r}
+#Load all files and gRNAs
+order_gRNAs <- list.files(path = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/", full.names = T)
+
+#Plot function
+plot_gRNA_location <- function(x) {
+  all_gRNAs <- read.delim(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/",x,"_hg38.csv"), sep = ",")
+  order_gRNA <- read.table(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_0.2_complete.txt"), header = T)
+  kgID_reference <- unique(order_gRNA$kgID)
+  
+  #All gRNA exons
+  exon_squares <- all_gRNAs %>%
+    filter(kgID %in% kgID_reference) %>%
+    dplyr::group_by(kgID, Exon.number) %>%
+    dplyr::summarise(start = unique(Exon.start),
+                     end = unique(Exon.end))
+  
+  #Region selected
+  selct_region <- order_gRNA %>%
+    dplyr::group_by(kgID) %>%
+    dplyr::summarise(start = min(Cutsite.coordinate),
+                     end = max(Cutsite.coordinate))
+  
+  targ_exons <- unique(order_gRNA$Exon.number)
+  
+  ggplot() + 
+    geom_point(data = all_gRNAs %>% filter(kgID %in% kgID_reference), 
+              aes(x = Cutsite.coordinate, y = Exon.number), color = "grey") +
+    geom_point(data = order_gRNA,
+              aes(x = Cutsite.coordinate, y = Exon.number)) +
+    theme_minimal() +
+    facet_wrap(~kgID) +
+    ggtitle(paste0("Targetted exons of ",x))
+}
+
+
+all_gRNA <- map(gene_names,plot_gRNA_location)
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/library_design/xv20230307_region_targetted_genes.pdf")
+all_gRNA
+dev.off()
+
+```
+
+
+
+#Check off-targets of gRNAs
+```{r, warning=F,message=F}
+off_target_filter <- function(x){
+    #Load data
+  print(paste("In this step, I will filter out gRNAs with off-targets for",x,"gene"))
+  # list.files
+  
+  off_target_files <- read.delim(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/off_target_analysis/off_target_2/off_targets_",x,".txt"))
+  
+
+    gRNA_files <- read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_0.2_complete.txt"), header = T)
+
+  #Mock line
+  mock_row <- tibble(gRNA = "A",`0`= 1, `1` = 1, `2` = 1, `3` = 1, `4` = 1)
+  
+  #Summarise off targets
+off_target_summary <- off_target_files%>%
+  dplyr::group_by(crRNA,Mismatches) %>%
+  dplyr::summarise(count = n()) %>%
+  mutate(gRNA = gsub("NGG","",crRNA)) %>%
+  ungroup() %>%
+  reshape2::dcast(gRNA ~ Mismatches, value.var = "count", fill = 0) %>%
+  full_join(mock_row)
+
+off_target_summary[is.na(off_target_summary)] <- 0
+
+  #Add off-target data to gRNAs
+  gRNA_correct_gRNA <- gRNA_files  %>%
+  left_join(off_target_summary) %>%
+  filter(`1` == 0 & `2`== 0 & `0` == 1)
+  
+  #Write table
+  write.table(gRNA_correct_gRNA,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",x,".txt"),
+            row.names = F, quote = F)
+  
+  print(paste("After filtering for gRNA with little off-targets, I have",nrow(gRNA_correct_gRNA),"gRNAs targetting ",x,"gene."))
+  print("==================================")
+  
+  #Create log file
+if (!file.exists(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))){
+log.file <- file(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))
+} else {
+  log.file <- paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt")
+}
+
+write(c("Author: Xabier Vergara",
+        paste("Date:",date()),
+        "Step: Off-target filtering step",
+        paste("In this step, I will filter out gRNAs with off-targets for",x,"gene"),
+        paste("After filtering for gRNA with little off-targets, I have",nrow(gRNA_correct_gRNA),"gRNAs targetting ",x,"gene."),
+        "=================================="),
+        log.file, append = T)
+
+}
+
+#Perform a loop
+files <- list.files("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/")
+gene_names <- gsub("_hg38.csv","",files)
+
+for (i in gene_names) {
+    off_target_filter(i)
+}
+
+
+```
+
+
+#Summary table: Including filtering steps and status
+```{r, warning=F}
+summarise_workflow <- function(x) {
+  #Load of files
+  #Step 0: All gRNAs
+  all_gRNA <- read.delim(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/",x,"_hg38.csv"), sep = ",")
+  
+  #Step 1: High qualitye
+    gRNA_files <- read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_0.2_complete.txt"), header = T)
+
+  
+  #Ste2: High quality & precision
+  precise <- if (nrow(read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",x,".txt"), header = T)) == 0){
+    "Empty"
+  } else {
+    read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",x,".txt"), header = T)
+  }
+  
+#Start and end
+first_gRNA <- min(gRNA_files$Cutsite.coordinate)
+last_gRNA <- max(gRNA_files$Cutsite.coordinate)
+kgID_reference <- unique(gRNA_files$kgID)
+
+#Step 0 : All gRNA in range
+n_gRNA_0 <- all_gRNA %>%
+  filter(Cutsite.coordinate >= first_gRNA & Cutsite.coordinate < last_gRNA & kgID %in% kgID_reference) %>%
+  nrow()
+
+#Step 1: Precise gRNAs
+n_gRNA_1 <- nrow(gRNA_files)
+
+#Step 2: Final gRNAs
+n_gRNA_2 <- if(precise == "Empty") {
+  0 } else {
+  nrow(precise)
+  }
+
+tmp <- tibble(gene = x,
+            chr = unique(gRNA_files$Chromosome),
+            start = first_gRNA,
+            end = last_gRNA,
+            kgID = kgID_reference,
+            all_gRNA = n_gRNA_0,
+            range = abs(end - start),
+            precise_eff_gRNA = n_gRNA_2,
+            status = case_when(n_gRNA_2 < 18 & n_gRNA_2 > 9 ~ "Ready",
+                               n_gRNA_2 > 17 ~ "Too_many!",
+                               n_gRNA_2 == 0 ~ "Skip",
+                               n_gRNA_2 < 9 & n_gRNA_2 != 0 ~ "Increase"))
+
+}
+
+
+summary_table <- map_dfr(gene_names, summarise_workflow)
+print(summary_table)
+
+```
+
+#Select 17 gRNA for those that have too many
+```{r}
+too_many <- summary_table %>% 
+  filter(status == "Too_many!") %>%
+  pull(gene)
+
+for (i in too_many) {
+  #Load data
+    precise <- if (nrow(read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",i,".txt"), header = T)) == 0){
+    "Empty"
+  } else {
+    read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",i,".txt"), header = T)
+  }
+    
+  very_high <- precise %>% top_n(17,Frameshift....)
+  
+  #Save file
+  write.table(very_high,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",i,"_gRNAs_to_order_stats.txt"),
+            row.names = F, quote = F)
+}
+```
+
+#Save for the ones ready the file
+```{r}
+ready <- summary_table %>% 
+  filter(status == "Ready") %>%
+  pull(gene)
+
+for (i in ready) {
+  #Load data
+    precise <- if (nrow(read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",i,".txt"), header = T)) == 0){
+    "Empty"
+  } else {
+    read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/precise_gRNA_pool",i,".txt"), header = T)
+  }
+  
+  #Save file
+  write.table(precise,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",i,"_gRNAs_to_order_stats.txt"),
+            row.names = F, quote = F)
+}
+```
+
+#For the ones with not enough gRNAs, can I include some with missmatches
+```{r, warning=F, message=F}
+off_target_filter_loose <- function(x){
+    #Load data
+  print(paste("In this step, I will filter out gRNAs with off-targets for in a less stringent way",x,"gene"))
+  # list.files
+  
+  off_target_files <- read.delim(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/off_target_analysis/off_target_2/off_targets_",x,".txt"))
+  
+gRNA_files <- read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/gRNAs_targetting_",x,"_0.2_complete.txt"), header = T)
+
+  #Mock line
+  mock_row <- tibble(gRNA = "A",`0`= 1, `1` = 1, `2` = 1, `3` = 1, `4` = 1)
+  
+  #Summarise off targets
+off_target_summary <- off_target_files%>%
+  dplyr::group_by(crRNA,Mismatches) %>%
+  dplyr::summarise(count = n()) %>%
+  mutate(gRNA = gsub("NGG","",crRNA)) %>%
+  ungroup() %>%
+  reshape2::dcast(gRNA ~ Mismatches, value.var = "count", fill = 0) %>%
+  full_join(mock_row)
+
+off_target_summary[is.na(off_target_summary)] <- 0
+
+  #Add off-target data to gRNAs
+  gRNA_correct_gRNA <- gRNA_files  %>%
+  left_join(off_target_summary) %>%
+  filter(`1` == 0 & `0` == 1)
+  
+  #Write table
+  write.table(gRNA_correct_gRNA,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/medium_precision_gRNA_pool",x,".txt"),
+            row.names = F, quote = F)
+  
+  print(paste("After filtering for gRNA with little off-targets, I have",nrow(gRNA_correct_gRNA),"gRNAs targetting ",x,"gene."))
+  print("==================================")
+  
+  #Create log file
+if (!file.exists(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))){
+log.file <- file(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt"))
+} else {
+  log.file <- paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis_log_file.txt")
+}
+
+write(c("Author: Xabier Vergara",
+        paste("Date:",date()),
+        "Step 3: Off-target filtering step allowing off-targets with 2 missmatches",
+        paste("In this step, I will filter out gRNAs with off-targets for",x,"gene"),
+        paste("After filtering for gRNA with little off-targets, I have",nrow(gRNA_correct_gRNA),"gRNAs targetting ",x,"gene."),
+        "=================================="),
+        log.file, append = T)
+
+}
+
+#Perform a loop
+too_few <- summary_table %>% 
+  filter(status == "Increase") %>%
+  pull(gene)
+
+for (i in too_few) {
+    off_target_filter_loose(i)
+}
+
+```
+#Update summary table with the lower stringent cut-off
+```{r}
+update_workflow <- function(x) {
+  #Ste2: High quality & precision
+  precise <- if (nrow(read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/medium_precision_gRNA_pool",x,".txt"), header = T)) == 0){
+    "Empty"
+  } else {
+    read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/medium_precision_gRNA_pool",x,".txt"), header = T)
+  }
+  
+#Step 2: Final gRNAs
+n_gRNA_3 <- if(precise == "Empty") {
+  0 } else {
+  nrow(precise)
+  }
+
+range_start <- min(precise$Cutsite.coordinate)
+range_end <- max(precise$Cutsite.coordinate)
+
+tibble(gene = x,
+              less_stringent_gRNA = nrow(precise),
+              range_update = abs(range_end - range_start),
+              status_update = case_when(less_stringent_gRNA < 18 & less_stringent_gRNA > 9 ~ "Ready",
+                               less_stringent_gRNA > 17 ~ "Too_many!",
+                               less_stringent_gRNA == 0 ~ "Skip",
+                               less_stringent_gRNA < 9 & less_stringent_gRNA != 0 ~ "Little_order"))
+
+}
+
+updated_summary_table <-  left_join(summary_table,map_dfr(too_few, update_workflow))
+
+
+
+```
+
+
+# Order all these gRNA pools
+```{r}
+
+for (i in too_few) {
+  #Load data
+    precise <- if (nrow(read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/medium_precision_gRNA_pool",i,".txt"), header = T)) == 0){
+    "Empty"
+  } else {
+    read.table(paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/Indelphi_analysis/medium_precision_gRNA_pool",i,".txt"), header = T)
+  }
+  
+  #Save file
+  write.table(precise,
+            file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",i,"_gRNAs_to_order_stats.txt"),
+            row.names = F, quote = F)
+}
+
+```
+
+#Plot gRNAs and targetting sites
+```{r, warning=F, echo=F, message=F}
+#Load all files and gRNAs
+order_gRNAs <- list.files(path = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/", full.names = T)
+
+#Plot function
+plot_gRNA_location_after <- function(x) {
+  order_gRNA <- read.table(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",x,"_gRNAs_to_order_stats.txt"),header = T)
+  all_gRNA <- read.delim(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/",x,"_hg38.csv"), sep = ",")
+  kgID_reference <- unique(order_gRNA$kgID)
+  
+  #All gRNA exons
+  exon_squares <- all_gRNA %>%
+    filter(kgID %in% kgID_reference) %>%
+    dplyr::group_by(kgID, Exon.number) %>%
+    dplyr::summarise(start = unique(Exon.start),
+                     end = unique(Exon.end))
+  
+  #Region selected
+  selct_region <- order_gRNA %>%
+    dplyr::group_by(kgID) %>%
+    dplyr::summarise(start = min(Cutsite.coordinate),
+                     end = max(Cutsite.coordinate))
+  
+  targ_exons <- unique(order_gRNA$Exon.number)
+  
+  ggplot() + 
+    geom_point(data = all_gRNA %>% filter(kgID %in% kgID_reference), 
+              aes(x = Cutsite.coordinate, y = Exon.number), color = "grey") +
+    geom_point(data = order_gRNA,
+              aes(x = Cutsite.coordinate, y = Exon.number), color = "orange", size = 3) +
+    theme_bw() +
+  #  facet_wrap(~kgID) +
+    ggtitle(paste0("Targetted exons of ",x)) + 
+    theme(legend.position = "none")
+}
+
+
+all_gRNA_after <- map(gene_names,plot_gRNA_location_after)
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/library_design/xv20230307_ordered_gRNAs_location.pdf")
+#all_gRNA_after
+#dev.off()
+
+
+
+
+```
+
+#Order gRNAs with the right template
+```{r}
+#get all gRNA sequences and prepare datatable
+gRNA_batch_generator <- function(x) {
+  #Load data
+  order_gRNA <- read.table(file = paste0("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/gRNA_stats/",x,"_gRNAs_to_order_stats.txt"),header = T)
+  
+  gRNA_table <- order_gRNA %>% mutate(`Pool name` = paste0(x,"_pool_human"),
+                                      Sequence = paste0("tggagaaCCAcctTGTTGG",gRNA,"GTTTAAGAGCTAAGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGCTTTTTTTCtcgagtactaggatccattaggcggccgcgtggataaccgtattac")) %>%
+    select(`Pool name`, Sequence)
+}
+
+gRNA_order_human <- map_dfr(gene_names[gene_names != "BABAM2"],gRNA_batch_generator)
+
+
+#Write rds files
+write.csv(gRNA_order_human,"~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/gRNA_pool_order/xv20230307_validation_human_gRNA_pools.csv", row.names = F)
+
+
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

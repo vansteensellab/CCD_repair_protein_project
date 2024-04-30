@@ -1,0 +1,157 @@
+---
+title: "xv20210517_figure1_meeting"
+output: html_document
+---
+
+#This will be part of a seriees of Rmarkdowns for the meeting. I will make figures that could go together eventually.
+
+Figure 1: This figure will show the main conclusions of the CRISPR screen. The message of this figure will be - chromatin genes regulate either MMEJ or NHEJ.
+
+```{r setup, include=FALSE}
+library(tidyverse) 
+library(ggbeeswarm)
+library(corrplot)
+library(pheatmap)
+library(viridis)
+library(factoextra)
+library(NbClust)
+library(ggpubr)
+#library(ggbiplot)
+library(ggrepel)
+library(readxl)
+library(gridExtra)
+#library(gprofiler2)
+library(readxl)
+library(RColorBrewer)
+```
+
+#Import
+
+```{r}
+#functions
+#mybreaks
+myBreaks <- function(test, p) {c(seq(min(test), 0, length.out=ceiling(p/2) + 1), 
+              seq(max(test)/p, max(test), length.out=floor(p/2)))}
+```
+#Import data tables
+```{r setup, include=FALSE}
+screen.score <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+screen.detail <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+screen.score.totals <-  readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+
+screen.controls <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+```
+
+# Figure A in this panel will be the heatmap CORUM data base
+
+# Figure B in the panel will be correlation between members of the comples
+```{r}
+#Select genes
+MLL3.4 <- c("KMT2C","KMT2D","KDM6A","PAXIP1","KDM6B","ASH2L","RBBP5")
+MLL1 <- c("KMT2A","ASH2L","KDM6B")
+
+
+mll34 <- screen.detail %>% filter(gene %in% MLL3.4) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+mll1 <- screen.detail %>% filter(gene %in% MLL1) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.mll <- cor(mll34, method = "spearman")
+mll.corr <- cor.mll[upper.tri(cor.mll)]
+
+cor.mll1 <- cor(mll1, method = "spearman")
+mll1.corr <- cor.mll1[upper.tri(cor.mll1)]
+
+# Random set of 7 genes
+set.seed(5)
+random.genes.mll <- sample(screen.detail$gene, length(MLL3.4))
+random.genes.mll1 <- sample(screen.detail$gene, length(MLL1))
+
+# Select only the ones selected from screening
+random.barcode.mll <- screen.detail %>% filter(gene %in% random.genes.mll) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+random.barcode.mll1 <- screen.detail %>% filter(gene %in% random.genes.mll1) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.random.mll <- cor(random.barcode.mll, method = "spearman")
+random.corr.mll <- cor.random.mll[upper.tri(cor.random.mll)]
+
+#Other
+cor.random.mll1 <- cor(random.barcode.mll1, method = "spearman")
+random.corr.mll1 <- cor.random.mll1[upper.tri(cor.random.mll1)]
+
+
+#Put two things together
+random.cor.bc.mll <- tibble(type = rep("random_mll34",length(random.corr.mll)), value = random.corr.mll,  class = "MLL3_4")
+mll.cor.bc <- tibble(type = rep("MLL3_4",length(mll.corr)), value = mll.corr, class = "MLL3_4")
+random.cor.bc.mll1 <- tibble(type = rep("random_mll1",length(random.corr.mll1)), value = random.corr.mll1, class = "MLL1")
+mll1.cor.bc <- tibble(type = rep("MLL1",length(mll1.corr)), value = mll1.corr, class = "MLL1")
+plot.cor.analysis.bc <- bind_rows(random.cor.bc.mll,mll.cor.bc,random.cor.bc.mll1,mll1.cor.bc)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+#plot
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_mll_complex.pdf", height = 3,width = 5, useDingbats = F)
+ggplot(plot.cor.analysis.bc %>% filter(class == "MLL3_4"), aes(type, value)) + stat_compare_means() + geom_quasirandom() + geom_boxplot(alpha = 0.3)  + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient") + theme(axis.title.x = element_blank())
+ggplot(plot.cor.analysis.bc %>% filter(class == "MLL1"), aes(type, value)) + stat_compare_means(aes(type,value),inherit.aes = F) + geom_quasirandom() + geom_boxplot(alpha = 0.3)  + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient") + theme(axis.title.x = element_blank())
+dev.off()
+
+```
+#Figure C: Clustering on selected hits (CI 90, based on z-score)
+
+```{r cars}
+#Select hits with abs(z.score) > 1.65
+```
+#Figure 3: heatmap in different chromatin categories. Are there differences between chromatin types?
+```{r}
+#Change colnames
+```
+# add correlation matrix
+```{r}
+```
+
+
+#Figure E: Tip60 and 53BP1 (link to complexes)
+```{r}
+
+```
+
+# Figure F: Tip60 complex proteins correlate to each other?
+```{r}
+#TIP60 and 53BP1 correlation
+tip60.complex <- c("DMAP1","EP400","EPC1","EPC2","KAT5","ING3","MORF4L1","RUVBL1","RUVBL2","TRRAP","YEATS4")
+
+# Select only the ones selected from screening
+tip60.barcode <- screen.detail %>% filter(gene %in% tip60.complex) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.tip60 <- cor(tip60.barcode, method = "spearman")
+tip60.corr <- cor.tip60[upper.tri(cor.tip60)]
+
+# Random set of 11 genes
+set.seed(1)
+random.genes <- sample(screen.detail$gene, 11)
+
+# Select only the ones selected from screening
+random.barcode <- screen.detail %>% filter(gene %in% random.genes) %>% dplyr::group_by(barcode,gene) %>% dplyr::summarise(bc.mmejscore = sum(mmej.SCscore, na.rm = T)/sqrt(n())) %>% distinct() %>% ungroup() %>% reshape2::dcast(barcode ~ gene, value.var = "bc.mmejscore") %>% column_to_rownames(var = "barcode")
+
+# Correlation of tip60 genes
+cor.random <- cor(random.barcode, method = "spearman")
+random.corr <- cor.random[upper.tri(cor.random)]
+
+
+#Put two things together
+random.cor.bc <- tibble(type = rep("random",length(random.corr)), value = random.corr)
+tip60.cor.bc <- tibble(type = rep("Tip60-NuA4 complex",length(tip60.corr)), value = tip60.corr)
+plot.cor.analysis.bc <- bind_rows(random.cor.bc,tip60.cor.bc)
+
+#Run t.test (are there different?)
+t.test.mll <- t.test(mll.cor$value,random.mll.cor$value, alternative = "greater")
+t.test.noeff <- t.test(noeff.cor$value,random.noeff.cor$value, alternative = "greater")
+
+#plot
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/figure1/xv20210517_tip60_complex.pdf", height = 3,width = 5, useDingbats = F)
+ggplot(plot.cor.analysis.bc, aes(fct_relevel(type, c("Tip60-NuA4 complex")),value)) + geom_quasirandom() + geom_boxplot(aes(fill = type),alpha = 0.3) + stat_compare_means(method.args = list(alternative = "greater"), label.x.npc = 0.4) + theme_bw() + coord_cartesian(ylim = c(-1,1.2)) + ylab("Spearman correlation coefficient") + theme(axis.title.x = element_blank())
+dev.off()
+```

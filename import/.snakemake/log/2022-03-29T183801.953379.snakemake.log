@@ -1,0 +1,296 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	7	align_chip
+	6	align_control
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	7	call_domains
+	1	chrom_sizes
+	1	compare_bam_replicates
+	1	compare_bw_rep
+	7	convert2gff
+	13	download_single_sra
+	7	filter_blackgrey
+	6	filter_blackgrey_ctrl
+	6	generate_greylist
+	6	idxstats
+	13	index
+	8	make_compare_bw
+	7	markdup
+	6	markdup_ctrl
+	1	plot_correlation
+	13	prefetch_sra
+	137
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657362_prefetch
+    jobid: 127
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657362
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657369_prefetch
+    jobid: 135
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657369
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657368_prefetch
+    jobid: 136
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657368
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657285_prefetch
+    jobid: 124
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657285
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657373_prefetch
+    jobid: 133
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657373
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR13764822_prefetch
+    jobid: 131
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR13764822
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657282_prefetch
+    jobid: 125
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657282
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364_prefetch
+    jobid: 126
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657364
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657348_prefetch
+    jobid: 129
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657348
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657363_prefetch
+    jobid: 128
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657363
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657347_prefetch
+    jobid: 130
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657347
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657315_prefetch
+    jobid: 132
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657315
+
+
+rule prefetch_sra:
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657374_prefetch
+    jobid: 134
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657374
+
+
+rule chrom_sizes:
+    input: /DATA/data/human/hg38/genome/chromSizes_hg38_LP180129.txt
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/chrom_sizes.txt
+    jobid: 34
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, genome=hg38
+
+Finished job 34.
+1 of 137 steps (0.73%) done
+Finished job 128.
+2 of 137 steps (1%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657363_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657363.fastq.gz
+    jobid: 115
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657363
+    threads: 5
+
+Finished job 136.
+3 of 137 steps (2%) done
+Finished job 124.
+4 of 137 steps (3%) done
+Finished job 133.
+5 of 137 steps (4%) done
+Finished job 127.
+6 of 137 steps (4%) done
+Finished job 129.
+7 of 137 steps (5%) done
+Finished job 135.
+8 of 137 steps (6%) done
+Finished job 125.
+9 of 137 steps (7%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657348_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657348.fastq.gz
+    jobid: 116
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657348
+    threads: 5
+
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657362_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657362.fastq.gz
+    jobid: 114
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657362
+    threads: 5
+
+Finished job 126.
+10 of 137 steps (7%) done
+Finished job 131.
+11 of 137 steps (8%) done
+Finished job 130.
+12 of 137 steps (9%) done
+Finished job 132.
+13 of 137 steps (9%) done
+Finished job 134.
+14 of 137 steps (10%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364.fastq.gz
+    jobid: 113
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657364
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657362_prefetch.
+Finished job 114.
+15 of 137 steps (11%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657374_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657374.fastq.gz
+    jobid: 121
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657374
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657363_prefetch.
+Finished job 115.
+16 of 137 steps (12%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657315_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657315.fastq.gz
+    jobid: 119
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657315
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364_prefetch.
+Finished job 113.
+17 of 137 steps (12%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657369_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657369.fastq.gz
+    jobid: 122
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657369
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657348_prefetch.
+Finished job 116.
+18 of 137 steps (13%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657285_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657285.fastq.gz
+    jobid: 111
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657285
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657315_prefetch.
+Finished job 119.
+19 of 137 steps (14%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR13764822_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR13764822.fastq.gz
+    jobid: 118
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR13764822
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657374_prefetch.
+Finished job 121.
+20 of 137 steps (15%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657373_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657373.fastq.gz
+    jobid: 120
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657373
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657369_prefetch.
+Finished job 122.
+21 of 137 steps (15%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657368_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657368.fastq.gz
+    jobid: 123
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657368
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657285_prefetch.
+Finished job 111.
+22 of 137 steps (16%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657282_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657282.fastq.gz
+    jobid: 112
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657282
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR13764822_prefetch.
+Finished job 118.
+23 of 137 steps (17%) done
+
+rule download_single_sra:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657347_prefetch
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657347.fastq.gz
+    jobid: 117
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, srr_id=SRR11657347
+    threads: 5
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657368_prefetch.
+Finished job 123.
+24 of 137 steps (18%) done
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657373_prefetch.
+Finished job 120.
+25 of 137 steps (18%) done
+
+rule align_control:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364.fastq.gz
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657364.bam.tmp
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/control/SRR11657364.txt
+    jobid: 100
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, genome=hg38, srr_id=SRR11657364
+    threads: 10
+
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657282_prefetch.
+Finished job 112.
+26 of 137 steps (19%) done
+Removing temporary output file /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657347_prefetch.
+Finished job 117.
+27 of 137 steps (20%) done
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-29T183801.953379.snakemake.log

@@ -1,0 +1,138 @@
+---
+title: "xv20200708_gProfiler_heatmap"
+output: html_document
+---
+
+# I will import gProfiler app and analyse hits based on this. 
+## General hits
+## Hits within LADs and iLADs
+## Hits in different types of chromatin
+
+```{r, include = FALSE}
+library(tidyverse) 
+library(ggbeeswarm)
+library(corrplot)
+library(pheatmap)
+library(viridis)
+library(factoextra)
+library(NbClust)
+library(ggpubr)
+library(ggbiplot)
+library(ggrepel)
+library(readxl)
+library(gridExtra)
+library(gprofiler2)
+library(readxl)
+```
+
+```{r}
+#functions
+#mybreaks
+myBreaks <- function(test, p) {c(seq(min(test), 0, length.out=ceiling(p/2) + 1), 
+              seq(max(test)/p, max(test), length.out=floor(p/2)))}
+```
+#Import data tables
+```{r setup, include=FALSE}
+screen.score <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20200708_frozen_chz_scores_dcast.rds")
+screen.detail <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20200708_frozen_chz_scores_mmej.rds")
+screen.score.totals <- read_xlsx("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/export/xv20200525_CRISPR_screen_scores.xlsx")
+
+screen.controls <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20200715_frozen_chz_scores_controls.rds")
+```
+
+## Heat map of hits: Plot z-scores as a heatmap
+```{r}
+gene.hits.hmap <- screen.score.totals %>% select(-LAD,-overall,-SPE.PC1,-PC1, -iLAD)
+CI.90.hits.list <- apply(gene.hits.hmap[2:length(gene.hits.hmap)],2, function(x){gene.hits.hmap %>% filter(x > 1.65 | x < -1.65) %>% pull(gene)})
+CI.90.hits <- Reduce(union,CI.90.hits.list)
+gene.hits.hmap.b <- as.matrix(gene.hits.hmap %>% filter(gene %in% CI.90.hits) %>% column_to_rownames(var = "gene"))
+
+pheatmap(as.matrix(gene.hits.hmap.b), breaks = c(min(gene.hits.hmap.b), -1.65,1.65,max(gene.hits.hmap.b)), color = c("blue", "grey90", "red"), cellwidth = 10,cellheight = 2, treeheight_row = 50, treeheight_col = 5, fontsize_row = 5)
+
+#Change colnames
+colnames(gene.hits.hmap.b) <- c("Euchromatin (2 IPRs)", "Euchromatin & Transcription (3 IPRs)","H3K27me3 (4 IPRs)","Triple heterochromatin (4 IPRs)","Other heterochromatin (4 IPRs)","Transcription (2 IPRs)")
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20200715_gene_heatmap_horizontal.pdf", width = 20)
+
+pheatmap(as.matrix(t(gene.hits.hmap.b)), breaks = seq(-5,5, by = 0.1), cellwidth = 7,cellheight = 7, treeheight_row = 30, treeheight_col = 80, fontsize_col = 7, fontsize_row = 7, border_color = NA)
+dev.off()
+
+
+```
+
+
+## Extract hits to it per chromatin type
+
+```{r cars}
+# Filter NHEJ complexes
+screen.score.totals.filter <- screen.score.totals %>% select(-SPE.PC1, -PC1)
+
+# CI > 1.65
+NHEJ.hits <- apply(screen.score.totals.filter[2:length(screen.score.totals.filter)],2,function(x) {filter(screen.score.totals.filter, x > 1.65) %>% pull(gene)})
+MMEJ.hits <- apply(screen.score.totals.filter[2:length(screen.score.totals.filter)],2,function(x) {filter(screen.score.totals.filter, x < -1.65) %>% pull(gene)})
+hits <- apply(screen.score.totals.filter[2:length(screen.score.totals.filter)],2,function(x) {filter(screen.score.totals.filter, abs(x) > 1.65) %>% pull(gene)})
+
+# run gProfiler
+NHEJ.gost <- gost(NHEJ.hits,source = "CORUM")
+MMEJ.gost <- gost(MMEJ.hits,source = "CORUM")
+hits.gost <- gost(hits,source = "CORUM")
+
+#Get link to webtool
+NHEJ.gost.link <- gost(NHEJ.hits,source = "CORUM", as_short_link = T)
+MMEJ.gost.link <- gost(MMEJ.hits,source = "CORUM", as_short_link = T)
+hits.gost.link <- gost(hits,source = "CORUM", as_short_link = T)
+
+#Plot gostplot
+gostplot(NHEJ.gost)
+gostplot(MMEJ.gost)
+gostplot(hits.gost)
+
+# Select variables that are interesting for us
+NHEJ.complex <- NHEJ.gost$result %>% select(query,p_value,term_name) %>% mutate(effect = -log10(p_value))
+MMEJ.complex <- MMEJ.gost$result %>% select(query, p_value, term_name) %>% mutate(effect = log10(p_value)) 
+hit.complexes <- bind_rows(NHEJ.complex,MMEJ.complex) %>% select(- p_value) %>% distinct() %>% reshape2::dcast(term_name ~ query, value.var = "effect", fun.aggregate = mean) %>% column_to_rownames(var = "term_name")
+hit.complexes[is.na(hit.complexes)] <- 0
+
+#Plot everything
+hit.complex <- hits.gost$result %>% select(query, p_value, term_name) %>% mutate(effect = -log10(p_value)) %>% select(- p_value) %>% distinct() %>% reshape2::dcast(term_name ~ query, value.var = "effect", fun.aggregate = mean) %>% column_to_rownames(var = "term_name")
+
+#Change colnames
+colnames(hit.complexes) <- c("Euchromatin (2 IPRs)", "Euchromatin & Transcription (3 IPRs)","H3K27me3 (4 IPRs)","LAD","Triple heterochromatin (4 IPRs)","Other heterochromatin (4 IPRs)","overall","Transcription (2 IPRs)")
+
+
+# Plot heatmap for chromatin types
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20200715_CORUM_complex_heatmap.pdf")
+
+pheatmap(as.matrix(hit.complexes %>% select(-LAD, -overall)), color = c("#2E358F","grey90","#EB2030"), breaks = c(-1,-0.95,0.95,1), cellheight = 15, cellwidth = 15,border_color = NA, treeheight_row = 6, treeheight_col = 6, legend = F)
+
+dev.off()
+```
+
+## MLL protein plots
+
+```{r}
+MLL.proteins <- filter(screen.detail, gene %in% c("KMT2A","ASH2L", "RBBP5","KDM6A","PAXIP1"))
+
+MLL.prot.level <- c("KMT2A","ASH2L","RBBP5","KDM6A","PAXIP1","WT","POLQ")
+
+#Arrange dt
+MLL.and.controls <- screen.controls %>% bind_rows(MLL.proteins) %>% select(chromatin, MMEJscore, t.rep, gene) %>% dplyr::group_by(chromatin,t.rep,gene) %>% dplyr::summarise(MMEJ.p = mean(MMEJscore)) %>% ungroup() %>% dplyr::group_by(chromatin,gene) %>% dplyr::mutate(MMEJ = mean(MMEJ.p))%>% mutate(NHEJ = 1 - MMEJ) %>% reshape2::melt(id.vars = c("chromatin","t.rep","gene", "MMEJ.p"), variable.name = "pathway")
+
+MLL.and.controls.chr <- filter(MLL.and.controls, !chromatin %in% c("euchromatin","transcription","other-heterochromatin"))
+
+chrom.labs <- c("Euchromatin & Transcription (3 IPRs)","H3K27me3 (4 IPRs)","Triple heterochromatin (4 IPRs)")
+names(chrom.labs) <- c("euchromatin-transcription","H3K27me3","late_replicating-LAD-H3K9me2")
+
+#plot
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20200722_balances.pdf", height = 3, width = 9)
+ggplot() + geom_col(data = MLL.and.controls.chr %>% select(-t.rep,-MMEJ.p) %>% distinct(),aes(fct_relevel(gene,MLL.prot.level), value, fill = pathway)) + geom_quasirandom(data = MLL.and.controls.chr %>% select(gene, MMEJ.p,chromatin) %>% distinct, aes(gene, 1 - MMEJ.p), size = 1, color = "grey70") + facet_wrap(~ chromatin, labeller = labeller(chromatin = chrom.labs)) + scale_fill_manual(values = c("#2E358F","#EB2030")) + theme_bw() + coord_cartesian(expand = F) + ylab("Pathway Frequency")+ theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title.x = element_blank())
+dev.off()
+
+#Control balances
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20200909_control_balances.pdf", height = 9, width = 9)
+ggplot() + geom_col(data = MLL.and.controls.chr %>% filter(gene %in% c("WT","POLQ"))%>% select(-t.rep,-MMEJ.p) %>% distinct(),aes(fct_relevel(gene,MLL.prot.level), value, fill = pathway)) + geom_quasirandom(data = MLL.and.controls.chr %>% filter(gene %in% c("WT","POLQ"))%>% select(gene, MMEJ.p,chromatin) %>% distinct, aes(gene, 1 - MMEJ.p), size = 1, color = "grey70") + facet_wrap(~ chromatin, labeller = labeller(chromatin = chrom.labs)) + scale_fill_manual(values = c("#2E358F","#EB2030")) + theme_bw() + coord_cartesian(expand = F) + ylab("Pathway Frequency")+ theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title.x = element_blank())
+dev.off()
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

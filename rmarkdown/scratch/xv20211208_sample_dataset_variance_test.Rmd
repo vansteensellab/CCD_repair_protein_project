@@ -1,0 +1,88 @@
+---
+title: "xv20211208_crispr_screen_chromatin_dna_repair"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(Hmisc)
+```
+
+# Create a summary with three gene POLL, POLQ and FANCM
+I will send this together with the control data
+
+
+# Import data
+```{r}
+#Raw data all indels in the ddr screen
+all.indel.data.ddr.screen <- readRDS("~/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_ddr_all_indel_data.rds")
+
+#Control processed data
+wt.processed.ddr <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds") %>% filter(gene == "WT")
+
+#KO processed data 
+ko.processed.ddr <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds") %>% filter(gene %in% c("POLL","FANCM","POLQ"))
+
+#Chromatin feature data
+clone5_chrom_tib <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200519_clone5_newdoms_chromatin.RDS")
+
+# Four state calling
+clasification.4.chroms <- clone5_chrom_tib %>% select(chromatin,barcode) %>% dplyr::mutate(chrom.4 = case_when(chromatin %in% c("euchromatin-transcription","other-euchromatin","transcription") ~ "euchromatin", T ~ chromatin)) %>% select(-chromatin)
+
+#Extract positions of wt and selected ko
+wt.positions <- wt.processed.ddr %>% select(gene,plate,well) %>% distinct()
+sel.genes.positions <-ko.processed.ddr %>% select(gene,plate,well) %>% distinct()
+# bind positions
+filter.positions <- bind_rows(wt.positions,sel.genes.positions)
+
+# Create final table pre-processed
+sample.data.table <- filter.positions %>% left_join(all.indel.data.ddr.screen %>% filter(replicate %in% c("R1","R2") & bio.rep %in% c("B4","B5")), by = c("plate","well")) %>% left_join(clasification.4.chroms, by ="barcode") %>% select(gene,barcode,chrom.4,replicate, bio.rep, freqMMEJ,freqNHEJ,freqCut, MMEJscore,indelreads, plate, well) 
+
+# create replicate conversion table
+replicate.conversion <- tibble(sample.data.table %>% select(replicate, bio.rep) %>% unique, rep = c("R1","R4","R5"))
+
+# Final sample data table
+sample.data.table.final <- sample.data.table %>% left_join(replicate.conversion,by = c("replicate", "bio.rep")) %>% select(-replicate,-bio.rep)
+
+#Create final table processed
+sample.data.processed.select <- wt.processed.ddr %>% bind_rows(ko.processed.ddr) %>% left_join(clasification.4.chroms, by = "barcode") %>% select(gene,barcode,chrom.4,rep = FinRep, mmej.z.score,plate,well)
+#Compute score per chromatin state
+sample.data.processed.select.4chrom <- sample.data.processed.select %>%
+  dplyr::group_by(chrom.4,rep,gene) %>%
+  dplyr::summarise(mmej.chrom.score = mean(mmej.z.score, na.rm = T))
+
+# Combine both data
+sample.processed.data.final <- left_join(sample.data.processed.select ,sample.data.processed.select.4chrom, by = c("gene", "chrom.4", "rep"))
+```
+
+
+# Some QC to make sure I have all the data
+```{r}
+# How many wells per replicate
+summarised.data.sample <- sample.data.table.final %>% dplyr::group_by(gene,rep) %>% dplyr::summarise(counts = n())
+# How many wells per replicate
+summarised.processed.data.sample <- sample.processed.data.final %>% dplyr::group_by(gene,rep) %>% dplyr::summarise(counts = n())
+```
+
+# Export data
+```{r}
+saveRDS(sample.data.table.final, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20211208_sample_dataset_variance_test.rds")
+saveRDS(sample.processed.data.final, file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20211209_sample_dataset_variance_test_processed.rds")
+```
+

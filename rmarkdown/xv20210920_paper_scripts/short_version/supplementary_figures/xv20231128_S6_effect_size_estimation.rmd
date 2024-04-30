@@ -12,9 +12,7 @@ output:
   editor_options:
     chunk_output_type: console
 ---
-# Script to generate figure S5 in the short version of the paper.
-
-Fig. S5: Estimation of genome-wide dynamic ranges of chromatin features. A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
+# Script to generate Supplementary Figure 6
 
 ```{r functions, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
@@ -71,7 +69,6 @@ readRDS_proof <- function(path, pat) {
 }
 ```
 
-
 # Libraries
 ```{r libraries, warning=FALSE, message=FALSE}
 # libraries:
@@ -89,15 +86,8 @@ library(ggbeeswarm)
 ```{r import, warning=FALSE,message=FALSE}
 setwd(in.dir)
 
-print("For this script the following data was inputed:")
 #Clone 5 chromatin Version cl20201026
 clone5_z.score_chrom_tib <- readRDS_proof("/DATA/projects/DSBrepair/data/R","cl20201026_ChIP_zscore_selection")
-
-#Import TIF ratio measurements per replicate
-TIF.ddr.screen.all.sel <- readRDS_proof( "data/processed_data/CCD_analysis","raw_data_TIF")
-
-#Import mean value measurements
-global_diff_TIF <- readRDS_proof( "data/processed_data/CCD_analysis","diff_TIF")
 
 # heatmap chromatin order
 heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
@@ -113,11 +103,8 @@ table_S3_CCDs  <- readRDS_proof("data/processed_data","Table_S7")
 
 ```
 
-#Supplementary Figures
+# Figure S6A:
 
-#Figure S6A:
-
-A) All the parameters needed for dynamic range estimation of the 25 high quality chromatin features. In grey, distribution of genome-wide chromatin scores, with the 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen (in this hypothetical example 19 random data points).
 ```{r Fig_S6_A}
 chromatin_features_plot <-  clone5_z.score_chrom_tib %>% reshape2::melt(id.vars = c("pool","ID","binsize"))
 
@@ -131,10 +118,13 @@ ggplot(chromatin_features_plot) +
   geom_quasirandom(data = chromatin_features_plot %>% filter(ID %in% clone5_bc_cluster), aes(fct_relevel(variable, heatmap.chromatin.order), value), color = "red", size = 1)  + 
   geom_errorbar(data = CI99_chromatin_features, aes(x = variable,ymin = CI0.5, ymax = CI99.5), color = "black", width = 0.5) 
 ```
+A) In grey, distribution of genome-wide chromatin scores, with the two-sided 99% confidence interval (99CI) marked by the horizontal black lines (top 0.5% and bottom 0.5%). In red, chromatin scores of all 19 IPRs in clone 5 for which MMEJ:NHEJ balance was measured in the screen. 
 
-#Calculate global effect RAD50
+
+# Figure S6B
+
 ```{r, fig.width=2,fig.height=3}
-pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example.pdf",width = 2, height = 3)
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example.pdf",width = 2, height = 3)
 ggplot(step2.epistasis %>% 
          dplyr::filter(gene %in% c("RAD50")),
        aes(gene, mean.log2foldchange)) + 
@@ -143,14 +133,16 @@ ggplot(step2.epistasis %>%
   theme_bw() + ylab("∆log2MMEJ:NHEJ RAD50 KO") + theme(legend.position = "none") +
   theme(panel.grid = element_blank()) + ylim(c(-1.5,0.25)) +
   geom_hline(yintercept = 0, linetype =2 )
-dev.off()
+#dev.off()
 ```
+B) Example of global ∆log2MMEJ:NHEJ score of RAD50 KO. The global ∆log2MMEJ:NHEJ score (∆Global in short) is the mean ∆log2MMEJ:NHEJ score (in red) of all 19 IPRs (individual datapoints, n = 3).
 
-#correlation
+# Figure S6C
+
 ```{r, fig.width=4,fig.height=3}
 
 # Plot RAD50 with LMNB1
-pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example_CCD_delta.pdf",width = 4, height = 3)
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_global_example_CCD_delta.pdf",width = 4, height = 3)
 ggplot() + 
   geom_segment(aes(x = -2, xend = 2.7,y = -1.0064 - 0.1143*2.7, yend = -1.0064 - 0.1143*2.7), color = "grey60", linetype = 3) +
   geom_segment(aes(x = -2, xend = -1.64,y = -1.0064 - 0.1143*-1.64, yend = -1.0064 - 0.1143*-1.64), color = "grey60", linetype = 3) +
@@ -168,32 +160,32 @@ ggplot() +
        aes(LMNB1,mean.log2foldchange)) +
   theme_bw() + ylab("∆log2MMEJ:NHEJ RAD50 KO") + theme(legend.position = "none") +
   theme(panel.grid = element_blank()) + ylim(c(-1.5,0.25)) + xlim(c(-2,3)) + geom_hline(yintercept = 0, linetype =2)
-dev.off()
+#dev.off()
 
 ```
+C) Example on how the CCD ∆log2MMEJ:NHEJ score (∆CCD in short) is estimated. In this case, the linear fit of ∆log2MMEJ:NHEJ scores with LMNB1 interaction levels (Same as in Fig. 2B). To estimate the genome-wide ∆CCD of RAD50, we extrapolated the linear fit to cover the two-sided 99CI of ge-nome-wide LMNB1 levels (LMNB199CI = [-1.64,2.7]) in brown. The maximum and minimum values of this extrapolated fit are taken as the ∆log2MMEJ:NHEJ estimated in the absence and presence of LMNB1 interactions (0.005 and 0.995 percentiles). The differential between these two values is taken as the ∆CCD of RAD50.
 
-#Column plot with both global and CCD ∆log2
+# Figure S6D
+
 ```{r, fig.width= 2, fig.height=3}
 RAD50_example <- tibble(effect = c("CCD","Global"), log2MMEJNHEJ = c(0.4954,1.025))
 
 #Plot
-pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_abs_estimation.pdf",width = 2, height = 3)
+#pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S7_effect_size/xv20231102_RAD50_abs_estimation.pdf",width = 2, height = 3)
 ggplot(RAD50_example) +
   geom_col(aes(effect, log2MMEJNHEJ)) +
   theme_bw() +
   theme(panel.grid = element_blank(),
         axis.title.x = element_blank()) + 
   ylab("abs(∆log2MMEJ:NHEJ)")
-dev.off()
+#dev.off()
 
 ```
-
-#Fig. S6EF: Global to CCD effect comparison
-
-(E) Comparison of CCD effect sizes to global effect sizes of the proteins in (D). Global effect sizes are absolute values of global ∆log2MMEJ:NHEJ scores as calculated in Fig. 1B. CCD effect sizes are the predicted genome-wide dynamic range of ∆log2MMEJ:NHEJ values for each protein KO, as a function of variation in chromatin context  (see Methods). 
+D) Direct comparison of CCD and Global ∆log2MMEJ:NHEJ balance of RAD50. To compare between M- and N-synergies, which have different signs, we calculate the absolute CCD and Global ∆og2MMEJ:NHEJ balance.
 
 
-#Preparatory chunk: Compare CCDs vs. global effect
+# Fig. S6E
+## Preparatory chunk: Compare CCDs vs. global effect
 ```{r prep_fig2F, warning=FALSE, message=FALSE}
 ##Filter max estimated FC
 max_estimated_FC_CCD_gene <- table_S3_CCDs %>% dplyr::group_by(gene) %>% dplyr::summarise(max_CCD_estim_diff = max(abs(CCD_estim_diff)))
@@ -202,7 +194,7 @@ max_estimated_FC_CCD_gene <- table_S3_CCDs %>% dplyr::group_by(gene) %>% dplyr::
 max_estimated_CCD_FC <- table_S3_CCDs %>% dplyr::select(gene,DR_effect_type,global_diff, CCD_model_p_adj, global_p_adj) %>% distinct() %>% left_join(max_estimated_FC_CCD_gene)
 ```
 
-
+## Plot
 ```{r Fig_2_F , warning=FALSE, message=FALSE}
 #Highlight proteins
 highlight_prots <- c("RAD50","FANCM","BOD1L1", "ATM")
@@ -213,4 +205,4 @@ ggplot(max_estimated_CCD_FC %>% filter(DR_effect_type %in% c("CCD","both"))) +
   geom_text_repel(data = subset(max_estimated_CCD_FC, gene %in% highlight_prots), aes(max_CCD_estim_diff, abs(global_diff), label = gene), box.padding = 2.5) +
   scale_color_manual(values = c("#CBCE91","#EA738D")) + theme(legend.position = "top") + geom_abline(linetype = 2) + labs(color = "Favored pathway") + theme_bw() + coord_fixed(xlim = c(0,2), ylim = c(0,2))
 ```
-
+E) Scatter plot between ∆CCD and ∆Global scores for 89 proteins with CCDs. If a protein has larger global effect than CCD effect, it will be represented above the diagonal (dashed line). On the contrary, proteins with larger CCD effect will be below the diagonal. Overall, 89 proteins have similar CCD and global effects (they are next to the diagonal line).

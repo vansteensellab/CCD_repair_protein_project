@@ -1,0 +1,149 @@
+---
+title: "xv20240430_Figure_S8_IPR_number_RPE1"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to generate Supplementary Figure 8
+
+Fig. S8: M- and N- synergies in RPE-1 cells. 
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r, warning=FALSE, message=FALSE}
+proteins_gRNA <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen","gRNA_gene") #gRNA gene conversion
+
+#Processed CCD data (4 cell lines)
+PRO_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","PRO_CCD")
+DEF_CCD <- readRDS_proof("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data","DEF_CCD")
+
+#Bind all table together
+RPE1_cell_lines_CCD <- bind_rows(PRO_CCD, DEF_CCD)
+
+#Calculate a toxicity score
+viability_data <- readRDS(file= "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230908_dna_quantification_viability.rds")
+
+
+#Manual order
+gene_list_order <- c("POLL","BRCC3","BRCA2","CHAF1A","BOD1L1","ATM","FANCD2","MDC1","RAD50","CHEK2","SMC5","FANCG","FAAP24","RMI2","BLM","PARP1","FANCM","ATR","RBBP8","TOPBP1")
+
+```
+
+# Figure S8A
+
+```{r, fig.height=3, fig.width=7, warning=FALSE, message=FALSE}
+#pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S5_RPE1_data_controls/xv20231102_S5D_DNA_recovery.pdf", width= 7,height = 2.5)
+ggplot(viability_data %>% left_join(proteins_gRNA) %>% filter(!cell_line %in%  c("U2OS","RPE1")) %>% na.omit(), aes(fct_relevel(gene,gene_list_order),log2(dna_score), fill = mean_DNA_loss < 0.5)) + 
+  stat_summary(geom = "col") +
+    facet_wrap(~ fct_relevel(cell_line, c("PRO","DEF","RPE1"))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_fill_manual(values = c("grey70","coral")) +
+  geom_hline(yintercept = -1, linetype = 2)
+#dev.off()
+
+```
+
+
+# Figure S8B
+
+```{r, fig.height=3, fig.width=7, warning=FALSE, message=FALSE}
+IPR_n_cell_line <- RPE1_cell_lines_CCD %>%
+  filter(cell_line != "K562") %>%
+  select(gene, cell_line, gene, n) %>%
+  distinct()
+
+#pdf("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S5_RPE1_data_controls/xv20231102_S5A_IPR_n_RPE1.pdf", width= 7,height = 2.5)
+ggplot(IPR_n_cell_line) +
+  geom_col(aes(fct_relevel(gene,gene_list_order), n, fill = n > 9)) +
+  facet_wrap(~ fct_relevel(cell_line, c("PRO","DEF"))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        legend.position = "none") +
+  scale_fill_manual(values = c("grey70","coral")) +
+  geom_hline(yintercept = 9, linetype = 2)
+#dev.off()
+
+#Mean per cell line
+mean_IPR_cell_line <- IPR_n_cell_line %>%
+  dplyr::group_by(cell_line) %>%
+  dplyr::summarise(mean_IPR = mean(n))
+
+#15.6 and 10.6
+
+```
+
+B) Number of assayed IPRs in RPE-1 p53KO and RPE-1 p53/BRCA1dKO.

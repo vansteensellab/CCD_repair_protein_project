@@ -1,0 +1,228 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(rtracklayer)
+library(caTools)
+```
+
+
+#Load chromatin info of the IPRs in RPE cells
+```{r}
+setwd("/DATA/projects/DSBrepair/data/xv20230608_K562_PMA_Ayoub/IPR_location/")
+# Load chip data
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam_",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Bind both
+chromatin_features_clone5_megaK <- chromatin_features_pools_dam %>% 
+  reshape2::melt() %>% 
+  mutate(treatment = case_when(grepl("DMSO", variable) ~ "DMSO",
+                               grepl("PMA", variable) ~ "PMA"),
+         antibody = case_when(grepl("H3K9me3", variable) ~ "H3K9me3",
+                              grepl("H3K9me2", variable) ~ "H3K9me2",
+                              grepl("LMNB2", variable) ~ "LMNB2",
+                              grepl("H3K27me3", variable) ~ "H3K27me3")) %>%
+  select("barcode" = name,treatment, antibody, "IPR_score" = value)
+```
+# Check replicate correlations
+```{r}
+#list_files
+setwd("/DATA/projects/DSBrepair/data/xv20230608_K562_PMA_Ayoub/results/tracks/normalized/bin-20kb/")
+file_list_rep <- list.files(pattern = "K562.*20kb.bw")
+
+#load files
+PMA_replicate_tracks <- map_dfr(file_list_rep, function(x){
+  import(x) %>% as_tibble() %>% 
+    mutate(file = x, smooth_score = runmean(score, k = 5)) %>% separate(file, into = c("rep","cell","treatment","antibody","extensionA","extensionB"))
+})
+
+PMA_rep_tracks_dcast <- PMA_replicate_tracks %>% reshape2::dcast(seqnames+start+end+antibody+treatment~rep, value.var = "score")
+
+#Plot correlation (20kb bins)
+ggplot(PMA_rep_tracks_dcast, aes(E2260,E2267)) +
+  geom_point(alpha = 0.05, size = 0.1) + 
+  ggpubr::stat_cor() + 
+  geom_smooth(method = "lm") + 
+  facet_grid(treatment~antibody) +
+  theme_bw() + coord_fixed()
+
+```
+
+# Load Tracks genomewide
+```{r}
+#list_files
+setwd("/DATA/projects/DSBrepair/data/xv20230608_K562_PMA_Ayoub/results/tracks/normalized/bin-20kb/")
+file_list <- list.files(pattern = "K562.*-combined")
+
+#load files
+PMA_diff_tracks <- map_dfr(file_list, function(x){
+  import(x) %>% as_tibble() %>% 
+    mutate(file = x, smooth_score = runmean(score, k = 3)) %>% separate(file, into = c("cell","treatment","antibody","extension"), sep = "_")
+})
+
+PMA_diff_tracks_dcast <- PMA_diff_tracks %>% reshape2::dcast(seqnames+start+end+antibody~treatment, value.var = "score")
+
+#Plot correlation (20kb bins)
+ggplot(PMA_diff_tracks_dcast %>% filter(antibody != "H3K9me2"), aes(DMSO,PMA)) +
+  geom_point(alpha = 0.05, size = 0.1) + 
+  ggpubr::stat_cor() + 
+  geom_smooth(method = "lm") + 
+  facet_wrap(~antibody) +
+  theme_bw() + coord_fixed()
+
+#Plot density plot
+ggplot(PMA_diff_tracks %>% filter(antibody != "H3K9me2")) +
+  geom_density(aes(score, fill = treatment, color = treatment), alpha = 0.25) +
+  facet_wrap(~antibody) +
+  theme_bw()
+
+```
+
+#Plot genomic coordinates
+
+#LMNB2
+```{r}
+  ggplot(PMA_diff_tracks %>% 
+         filter(antibody == "LMNB2" & seqnames == "chr3" & start < 90000000)) +
+  geom_col(aes(start,smooth_score), color = "grey30") + 
+  facet_wrap(~treatment,ncol = 1) + 
+  theme_bw() + 
+  theme(legend.position = "top") + 
+  xlab("chr3")
+```
+
+#H3K9me3
+```{r}
+  ggplot(PMA_diff_tracks %>% 
+         filter(antibody == "H3K9me3" & seqnames == "chr3" & start < 90000000)) +
+  geom_col(aes(start,smooth_score), color = "grey30") + 
+  facet_wrap(~treatment,ncol = 1) + 
+  theme_bw() + 
+  theme(legend.position = "top") + 
+  xlab("chr3")
+```
+
+
+#H3K9me2
+```{r}
+  ggplot(PMA_diff_tracks %>% 
+         filter(antibody == "H3K27me3" & seqnames == "chr3" & start < 90000000)) +
+  geom_col(aes(start,smooth_score), color = "grey30") + 
+  facet_wrap(~treatment,ncol = 1) + 
+  theme_bw() + 
+  theme(legend.position = "top") + 
+  xlab("chr3")
+```
+
+
+#Chromatin features changes in clone #5 IPRs
+```{r}
+#Load screening data
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS') %>%
+  filter(binsize == 2000) %>% select("barcode" = ID, H3K9me3, "LMNB2" = LMNB1, H3K27me3) %>% reshape2::melt() %>% filter()
+colnames(clone5_z.score_chrom_tib) <- c("barcode","antibody","reference")
+#Prepare for plotting
+chrom_features_clone5 <- chromatin_features_clone5_megaK %>% reshape2::dcast(barcode + antibody ~ treatment) %>% left_join(clone5_z.score_chrom_tib)
+
+ggplot(chrom_features_clone5 %>% filter(antibody != "H3K9me2"), aes(DMSO, reference)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~ antibody) +
+  coord_fixed() +
+  theme_bw()
+```
+#CONCLUSION: Once more we show that reporter take the expected chromatin type. This time, even if the technique used to profile chromatin features and the presence of DMSO didn't alter the chromatin landscape.
+
+
+#Change between treated and un-treated
+```{r}
+ggplot(chrom_features_clone5 %>% filter(antibody != "H3K9me2"), aes(DMSO, PMA)) + 
+  geom_point() + 
+  ggpubr::stat_cor() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~ antibody) +
+  coord_fixed() +
+  theme_bw() +
+  geom_abline(linetype = 2)
+```
+# CCONCLUSION: Correlation between PMA and DMSO samples are there. LMNB2 signal changes the most globally, we observe the decrease of dynamic range. Still, there are some reporters that deviate from the global trend, suggesting that these change their chromatin state above the general effects. H3K9me3 does not change that much and general. H3K27me3 has some sites that are changed quite some, but the trend stays close to the diagonal.
+
+#Quantify changes in the reporters: Residual (deviation from the genomewide trend)
+```{r}
+antibodies_unique <- unique(chrom_features_clone5$antibody)
+linear_model <- map_dfr(antibodies_unique, function(x) {
+  tib <- chrom_features_clone5 %>% filter(antibody == x)
+  res <- resid(lm(PMA ~ DMSO, tib))
+  tib %>% mutate(residual = res)
+})
+
+
+plot1 <- ggplot(linear_model %>% filter(antibody != "H3K9me2")) + 
+  geom_point(aes(DMSO,residual, barcode = barcode)) + 
+  facet_wrap(~antibody) + 
+  geom_hline(yintercept = 0, linetype= 2) + 
+  theme_bw() + coord_fixed()
+
+#ggplotly(plot1)
+
+ggplotly(plot1)
+```
+
+#Quantify changes in the reporters: log2 foldchange (general deviation)
+```{r}
+log2FC_feature <- chrom_features_clone5 %>% mutate(deltaZ = PMA - DMSO)
+
+plot2 <- ggplot(log2FC_feature %>% filter(antibody != "H3K9me2")) + 
+  geom_point(aes(DMSO,deltaZ, barcode = barcode)) + 
+  facet_wrap(~antibody) + 
+  geom_hline(yintercept = 0, linetype= 2) + 
+  theme_bw() + coord_fixed()
+
+#ggplotly(plot2)
+ggplotly(plot2)
+```
+
+#Check tracks per replicate
+```{r}
+#Load bed file
+coordinates <- read.table(file = "/DATA/projects/DSBrepair/data/xv20230608_K562_PMA_Ayoub/IPR_location/xv20230608_coordinates_clone5.txt", header=T)
+
+plot_changes <- map(coordinates$IPR_barcode,function(x){
+  position <- filter(coordinates, IPR_barcode == x) %>% pull(start)
+  chrom <- filter(coordinates, IPR_barcode == x) %>% pull(chr)
+  
+  ggplot(PMA_replicate_tracks %>% 
+         filter(antibody != "H3K9me2" & seqnames == chrom & start > position - 5000000 & start < position + 5000000)) +
+  geom_line(aes(start,smooth_score,color = treatment), position = "dodge") + 
+  facet_grid(rep~antibody) + 
+  theme_bw() + 
+  geom_vline(xintercept = position, linetype = 2) +
+  geom_hline(yintercept = 0)+
+  ggtitle(x)
+})
+
+#Make pdf
+print(plot_changes)
+
+
+
+```
+

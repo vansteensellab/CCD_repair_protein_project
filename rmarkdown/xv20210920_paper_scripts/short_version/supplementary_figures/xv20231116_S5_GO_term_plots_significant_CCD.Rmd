@@ -13,9 +13,9 @@ output:
     chunk_output_type: console
 ---
 
-# Script to generate figure Supplementary #5 in the paper.
+# Script to generate Supplementary Figure 5
 
-Fig. S5: Add legend
+Fig. S5: M- and N-synergies of DNA repair proteins per Gene Ontology category. 
 
 ```{r functions, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
@@ -86,6 +86,7 @@ library(ggpubr)
 library(scales)
 library(ggrepel)
 library(ggdendro)
+library(readxl)
 ```
 
 # Import data tables
@@ -112,8 +113,8 @@ GO_files_all <- map_dfr(GO_files, function(x) {
 
 ```
 
-#Figure S5A GO:0006303 = double-strand break repair involved in non-homologous end joining
-```{r Fig_2_D, warning=FALSE, message=FALSE}
+# Figure S5A
+```{r Fig_5A, warning=FALSE, message=FALSE}
 # Separate data based on the significant IPRs that they have (based on z-score)
 GO_0006303_genes <- GO_files_all %>% filter(grepl("0006303", GO_ID)) %>% pull(V1) %>% unique()
 GO_0006303 <- table_S3_CCDs %>% filter(gene %in% GO_0006303_genes & !is.na(chrom_feature))
@@ -128,7 +129,7 @@ GO_0006303_order <- rev(rownames(GO_0006303_dcast[GO_0006303_heatmap$tree_col[["
 # This are the effects
 
 # heatmap: All heatmaps together
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0006303_significants.pdf", width = 5, height = 4)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0006303_significants.pdf", width = 5, height = 4)
 ggplot(GO_0006303) + 
   geom_tile(aes(fct_relevel(gene,GO_0006303_order),
                 fct_relevel(chrom_feature, heatmap.chromatin.order),
@@ -140,12 +141,14 @@ ggplot(GO_0006303) +
   xlab("DNA repair proteins with significant chromatin dependencies") + 
   ylab("Chromatin features") +
   ggtitle("GO:0006303 = double-strand break repair involved in non-homologous end joining")
-dev.off()
+#dev.off()
 
 ```
+(A-E) CCD patterns of DNA repair proteins in (A) end-joining repair (GO:0006303) 
 
-#Figure S5B GO:0000729 = DNA double-strand break processing
-```{r Fig_2_D, warning=FALSE, message=FALSE, fig.width=5, fig.height=4}
+
+# Figure S5B
+```{r Fig_5B, warning=FALSE, message=FALSE, fig.width=5, fig.height=4}
 # Separate data based on the significant IPRs that they have (based on z-score)
 GO_0000729_genes <- GO_files_all %>% filter(grepl("0000729", GO_ID)) %>% pull(V1) %>% unique()
 GO_0000729 <- table_S3_CCDs %>% filter(gene %in% GO_0000729_genes) %>% distinct()
@@ -166,7 +169,7 @@ GO_0000729_order <- rev(rownames(GO_0000729_dcast[GO_0000729_heatmap$tree_col[["
 # This are the effects
 
 # heatmap: All heatmaps together
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0000729_significants.pdf", width = 5, height = 4)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0000729_significants.pdf", width = 5, height = 4)
 ggplot(GO_0000729) + 
   geom_tile(aes(fct_relevel(gene,GO_0000729_order),
                 fct_relevel(chrom_feature, heatmap.chromatin.order),
@@ -178,11 +181,12 @@ ggplot(GO_0000729) +
   xlab("DNA repair proteins with significant chromatin dependencies") + 
   ylab("Chromatin features") +
   ggtitle("GO:0000729 DNA double-strand break processing")
-dev.off()
+#dev.off()
 ```
+(B) DSB processing (GO:0000729)
 
-# Figure S5C GO:0045002 = double-strnad break repair by single-strand annealing
-```{r Fig_2_D, warning=FALSE, message=FALSE}
+# Figure S5C
+```{r Fig_5C, warning=FALSE, message=FALSE}
 # Separate data based on the significant IPRs that they have (based on z-score)
 GO_0045002_genes <- GO_files_all %>% filter(grepl("0045002", GO_ID)) %>% pull(V1) %>% unique()
 GO_0045002 <- table_S3_CCDs %>% filter(gene %in% GO_0045002_genes)
@@ -197,7 +201,7 @@ GO_0045002_order <- rev(rownames(GO_0045002_dcast[GO_0045002_heatmap$tree_col[["
 # This are the effects
 
 # heatmap: All heatmaps together
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0045002_significants.pdf", width = 5, height = 4)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0045002_significants.pdf", width = 5, height = 4)
 ggplot(GO_0045002) + 
   geom_tile(aes(fct_relevel(gene,GO_0045002_order),
                 fct_relevel(chrom_feature, heatmap.chromatin.order),
@@ -209,11 +213,12 @@ ggplot(GO_0045002) +
   xlab("DNA repair proteins with significant chromatin dependencies") + 
   ylab("Chromatin features") +
   ggtitle("GO:0045002 = double-strnad break repair by single-strand annealing")
-dev.off()
+#dev.off()
 ```
+(C) single-strand annealing repair (GO:0045002)
 
-# Figure S5D GO:1990918 = double-strand break repair involved in meiotic recombination
-```{r Fig_2_D, warning=FALSE, message=FALSE}
+# Figure S5D
+```{r Fig_5D, warning=FALSE, message=FALSE}
 # Separate data based on the significant IPRs that they have (based on z-score)
 GO_1990918_genes <- GO_files_all %>% filter(grepl("1990918", GO_ID)) %>% pull(V1) %>% unique()
 GO_1990918 <- table_S3_CCDs %>% filter(gene %in% GO_1990918_genes) %>% distinct()
@@ -228,7 +233,7 @@ GO_1990918_order <- rev(rownames(GO_1990918_dcast[GO_1990918_heatmap$tree_col[["
 # This are the effects
 
 # heatmap: All heatmaps together
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO1990918_significants.pdf", width = 5, height = 4)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO1990918_significants.pdf", width = 5, height = 4)
 ggplot(GO_1990918) + 
   geom_tile(aes(fct_relevel(gene,GO_1990918_order),
                 fct_relevel(chrom_feature, heatmap.chromatin.order),
@@ -240,11 +245,12 @@ ggplot(GO_1990918) +
   xlab("DNA repair proteins with significant chromatin dependencies") + 
   ylab("Chromatin features") +
   ggtitle("GO:1990918 DNA double-strand break processing")
-dev.off()
+#dev.off()
 ```
+(D) meiotic recombination (GO:1990918)
 
-# Figure S5E GO:0000724 = double-strand break repair involved in homologus recombination
-```{r Fig_2_D, warning=FALSE, message=FALSE}
+# Figure S5E
+```{r Fig_5E, warning=FALSE, message=FALSE}
 # Separate data based on the significant IPRs that they have (based on z-score)
 GO_0000724_genes <- GO_files_all %>% filter(grepl("0000724", GO_ID)) %>% pull(V1) %>% unique()
 GO_0000724 <- table_S3_CCDs %>% filter(gene %in% GO_0000724_genes)
@@ -259,7 +265,7 @@ GO_0000724_order <- rev(rownames(GO_0000724_dcast[GO_0000724_heatmap$tree_col[["
 # This are the effects
 
 # heatmap: All heatmaps together
-pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0000724_significants.pdf", width = 5, height = 4)
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/GO_terms/xv20231116_GO0000724_significants.pdf", width = 5, height = 4)
 ggplot(GO_0000724) + 
   geom_tile(aes(fct_relevel(gene,GO_0000724_order),
                 fct_relevel(chrom_feature, heatmap.chromatin.order),
@@ -271,5 +277,6 @@ ggplot(GO_0000724) +
   xlab("DNA repair proteins with significant chromatin dependencies") + 
   ylab("Chromatin features") +
   ggtitle("GO:0000724 = double-strand break repair involved in homologus recombination")
-dev.off()
+#dev.off()
 ```
+(E) homologous recombination (GO:0000724). Chromatin features are colored as in Fig. 1C and pro-teins arranged by CCD pattern similarity. Proteins highlighted in the text are highlighted in bold.

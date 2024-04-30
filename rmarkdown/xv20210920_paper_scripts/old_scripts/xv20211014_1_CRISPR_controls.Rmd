@@ -1,0 +1,238 @@
+---
+title: "xv20211007_5_POLL"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(gprofiler2)
+```
+
+# Aesthetic legend for the whole paper
+```{r}
+# Pathway color palette (MMEJ, wt/no_effect, NHEJ)
+pathway.colors <- c("#EB2030","grey90","#2E358F")
+# Pathway symbol palette ()
+pathway.symbol <- c(19,17)
+
+# Chromatin color palette
+#chrom_colors = c( c("euchromatin" = "#F7941D", "other" = "#838687",  "H3K27me3" = "#D21F8A", "triple" = "#662D91"))
+chromatin.colors <- c("#D21F8A","#838687","#F7941D","#662D91")
+
+#Library colors
+library.colors <- c("#E69F03","#56B3E6")
+```
+
+# Import data tables
+
+```{r libraries}
+#dcast table
+#ddr
+ddr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_dcast.rds")
+#chromatin
+chr.screen.dcast <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+  
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+```
+
+# figure 1C&D: Gene editing efficiency and MMEJscore
+```{r}
+# chr.screen.controls
+both.screen.controls <- bind_rows(chr.screen.controls, ddr.screen.controls)
+
+# Filter null distribution
+wt.screen.controls <- both.screen.controls %>% select(gene,barcode,t.rep,b.rep,freqCut,MMEJscore, well, plate, library) %>%  filter(gene == "WT")
+
+# This one will go to supplementary
+ggplot(wt.screen.controls %>% dplyr::group_by(gene, t.rep,b.rep,well,plate,library) %>% dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>% mutate(lib_rep = paste0(library,"_",t.rep)))+ geom_density(aes(mean.cut, fill = lib_rep), alpha = 0.3) + theme_bw() + xlab("Gene editing frequency in 2nd transfection")
+
+#This one will be fig 1C: Make a line per
+ggplot(wt.screen.controls %>% mutate(lib_rep = paste0(library,"_",t.rep)))+ 
+  geom_density(aes(MMEJscore, group = lib_rep, color = library), linetype = 2) +
+  geom_density(aes(MMEJscore, group = library, color = library, fill = library), alpha = 0.3) +
+  theme_bw() + xlab("MMEJscore per IPR") + scale_color_manual(values = library.colors) + scale_fill_manual(values = library.colors) + theme(legend.position = "top")
+
+```
+
+# Figure 1E: WT & POLQ density plot
+```{r}
+# WT & POLQ z-score values
+POLQ.control.KO <- both.screen.controls %>% 
+  mutate(sample = case_when(gene == "WT" ~ "WT", T ~ "POLQ")) %>%
+  bind_rows(both.screen.detail %>%
+              mutate(sample = "KO")) %>%
+  select(gene, barcode,t.rep,b.rep, mmej.z.score, well, plate, library,sample) %>% 
+  mutate(lib_rep = paste0(library,"_",t.rep)) %>% 
+  dplyr::group_by(gene, t.rep,b.rep,well,plate,library, lib_rep,sample) %>% 
+  dplyr::summarise(mean.mmej = mean(mmej.z.score, na.rm = T))
+
+#Add KO genes as well
+ggplot(POLQ.control.KO)+ 
+  geom_hline(yintercept = 0, linetype = 2) + 
+  geom_quasirandom(aes(paste(sample,library),mean.mmej, color = library)) + 
+  theme_bw() + ylab("MMEJscore per IPR (z-score)") + 
+  scale_color_manual(values = library.colors) + 
+  theme(legend.position = "top")
+```
+
+# 2A: Genowide effect correlations
+
+```{r}
+# Compute the average effect for every biological replicate (mean x = 19 IPR)
+both.screen.gene.value <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>% 
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(IPR.z.score = mean(mmej.z.score, na.rm = T)) %>% 
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3), pathway = case_when(comb.data < -1.95 ~ "MMEJ", comb.data > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# plot correlation (all three correlations)
+ggplot(both.screen.gene.value) + 
+  geom_abline(linetype = 2) +
+  geom_point(aes(R1,R2, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + 
+  xlab("MMEJ:NHEJ R1 (z-score)") +
+  ylab("MMEJ:NHEJ R2 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = both.screen.gene.value, aes(R1,R2), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  scale_color_manual(values = library.colors)
+
+ggplot(both.screen.gene.value) + 
+  geom_abline(linetype = 2) +
+  geom_point(aes(R1,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + ylab("MMEJ:NHEJ R3 (z-score)") + xlab("MMEJ:NHEJ R1 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = both.screen.gene.value, aes(R1,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  scale_color_manual(values = library.colors)
+
+ggplot(both.screen.gene.value) + 
+  geom_abline(linetype = 2) +
+  geom_point(aes(R2,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,25), xlim = c(-10,25)) + 
+  ylab("MMEJ:NHEJ R2 (z-score)") + xlab("MMEJ:NHEJ R3 (z-score)") +
+  theme(legend.position = "none") +
+  stat_cor(data = both.screen.gene.value, aes(R2,R3), method = "spearman", label.y = 20, label.x = -10, cor.coef.name = "rho") +
+  scale_color_manual(values = library.colors)
+```
+# Gene editing
+Fig2As: Gene editing
+```{r}
+#Chromatin screen
+gene.editing.z.score.chr <- chr.screen.detail %>% select(gene,barcode,freqCut,b.rep,t.rep)
+wt.ge.chr <- chr.screen.controls %>% filter(gene == "WT") %>% select(gene,barcode,freqCut,b.rep,t.rep,-gene) %>% dplyr::group_by(barcode,t.rep) %>% dplyr::summarise(m.wt = mean(freqCut, na.rm = T), sd.wt = sd(freqCut, na.rm = T)) 
+z.score.ge.chr <- gene.editing.z.score.chr %>% left_join(wt.ge.chr, by = c("barcode","t.rep")) %>% mutate(z.freqCut = (freqCut - m.wt)/sd.wt) %>% mutate(ID_gene = paste(gene, "_Chromatin"), library = "Chromatin") %>% dplyr::group_by(ID_gene,library, t.rep) %>% dplyr::summarise(ge.mean = mean(z.freqCut, na.rm = T))
+
+
+#DDR screen
+gene.editing.z.score.ddr <- ddr.screen.detail %>% select(gene,barcode,freqCut,b.rep,t.rep) %>% filter(gene != "LBR_ctrl")
+wt.ge.ddr <- ddr.screen.controls %>% filter(gene == "WT") %>% select(-gene,barcode,freqCut,b.rep,t.rep) %>% dplyr::group_by(barcode,t.rep) %>% dplyr::summarise(m.wt = mean(freqCut, na.rm = T), sd.wt = sd(freqCut, na.rm = T))
+z.score.ge.ddr <- gene.editing.z.score.ddr %>% left_join(wt.ge.ddr, by = c("barcode","t.rep")) %>% mutate(z.freqCut = (freqCut - m.wt)/sd.wt) %>% mutate(ID_gene = paste0(gene, "_DNA_repair"), library = "DNA_repair", t.rep = case_when(t.rep == "R4" ~ "R2", t.rep == "R5"~ "R3", T ~ t.rep)) %>% dplyr::group_by(ID_gene,library, t.rep) %>% dplyr::summarise(ge.mean = mean(z.freqCut, na.rm = T))
+
+#Bind both screens
+both.ge.z.score <- bind_rows(z.score.ge.chr,z.score.ge.ddr) %>% reshape2::dcast(ID_gene +library ~ t.rep, value.var = "ge.mean") %>% filter(complete.cases(.))
+
+#plot
+ggplot(both.ge.z.score) + 
+  geom_abline(linetype = 2) +
+  geom_point(aes(R1,R2, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,10), xlim = c(-10,10)) +
+  ylab("Gene editing R2 (z-score)") +
+  xlab("Gene editing R1 (z-score)")  +
+  stat_cor(data = both.ge.z.score, aes(R1,R2), method = "spearman", label.y = 9, label.x = -9, cor.coef.name = "rho") +
+  theme(legend.position = "none") + 
+  scale_color_manual(values = library.colors)
+
+ggplot(both.ge.z.score) +  
+  geom_abline(linetype = 2) +
+  geom_point(aes(R1,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,10), xlim = c(-10,10)) +
+  ylab("Gene editing R3 (z-score)") +
+  xlab("Gene editing R1 (z-score)") +
+  stat_cor(data = both.ge.z.score, aes(R1,R3), method = "spearman", label.y = 9, label.x = -9, cor.coef.name = "rho") +
+  theme(legend.position = "none") + 
+  scale_color_manual(values = library.colors)
+
+ggplot(both.ge.z.score) + 
+  geom_abline(linetype = 2) +
+  geom_point(aes(R2,R3, color = library)) + 
+  theme_bw() + 
+  coord_fixed(ylim = c(-10,10), xlim = c(-10,10)) +
+  ylab("R3 (Gene editing efficiency z-score)") +
+  xlab("R2 (Gene editing efficiency z-score") +
+  stat_cor(data = both.ge.z.score, aes(R2,R3), method = "spearman", label.y = 9, label.x = -9, cor.coef.name = "rho") +
+  theme(legend.position = "none") + 
+  scale_color_manual(values = library.colors)
+
+
+
+```
+
+# Numbers in text (where they come from)
+```{r}
+#Mean values
+POLQ.control %>%
+  dplyr::group_by(gene) %>%
+  dplyr::summarise(MMEJ.z = mean(mean.mmej, na.rm = T))
+
+#Outlier value
+POLQ.control %>%
+  filter(gene == "POLQ" & mean.mmej > -3) %>%
+  ungroup() %>%
+  select(gene,lib_rep,mean.mmej)
+
+```
+

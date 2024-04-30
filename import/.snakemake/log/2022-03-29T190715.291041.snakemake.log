@@ -1,0 +1,45 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	7	align_chip
+	6	align_control
+	1	all_chip_align
+	7	bamcompare
+	13	bw_coverage
+	7	call_domains
+	1	compare_bam_replicates
+	1	compare_bw_rep
+	7	convert2gff
+	7	filter_blackgrey
+	6	filter_blackgrey_ctrl
+	6	generate_greylist
+	6	idxstats
+	13	index
+	8	make_compare_bw
+	7	markdup
+	6	markdup_ctrl
+	1	plot_correlation
+	110
+
+rule align_control:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657374.fastq.gz
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657374.bam.tmp
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/control/SRR11657374.txt
+    jobid: 106
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, genome=hg38, srr_id=SRR11657374
+    threads: 10
+
+rule align_control:
+    input: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/raw_data/SRR11657364.fastq.gz
+    output: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/mapping/control/SRR11657364.bam.tmp
+    log: /DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps/hg38/log/mapping/control/SRR11657364.txt
+    jobid: 110
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20220329_HNSCC_H3K27me3_maps, genome=hg38, srr_id=SRR11657364
+    threads: 10
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2022-03-29T190715.291041.snakemake.log

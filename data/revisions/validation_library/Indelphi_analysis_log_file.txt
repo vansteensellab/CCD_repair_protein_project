@@ -1,0 +1,1364 @@
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:13 2023
+Step: Indelphi analysis
+This is the summary of ATM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001pkb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc009yxr.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbi.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbt.1 .
+There are a total of 67 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:22 2023
+Step: Indelphi analysis
+This is the summary of ATR gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eux.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oos.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oor.1 .
+There are a total of 100 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:35 2023
+Step: Indelphi analysis
+This is the summary of BABAM2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002rlq.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlr.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rls.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlt.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlu.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hry.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hru.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hrz.1 .
+There are a total of 20 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:39 2023
+Step: Indelphi analysis
+This is the summary of BLM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002bpr.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010bnx.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc059ngc.1 .
+There are a total of 60 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:41 2023
+Step: Indelphi analysis
+This is the summary of BOD1L1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003gmz.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfv.1 .
+There are a total of 69 gRNAs in the selected region and 4 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:46 2023
+Step: Indelphi analysis
+This is the summary of BRCA2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001uub.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wft.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfx.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfw.1 .
+There are a total of 43 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:48 2023
+Step: Indelphi analysis
+This is the summary of BRCC3 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004fna.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjs.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc004fnb.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc011mzy.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cju.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjt.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjw.1 .
+There are a total of 108 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:49 2023
+Step: Indelphi analysis
+This is the summary of CHAF1A gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002mal.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rws.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rww.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwt.1 .
+There are a total of 144 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:49 2023
+Step: Indelphi analysis
+This is the summary of CHEK2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003adt.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adu.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuh.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cul.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc010gvh.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cum.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuo.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cus.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cui.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adx.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cun.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cur.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cut.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuu.1 .
+There are a total of 57 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:49 2023
+Step: Indelphi analysis
+This is the summary of FAAP24 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002nud.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wss.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wst.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsu.1 .
+There are a total of 36 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:54 2023
+Step: Indelphi analysis
+This is the summary of FANCD2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003bux.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqr.1 .
+There are a total of 56 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:54 2023
+Step: Indelphi analysis
+This is the summary of FANCG gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003zwb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svu.1 .
+There are a total of 59 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:54 2023
+Step: Indelphi analysis
+This is the summary of FANCM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001wwd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010anf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001wwc.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdm.1 .
+There are a total of 102 gRNAs in the selected region and 2 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:55 2023
+Step: Indelphi analysis
+This is the summary of MDC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003nrg.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mtz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muf.1 .
+There are a total of 270 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:55 2023
+Step: Indelphi analysis
+This is the summary of PARP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001hqd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyr.1 .
+There are a total of 30 gRNAs in the selected region and 9 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:55 2023
+Step: Indelphi analysis
+This is the summary of POLL gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001ktg.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kti.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktj.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vng.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktl.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kth.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vni.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktd.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vno.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnl.1 .
+There are a total of 74 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:56 2023
+Step: Indelphi analysis
+This is the summary of RAD50 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003kxi.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvp.1 .
+There are a total of 32 gRNAs in the selected region and 14 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:59 2023
+Step: Indelphi analysis
+This is the summary of RBBP8 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002ktw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kty.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kua.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002ktz.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwg.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwe.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwa.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwd.1 .
+There are a total of 9 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:58:59 2023
+Step: Indelphi analysis
+This is the summary of RMI2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002daw.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc059quq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059qux.1 .
+There are a total of 78 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:59:06 2023
+Step: Indelphi analysis
+This is the summary of SMC5 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004ahr.3 .
+There are a total of 31 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:59:09 2023
+Step: Indelphi analysis
+This is the summary of TOPBP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eps.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzj.1 .
+There are a total of 50 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 00:59:13 2023
+Step: Indelphi analysis
+This is the summary of UIMC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc063kam.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kan.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kao.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kap.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kat.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kay.1 .
+There are a total of 136 gRNAs in the selected region and 15 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:07 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATM gene
+After filtering for gRNA with little off-targets, I have 39 gRNAs targetting  ATM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:07 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATR gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  ATR gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:08 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BABAM2 gene
+After filtering for gRNA with little off-targets, I have 15 gRNAs targetting  BABAM2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:08 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BLM gene
+After filtering for gRNA with little off-targets, I have 26 gRNAs targetting  BLM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:08 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BOD1L1 gene
+After filtering for gRNA with little off-targets, I have 12 gRNAs targetting  BOD1L1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:09 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCA2 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  BRCA2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:09 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 2 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:09 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHAF1A gene
+After filtering for gRNA with little off-targets, I have 57 gRNAs targetting  CHAF1A gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:09 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHEK2 gene
+After filtering for gRNA with little off-targets, I have 28 gRNAs targetting  CHEK2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:10 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FAAP24 gene
+After filtering for gRNA with little off-targets, I have 24 gRNAs targetting  FAAP24 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:10 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCD2 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  FANCD2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:10 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCG gene
+After filtering for gRNA with little off-targets, I have 25 gRNAs targetting  FANCG gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:11 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCM gene
+After filtering for gRNA with little off-targets, I have 67 gRNAs targetting  FANCM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:11 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for MDC1 gene
+After filtering for gRNA with little off-targets, I have 101 gRNAs targetting  MDC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:11 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 4 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:12 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for POLL gene
+After filtering for gRNA with little off-targets, I have 27 gRNAs targetting  POLL gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:12 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RAD50 gene
+After filtering for gRNA with little off-targets, I have 16 gRNAs targetting  RAD50 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:12 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:12 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RMI2 gene
+After filtering for gRNA with little off-targets, I have 35 gRNAs targetting  RMI2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:13 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for SMC5 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  SMC5 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:13 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for TOPBP1 gene
+After filtering for gRNA with little off-targets, I have 19 gRNAs targetting  TOPBP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:27:13 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for UIMC1 gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  UIMC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:30:15 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:30:15 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 01:30:15 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 9 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:41:03 2023
+Step: Indelphi analysis
+This is the summary of ATM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001pkb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc009yxr.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbi.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbt.1 .
+There are a total of 67 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:41:12 2023
+Step: Indelphi analysis
+This is the summary of ATR gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eux.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oos.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oor.1 .
+There are a total of 100 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:54:43 2023
+Step: Indelphi analysis
+This is the summary of ATM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001pkb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc009yxr.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbi.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbt.1 .
+There are a total of 67 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:54:49 2023
+Step: Indelphi analysis
+This is the summary of ATR gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eux.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oos.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oor.1 .
+There are a total of 100 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:54:57 2023
+Step: Indelphi analysis
+This is the summary of BABAM2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002rlq.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlr.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rls.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlt.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlu.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hry.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hru.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hrz.1 .
+There are a total of 20 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:54:59 2023
+Step: Indelphi analysis
+This is the summary of BLM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002bpr.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010bnx.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc059ngc.1 .
+There are a total of 60 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:00 2023
+Step: Indelphi analysis
+This is the summary of BOD1L1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003gmz.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfv.1 .
+There are a total of 69 gRNAs in the selected region and 4 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:04 2023
+Step: Indelphi analysis
+This is the summary of BRCA2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001uub.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wft.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfx.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfw.1 .
+There are a total of 43 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:05 2023
+Step: Indelphi analysis
+This is the summary of BRCC3 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004fna.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjs.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc004fnb.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc011mzy.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cju.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjt.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjw.1 .
+There are a total of 108 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:05 2023
+Step: Indelphi analysis
+This is the summary of CHAF1A gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002mal.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rws.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rww.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwt.1 .
+There are a total of 144 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:05 2023
+Step: Indelphi analysis
+This is the summary of CHEK2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003adt.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adu.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuh.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cul.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc010gvh.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cum.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuo.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cus.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cui.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adx.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cun.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cur.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cut.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuu.1 .
+There are a total of 57 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:06 2023
+Step: Indelphi analysis
+This is the summary of FAAP24 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002nud.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wss.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wst.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsu.1 .
+There are a total of 36 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:08 2023
+Step: Indelphi analysis
+This is the summary of FANCD2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003bux.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqr.1 .
+There are a total of 56 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:08 2023
+Step: Indelphi analysis
+This is the summary of FANCG gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003zwb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svu.1 .
+There are a total of 59 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:09 2023
+Step: Indelphi analysis
+This is the summary of FANCM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001wwd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010anf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001wwc.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdm.1 .
+There are a total of 102 gRNAs in the selected region and 2 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:09 2023
+Step: Indelphi analysis
+This is the summary of MDC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003nrg.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mtz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muf.1 .
+There are a total of 270 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:09 2023
+Step: Indelphi analysis
+This is the summary of PARP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001hqd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyr.1 .
+There are a total of 30 gRNAs in the selected region and 9 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:09 2023
+Step: Indelphi analysis
+This is the summary of POLL gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001ktg.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kti.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktj.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vng.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktl.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kth.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vni.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktd.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vno.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnl.1 .
+There are a total of 74 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:09 2023
+Step: Indelphi analysis
+This is the summary of RAD50 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003kxi.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvp.1 .
+There are a total of 32 gRNAs in the selected region and 14 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:12 2023
+Step: Indelphi analysis
+This is the summary of RBBP8 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002ktw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kty.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kua.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002ktz.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwg.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwe.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwa.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwd.1 .
+There are a total of 9 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:12 2023
+Step: Indelphi analysis
+This is the summary of RMI2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002daw.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc059quq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059qux.1 .
+There are a total of 78 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:16 2023
+Step: Indelphi analysis
+This is the summary of SMC5 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004ahr.3 .
+There are a total of 31 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:18 2023
+Step: Indelphi analysis
+This is the summary of TOPBP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eps.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzj.1 .
+There are a total of 50 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:20 2023
+Step: Indelphi analysis
+This is the summary of UIMC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc063kam.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kan.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kao.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kap.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kat.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kay.1 .
+There are a total of 136 gRNAs in the selected region and 15 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:24 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATM gene
+After filtering for gRNA with little off-targets, I have 39 gRNAs targetting  ATM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:24 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATR gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  ATR gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:24 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BABAM2 gene
+After filtering for gRNA with little off-targets, I have 15 gRNAs targetting  BABAM2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BLM gene
+After filtering for gRNA with little off-targets, I have 26 gRNAs targetting  BLM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BOD1L1 gene
+After filtering for gRNA with little off-targets, I have 12 gRNAs targetting  BOD1L1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCA2 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  BRCA2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 2 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHAF1A gene
+After filtering for gRNA with little off-targets, I have 57 gRNAs targetting  CHAF1A gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHEK2 gene
+After filtering for gRNA with little off-targets, I have 28 gRNAs targetting  CHEK2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FAAP24 gene
+After filtering for gRNA with little off-targets, I have 24 gRNAs targetting  FAAP24 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCD2 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  FANCD2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCG gene
+After filtering for gRNA with little off-targets, I have 25 gRNAs targetting  FANCG gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCM gene
+After filtering for gRNA with little off-targets, I have 67 gRNAs targetting  FANCM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for MDC1 gene
+After filtering for gRNA with little off-targets, I have 101 gRNAs targetting  MDC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 4 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for POLL gene
+After filtering for gRNA with little off-targets, I have 27 gRNAs targetting  POLL gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RAD50 gene
+After filtering for gRNA with little off-targets, I have 16 gRNAs targetting  RAD50 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:25 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:26 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RMI2 gene
+After filtering for gRNA with little off-targets, I have 35 gRNAs targetting  RMI2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:26 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for SMC5 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  SMC5 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:26 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for TOPBP1 gene
+After filtering for gRNA with little off-targets, I have 19 gRNAs targetting  TOPBP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:26 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for UIMC1 gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  UIMC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:27 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:27 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 11:55:27 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 9 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:00:32 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:00:33 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:00:33 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 9 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:01:47 2023
+Step: Indelphi analysis
+This is the summary of ATM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001pkb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc009yxr.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbi.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbt.1 .
+There are a total of 67 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:01:53 2023
+Step: Indelphi analysis
+This is the summary of ATR gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eux.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oos.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062ooq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062oor.1 .
+There are a total of 100 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:01 2023
+Step: Indelphi analysis
+This is the summary of BABAM2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002rlq.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlr.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rls.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlt.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002rlu.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hry.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hru.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc061hrz.1 .
+There are a total of 20 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:03 2023
+Step: Indelphi analysis
+This is the summary of BLM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002bpr.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010bnx.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc059ngc.1 .
+There are a total of 60 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:05 2023
+Step: Indelphi analysis
+This is the summary of BOD1L1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003gmz.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062vfv.1 .
+There are a total of 69 gRNAs in the selected region and 4 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:08 2023
+Step: Indelphi analysis
+This is the summary of BRCA2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001uub.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wft.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfx.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058wfw.1 .
+There are a total of 43 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:09 2023
+Step: Indelphi analysis
+This is the summary of BRCC3 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004fna.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjs.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc004fnb.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc011mzy.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cju.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjt.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc065cjw.1 .
+There are a total of 108 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:10 2023
+Step: Indelphi analysis
+This is the summary of CHAF1A gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002mal.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rws.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rww.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060rwt.1 .
+There are a total of 144 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:10 2023
+Step: Indelphi analysis
+This is the summary of CHEK2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003adt.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adu.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuh.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cul.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc010gvh.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cum.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuo.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cus.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cui.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003adx.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cun.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cur.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cut.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062cuu.1 .
+There are a total of 57 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:10 2023
+Step: Indelphi analysis
+This is the summary of FAAP24 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002nud.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsv.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wss.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wst.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060wsu.1 .
+There are a total of 36 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:13 2023
+Step: Indelphi analysis
+This is the summary of FANCD2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003bux.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc003buw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062gqr.1 .
+There are a total of 56 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:13 2023
+Step: Indelphi analysis
+This is the summary of FANCG gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003zwb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svy.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc064svu.1 .
+There are a total of 59 gRNAs in the selected region and 1 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:13 2023
+Step: Indelphi analysis
+This is the summary of FANCM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001wwd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc010anf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001wwc.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059bdm.1 .
+There are a total of 102 gRNAs in the selected region and 2 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:13 2023
+Step: Indelphi analysis
+This is the summary of MDC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003nrg.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mtz.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mud.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063mue.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063muf.1 .
+There are a total of 270 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:14 2023
+Step: Indelphi analysis
+This is the summary of PARP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001hqd.5 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyp.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057pyr.1 .
+There are a total of 30 gRNAs in the selected region and 9 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:14 2023
+Step: Indelphi analysis
+This is the summary of POLL gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001ktg.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kti.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktj.3 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vng.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktl.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001kth.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vni.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001ktd.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vno.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc057vnl.1 .
+There are a total of 74 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:14 2023
+Step: Indelphi analysis
+This is the summary of RAD50 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003kxi.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvr.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063gvp.1 .
+There are a total of 32 gRNAs in the selected region and 14 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:16 2023
+Step: Indelphi analysis
+This is the summary of RBBP8 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002ktw.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kty.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002kua.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc002ktz.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwg.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwe.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwf.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwn.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwa.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc060nwd.1 .
+There are a total of 9 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:16 2023
+Step: Indelphi analysis
+This is the summary of RMI2 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc002daw.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc059quq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc059qux.1 .
+There are a total of 78 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:20 2023
+Step: Indelphi analysis
+This is the summary of SMC5 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc004ahr.3 .
+There are a total of 31 gRNAs in the selected region and 0 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:22 2023
+Step: Indelphi analysis
+This is the summary of TOPBP1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc003eps.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc062nzj.1 .
+There are a total of 50 gRNAs in the selected region and 3 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:25 2023
+Step: Indelphi analysis
+This is the summary of UIMC1 gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc063kam.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kan.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kao.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaq.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kap.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kat.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kaw.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc063kay.1 .
+There are a total of 136 gRNAs in the selected region and 15 target both species.
+===============================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATM gene
+After filtering for gRNA with little off-targets, I have 39 gRNAs targetting  ATM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for ATR gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  ATR gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BABAM2 gene
+After filtering for gRNA with little off-targets, I have 15 gRNAs targetting  BABAM2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BLM gene
+After filtering for gRNA with little off-targets, I have 26 gRNAs targetting  BLM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BOD1L1 gene
+After filtering for gRNA with little off-targets, I have 12 gRNAs targetting  BOD1L1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCA2 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  BRCA2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 2 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHAF1A gene
+After filtering for gRNA with little off-targets, I have 57 gRNAs targetting  CHAF1A gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for CHEK2 gene
+After filtering for gRNA with little off-targets, I have 28 gRNAs targetting  CHEK2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FAAP24 gene
+After filtering for gRNA with little off-targets, I have 24 gRNAs targetting  FAAP24 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCD2 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  FANCD2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCG gene
+After filtering for gRNA with little off-targets, I have 25 gRNAs targetting  FANCG gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:29 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for FANCM gene
+After filtering for gRNA with little off-targets, I have 67 gRNAs targetting  FANCM gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for MDC1 gene
+After filtering for gRNA with little off-targets, I have 101 gRNAs targetting  MDC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 4 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for POLL gene
+After filtering for gRNA with little off-targets, I have 27 gRNAs targetting  POLL gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RAD50 gene
+After filtering for gRNA with little off-targets, I have 16 gRNAs targetting  RAD50 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for RMI2 gene
+After filtering for gRNA with little off-targets, I have 35 gRNAs targetting  RMI2 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for SMC5 gene
+After filtering for gRNA with little off-targets, I have 23 gRNAs targetting  SMC5 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for TOPBP1 gene
+After filtering for gRNA with little off-targets, I have 19 gRNAs targetting  TOPBP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:30 2023
+Step: Off-target filtering step
+In this step, I will filter out gRNAs with off-targets for UIMC1 gene
+After filtering for gRNA with little off-targets, I have 45 gRNAs targetting  UIMC1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:31 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for BRCC3 gene
+After filtering for gRNA with little off-targets, I have 6 gRNAs targetting  BRCC3 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:31 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for PARP1 gene
+After filtering for gRNA with little off-targets, I have 14 gRNAs targetting  PARP1 gene.
+==================================
+Author: Xabier Vergara
+Date: Wed Mar  8 12:02:31 2023
+Step 3: Off-target filtering step allowing off-targets with 2 missmatches
+In this step, I will filter out gRNAs with off-targets for RBBP8 gene
+After filtering for gRNA with little off-targets, I have 9 gRNAs targetting  RBBP8 gene.
+==================================
+Author: Xabier Vergara
+Date: Sat Apr 29 19:10:20 2023
+Step: Indelphi analysis
+This is the summary of ATM gene for the first 0.2 :
+For this analysis, we will use the gRNAs targetting the gene build uc001pkb.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc009yxr.2 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbi.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkf.4 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbj.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbl.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbm.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc001pkc.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbk.1 .
+For this analysis, we will use the gRNAs targetting the gene build uc058hbt.1 .
+There are a total of 67 gRNAs in the selected region and 3 target both species.
+===============================================

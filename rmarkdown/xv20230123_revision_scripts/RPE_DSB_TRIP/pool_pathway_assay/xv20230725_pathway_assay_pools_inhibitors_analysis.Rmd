@@ -1,0 +1,301 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("exp_n","sample_ID","cell_line","condition","bio_rep","t_rep"))
+})
+```
+
+
+#Number of mapped IPRs with indel data (most optimistic). From previous analysis
+```{r}
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+high_confidence_IPR <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230726_high_confidence_IPR_set.rds") %>% 
+  filter(condition == "LBR2") %>% select(barcode, cell_line, bio_rep)
+
+```
+
+#CONCLUSION: We are recovering the whole complexity for U2OS & PRO (input 400 ng). With DEF & RPE we are not capturing full complexity (input 200 ng).
+
+
+```{r}
+#Filter by replicate
+indel_data_high_confidence <- clone_pools_pathway_assay %>% 
+  dplyr::group_by(barcode,outcome, exp_n, cell_line, condition, bio_rep) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F) + 1) %>% right_join(high_confidence_IPR)
+
+#Only look at LBR2 vs. tracr
+control_balance_inh <- indel_data_high_confidence %>% filter(outcome %in% c("ins_1","del_-7"))
+
+#Look at read numbers
+control_balance_bio_dcast <- control_balance_inh %>% reshape2::dcast(barcode + cell_line + condition + bio_rep ~ outcome, value.var = "counts", fun.aggregate = mean, fill = 1)
+
+#Control_measurements (bio_rep)
+pathway_metric_control_bio <- control_balance_bio_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1)) %>%
+  na.omit()
+
+#Filter by read number and plot noise level
+read_count <- c(0,1,2,5,10,15,20,50,100,200,300)
+
+filter_read_count_test <- map_dfr(read_count , function(x) {
+  pathway_metric_control_bio %>%
+    filter(`del_-7` >= x & ins_1 >= x) %>%
+    mutate(read_filter = x)
+})
+
+#Number of IPRs in each
+IPR_summary <- pathway_metric_control_bio %>% 
+  dplyr::group_by(cell_line, condition, bio_rep) %>% 
+  dplyr::summarize(IPR_n = n()) 
+
+#Plot loss of IPRs by each read_count filter
+
+ggplot(IPR_summary) + 
+  geom_col(aes(x = bio_rep,
+               y = IPR_n)) +
+  labs(fill = "read_filter") +
+  facet_grid(condition~ cell_line, scales = "free") + 
+  theme_bw()
+```
+#Conclusion: we always get some barcodes, but these are extremely low in RPE1 cells
+
+#Calculate differentials per replicate
+```{r}
+dmso_balance <- pathway_metric_control_bio %>% filter(condition == "LBR2") %>% select(barcode, cell_line, bio_rep, dmso_bal = log2_bal)
+
+inhibitor_balance_calculation <- pathway_metric_control_bio %>% 
+  filter(condition != "LBR2") %>% 
+  left_join(dmso_balance) %>% 
+  mutate(diff_bal = log2_bal - dmso_bal)
+
+mean_inhibitor_effect <- inhibitor_balance_calculation %>%
+  dplyr::group_by(barcode, cell_line, condition) %>%
+  dplyr::summarise(mean_diff = mean(diff_bal),
+                   sd_diff = sd(diff_bal),
+                   reps = n()) %>%
+  filter(reps > 1)  %>% filter(condition != "tracr")
+```
+
+#Plot pathway balance changes
+```{R}
+ggplot(mean_inhibitor_effect) +
+  ggbeeswarm::geom_quasirandom(aes(cell_line, mean_diff)) +
+  facet_wrap(~ condition) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+```
+
+#Add chromatin info for RPE1 cells
+#Load chromatin info of the IPRs in RPE cells
+```{r}
+setwd("/DATA/projects/DSBrepair/data/DSB_TRIP_cell_lines_mapping/xv20230519_all_RPE_pools_mapping/")
+# Load chip data
+chip_files <- list.files(path = "chip/site_means", pattern = "2000", full.names = T)
+dam_files <- list.files(path = "dam", pattern = "2000", full.names = T)
+repli_files <- "coverage/RPE1_DSB_TRIP_pools-2000_summary.tsv"
+
+#Make a dataframe with all the files
+chromatin_features_pools_chip <- map(chip_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(ID, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("chip.",str_extract(x, "H.*(?=_)"))) %>%
+    reshape2::dcast(ID ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "ID")
+
+#Make a dataframe with dam files
+chromatin_features_pools_dam <- map(dam_files, function(x) {
+  read.delim(x, header = T) %>%
+    dplyr::select(name, z_score) %>%
+    na.omit() %>%
+    mutate(file = paste0("dam.",str_extract(x, "(?<=2000_).*(?=.txt)"))) %>%
+    reshape2::dcast(name ~ file, value.var = "z_score")
+}) %>% purrr::reduce(left_join, by = "name")
+
+#Make a column for repliseq
+repliseq_dataframe <- map_dfr(repli_files, function(x) {
+  read.delim(x, header = T) %>%
+    na.omit() %>%
+    mutate(ratio_r1 = repliseq_r1_late - repliseq_r1_early, ratio_r2 = repliseq_r2_late - repliseq_r2_early) %>%
+    mutate(late_replicating = (ratio_r1 + ratio_r2)/2) %>%
+    dplyr::select("ID" = barcode, late_replicating)
+})
+
+#Bind both
+chromatin_features_pools <-  left_join(chromatin_features_pools_chip, chromatin_features_pools_dam, by = c("ID"="name")) %>%
+  left_join(repliseq_dataframe) %>%
+  separate(ID, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity")) %>%
+  mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% 
+  filter(pool %in% selected_pools) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(-pool, -iPCR_cell, -iPCR_transfection, -iPCR_complexity)
+  
+```
+
+#Join with balances and calculate the correlation (do this for all marks)
+```{r, warning=F}
+values_chromatin <- left_join(mean_inhibitor_effect, chromatin_features_pools) %>% filter(cell_line != "U2OS")
+
+#Quick plot
+ggplot(values_chromatin, aes(late_replicating,mean_diff)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = F) + 
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ condition) + theme_bw()
+
+```
+
+#Plot some control plots
+```{r}
+#Import K562 data 
+K562_data <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_inhibitors/xv20220929_drug_differentials_log2_MMEJ_NHEJ_balance.rds") %>% dplyr::select(condition = drug, barcode,mean_diff =mean.log2foldchange) %>% mutate(cell_line = "K562")
+
+
+#Plot differentials
+ggplot(values_chromatin %>% bind_rows(K562_data) %>% filter(condition != "DMSO")) + 
+  geom_quasirandom(aes(fct_relevel(cell_line, c("K562","RPE1","RPEPro","RPEDef")), mean_diff)) + 
+  geom_hline(yintercept = 0, linetype = 2) +
+  facet_wrap(~condition) + 
+  theme_bw() +
+  xlab("Cell line") + ylab("∆log2 MMEJ:NHEJ balance")
+
+```
+#PCR modeling
+```{r}
+#Create an empty dt with CCDs of DDR proteins
+drug_CCDs_dt <- tibble(cell_line = NA, drug = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+for (j in unique(values_chromatin$cell_line)){
+  for (i in unique(values_chromatin$condition)){
+    gene.library.dt <- filter(values_chromatin, condition == i & cell_line == j)
+    set.seed(1)
+    PCR_model_DDR_test <- pcr(mean_diff~ dam.H3K9me3+dam.H3K27me3+chip.H3K27ac+chip.H3K4me1+ chip.H3K36me3+chip.H3K4me3+chip.H3K4me2+dam.H3K9me2+dam.LMNB1+late_replicating, data=gene.library.dt , validation="CV") #Run principal component regression
+
+    pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+    combined.dt <- tibble(measured = gene.library.dt$mean_diff, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+    pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% glance() #Predicted vs. measured correlation plot
+    drug_CCDs_dt <- drug_CCDs_dt %>% add_row(cell_line = j, drug = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+  }
+}
+
+#Adjust per cell line
+adj_drug_dt <- map_dfr(cells,function(x) {
+  drug_CCDs_dt %>% filter(cell_line ==x) %>% mutate(p.adj = p.adjust(p.value, method = "BH"))
+})
+
+```
+
+#Calculate slopes
+```{r}
+#Create empty dataframe to calculate synergy scores
+drug_CCD_slopes_RPE <- tibble(drug = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA, cell_line = NA)
+
+#Loop to run linear models on the values
+for (h in unique(values_chromatin$condition)) {
+  for(i in unique(values_chromatin$cell_line)) {
+  for (j in colnames(values_chromatin)[7:16]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- values_chromatin %>% filter(condition == h & cell_line == i) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean_diff ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   drug_CCD_slopes_RPE <- drug_CCD_slopes_RPE %>% add_row(drug = h, feature = j,cell_line = i, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+  }
+}
+
+#Retain slopes that 
+drug_CCD_all_values <- drug_CCD_slopes_RPE %>% 
+  reshape2::dcast(drug + feature + cell_line ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(drug, cell_line,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  left_join(adj_drug_dt) %>%
+  mutate(CCD_value = case_when(drug == "ATMi" & slope < 0 ~ slope, drug == "ATMi"& slope > 0 ~ 0, drug == "DNAPKi" & slope > 0 ~ slope, drug == "DNAPKi" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit() 
+```
+
+#Plot CCDs of ATM and DNAPK inhibitors
+```{r}
+chromatin_features <- c("late_replicating","LMNB1","H3K9me2","H3K9me3","H3K27me3","H3K36me3","H3K4me1","H3K4me2","H3K4me3","H3K27ac")
+cells <- c("K562","RPE1","RPEPro","RPEDef")
+
+#Import K562_data
+CCD_K562 <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220816_drug_CCD_results.rds") %>%
+  mutate(cell_line = "K562") %>% filter(chrom_feature %in% chromatin_features)
+
+CCD_RPE <- drug_CCD_all_values %>% mutate(chrom_feature = gsub(".*\\.","",feature)) %>% dplyr::select(CCD_synergy_score = CCD_value, drug, cell_line, chrom_feature, CCD_model_p_adj = p.adj)  %>% filter(chrom_feature %in% chromatin_features)
+
+CCD_dt <- bind_rows(CCD_K562, CCD_RPE)
+
+#Plot in the same style as 
+ggplot(CCD_dt) + 
+  geom_tile(aes(fct_relevel(cell_line,c("K562","RPE1","RPEPro","RPEDef")), fct_relevel(chrom_feature,chromatin_features), fill = CCD_synergy_score)) + 
+  geom_point(data = CCD_dt %>% filter(CCD_synergy_score != 0), aes(cell_line, fct_relevel(chrom_feature)))+
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-1,-0.5,0, 0.5,1), limits = c(-1,1), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + facet_wrap(~ drug)
+
+#Correlation by cell line (cosine similarity)
+cosine.cliques <- map_dfr(c("ATMi","DNAPKi"), function(x){
+  cosine.cliques.cells.dcast <- CCD_dt %>% filter(drug == x) %>% dplyr::select(-drug) %>% reshape2::dcast(chrom_feature ~ cell_line, value.var = "CCD_synergy_score") %>% column_to_rownames(var = "chrom_feature")
+  cosine.d.cliques <- cosine(as.matrix(cosine.cliques.cells.dcast)) %>% reshape2::melt() %>% mutate(drug = x)
+})
+
+
+#Generate cosine distance matrix
+ggplot(cosine.cliques %>% distinct()) + 
+     geom_tile(aes(fct_relevel(Var1,cells), fct_relevel(Var2,cells), fill = value))+ 
+     theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), legend.position = "top") + 
+     coord_fixed(expand = F,ratio = 1) + scale_fill_gradient2(low = "#af8dc3", mid = "#f7f7f7", high = "#7fbf7b", limits = c(-1,1)) + 
+     geom_text(aes(fct_relevel(Var1,cells), fct_relevel(Var2,cells),label = round(value, digits = 2))) + theme(axis.title = element_blank()) + facet_wrap(~ drug)
+
+
+```
+#CONCLUSION: This is quite crazy these CCDs are 5x larger in p53WT background than in p53 null =00000!!!!!!!
+
+#Plot correlation plots for H3K27me3 & LMNB1 with ATMi and DNAPKi with H3K36me3
+```{r}
+#With H3K27me3 and ATMi
+ggplot(values_chromatin %>% filter(condition == "ATMi"), aes(dam.H3K27me3,)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ cell_line) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+
+#With H3K36me3 and DNAPKi
+ggplot(values_chromatin %>% filter(condition == "DNAPKi"), aes(chip.H3K36me3,diff_bal)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ cell_line) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+```

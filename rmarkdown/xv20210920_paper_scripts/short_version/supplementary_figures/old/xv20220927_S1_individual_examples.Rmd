@@ -1,0 +1,115 @@
+---
+title: "xv20220926_ATM_DNAPK_inhibitors"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S6: 
+
+Text in supplementary:
+
+Fig. S6: ATM and DNAPK inhibitor effects. A) ∆log2MMEJ:NHEJ of ATM and DNAPKcs inhibitor of each IPR. B) Adjusted p-values of Student’s t-test comparing ∆log2MMEJ:NHEJ scores in ATM and DNAPKcs inhibited compared to the vehicle control (n = 3) for each reporter. This test was used to con-firm significance of the changes in the log2MMEJ:NHEJ.
+
+```{r}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+library(ggpubr)
+```
+
+# Import data tables
+```{r}
+setwd(in.dir)
+
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+drug_summary_test <- readRDS_proof( "data/processed_data/CCD_inhibitors/","drug_t_test")
+
+```
+
+
+#Plot for supplementary figures (Check if this in supps)
+
+A) ∆log2MMEJ:NHEJ of ATM and DNAPKcs inhibitor of each IPR.
+```{r}
+# General perturbation
+ggplot(drug_summary_test %>% filter(drug %in% c("ATMi","DNAPKi"))) + geom_quasirandom(aes(drug, mean)) + geom_hline(aes(yintercept = 0), linetype = 2) + theme_bw()
+```
+
+B) Adjusted p-values of Student’s t-test comparing ∆log2MMEJ:NHEJ scores in ATM and DNAPKcs inhibited compared to the vehicle control (n = 3) for each reporter. This test was used to confirm significance of the changes in the log2MMEJ:NHEJ.
+```{r}
+#p.values
+significant.inh.t.test_levels <- drug_summary_test %>% mutate(signif_level = case_when(p.adj > 0.05 ~ "ns", p.adj > 0.01 & p.adj <= 0.05 ~ "*", p.adj > 0.001 & p.adj <= 0.01 ~ "**", p.adj > 0.0001 & p.adj <= 0.001 ~ "***", T ~ "****"))
+
+ggplot(significant.inh.t.test_levels) + geom_tile(aes(fct_relevel(barcode, clone5_bc_cluster), drug, fill = -log10(p.adj))) + coord_fixed(ratio = 1) + theme(axis.text.x = element_blank()) + scale_fill_gradient2() + geom_text(aes(fct_relevel(barcode, clone5_bc_cluster), drug, label = signif_level))
+```
+

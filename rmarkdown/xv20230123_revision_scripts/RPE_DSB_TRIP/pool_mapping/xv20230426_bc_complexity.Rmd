@@ -1,0 +1,73 @@
+---
+title: "xv20230426_E2255_bcPCR_TRIP_pools"
+author: "Xabier Vergara"
+date: "2023-04-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Load all files
+```{r cars}
+#List all pool files
+pool_bc_files <- list.files(path="/DATA/projects/DSBrepair/data/xv20230426_E2255_bcPCR_TRIP_pools/counts/", pattern = "star", full.names = T)
+
+# Create a data table 
+table_IPR_pools <- map_dfr(pool_bc_files, function(x){
+  read.delim(x, header = F) %>% 
+    mutate(filename = str_extract(x, "(?<=NoIndex_).*(?=.starcode.count)"),
+           exp = "E2255",
+           cell_line = str_extract(filename, "(?<=E2255_).*(?=_[:digit:])"),
+           pool_nr = str_extract(filename, "nr[:digit:]"),
+           complexity = str_extract(filename, "(?<=_)[:digit:]{3,4}(?=_)"),
+           transfection = case_when(grepl("High", filename) ~ "High",
+                                    grepl("Low", filename) ~ "Low",
+                                    T ~ "High")) %>%
+    select(barcode = V1, count = V2, filename, exp, cell_line, pool_nr, complexity,transfection)})
+
+
+```
+
+#Plot reads per barcode distribution
+```{r}
+#
+ggplot(table_IPR_pools) +
+  geom_density(aes(log10(count))) +
+  facet_wrap(~ filename, scales = "free_y") + 
+  theme_bw() +
+  geom_vline(xintercept = 0.5, linetype = 2)
+
+```
+#Conclusion: I will get IPRs that have 5 or more counts
+
+#Filter IPRs that are real most likely
+```{r}
+#Filter all data
+filter_IPR_pools <- table_IPR_pools %>%
+  filter(count >= 5)
+
+#Summarise number of IPR per pool
+summary_pools <- filter_IPR_pools %>% 
+  dplyr::group_by(cell_line,pool_nr, complexity, transfection,filename) %>%
+  dplyr::summarise(pool_IPR = n())
+```
+# Conclusion: There are enough IPRs per cell line. They all worked!!
+
+#Best pools per cell line
+```{r}
+#
+ggplot(summary_pools) + 
+  geom_col(aes(fct_relevel(transfection, c("Low","High")),
+               pool_IPR,
+               fill = fct_relevel(complexity,c("100","250","1000"))),
+           position = "dodge") + 
+  facet_wrap(~ fct_relevel(cell_line,c("RPE1","U2OS","RPE1_HR_P","RPE1_HR_D","mESC")), nrow = 1) +
+  theme_bw() + theme(legend.position = "top") + labs(fill= "Pool complexity") + xlab("Amount of plasmid in transfection") + ylab("Number of IPR per pool")
+```
+
+
+
+

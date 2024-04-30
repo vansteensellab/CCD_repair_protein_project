@@ -1,0 +1,396 @@
+---
+title: "xv20230123_RPE_clone_IPR"
+author: "Xabier Vergara"
+date: "2023-01-23"
+output: html_document
+---
+
+#Info: In this document, I will analyse the mapping and pathway assay of RPE1 clones.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Script to analyse the IPRs in RPE clones
+
+```{r library}
+library(tidyverse)
+library(rtracklayer)
+```
+
+#Load all clones data
+```{r}
+#List files
+dir="/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20230123_revision_scripts/RPE_DSB_TRIP/clone_mapping/"
+setwd(dir)
+clone_files <- list.files(pattern= "XV", full.names = T)
+
+clone_integrations <- map_dfr(clone_files, function(x){
+  setwd(dir)
+  read_delim(x, show_col_types = F) %>%
+    mutate(filename = x) %>%
+    separate(filename, into = c("a","owner","clone_number", "filetype"))
+})
+```
+#Filter integrations with more than 5 reads
+```{r pressure, echo=FALSE}
+#Filtered locations
+filt_clone_IPR <- clone_integrations %>% filter(read_count_1 > 1 & read_count_2 > 1)
+
+#Are there clones that are repeated?
+repeated_positions <- filt_clone_IPR %>% 
+  dplyr::group_by(chr,start,end) %>%
+  dplyr::summarise(count = n())
+
+#plot IPRs
+ggplot(filt_clone_IPR) + 
+  geom_point(aes(clone_number, log10(read_count), color = chr)) +
+  theme_bw()
+
+ggplot(filt_clone_IPR) + 
+  geom_bar(aes(clone_number)) +
+  theme_bw()
+
+```
+#CONCLUSION: Clone #32 has multiple integrations, but the other clones seem to be the same clone with 2 to 3 IPRs.
+
+#Quick control: check if they are in heterochromatin vs euchromatin. Very rough estimation taking 20kb bin surrounding the integration site
+```{r}
+# pA-DamID tracks
+pA_DamID_dir <- "/DATA/projects/DSBrepair/data/xv20221110_E2061_pA_DamID_het/results/tracks/normalized/bin-20kb/"
+
+#tracks
+control_pA_DamID <- list.files(path = pA_DamID_dir, pattern = "tracr.*comb", full.names = T)[2:5]
+
+#IPR_coordinates (in repeated_positions)
+
+chromatin_values_pA_DamID <- map_dfr(control_pA_DamID, function(x){
+  track <- import(x) %>% as_tibble()
+  tmp <- map2_dfr(repeated_positions$chr, repeated_positions$start, function(x,y) {
+    track %>% 
+      filter(seqnames == x & start < y & end > y) %>%
+      select(chr = seqnames, width, score) %>%
+      mutate(start = y)
+  })
+  tmp %>% mutate(antibody = str_extract(x,"(?<=tracr_).*(?=_comb)"))
+})
+
+#Combine with the clone and position they are
+position_chromatin_feat <- filt_clone_IPR %>% left_join(chromatin_values_pA_DamID)
+
+
+```
+
+#Check pathway assay
+#Import files
+```{r, warning=F,message=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230123_RPE_clones_targetted_pA_DamID/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+
+RPE1_clones_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230123_RPE_clones_targetted_pA_DamID/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("seq_run","sample_ID","exp","ID","NA","clone","gRNA","replicate"))
+})
+
+#Table with curated barcodes (these are the 29 IPRs of clone 12 and three on other clones)
+clone_32_bc <- tibble(clone = "32", barcode = c("TGGCCTGAGGAGGCGA","AGCTCAGACTAGATGG","GGACGTGCCAACTTGC","TGCATGTAGACCTCGG","CATATCTACTAAAGT","TCCATCTGCTATTGGT","AGCCTGATCGGATAAT","AGAGACATTTATGTAC","GAATAAGTCTTATCCG","CAATATGCCCCTTAGG","ACCCATAGCCAGCCAT","GGTTGTTAACCCGAGG","AACTTTGAACACCAAG","AGAAACTGGTGCCATG","TACTACTAGTTCGCAT","ATTCGCCTTACACAGA","TACGCATTTTTACGAT","GTATTGATAACAATCC","TCTCAATAACAGCAGG","TTGCTGGACTGTCTTT","ACGTGCTACCGTCAAC","GTACAAGCTACCTGTG","ACGTGATTGTTACGA","TTGTATTCCTAACGCC","GGCGAATTCAAGAAGT","CCTCCGTCTCACCTAC","CCGGCGAGCTTCAGCG","ACCCATCGACCACGGT","TAAAGTTATATACAAC"))
+
+other_clones_bc <- tibble(clone = rep(c("9","11","12","14","16","19","23","27","30"), 3), barcode = c(rep("AGGATACACCACTTAT",9),rep("CCCCCAGCTGCACGCT",9),rep("CTGTCCGCATTTTTCC",9)))
+
+#All correct barcodes
+barcodes_RPE <- bind_rows(clone_32_bc,other_clones_bc)
+```
+
+#Perform some quality checks with the samples
+```{r, message=F}
+#How many reads I have per parcode and clone
+#total counts per barcode in each clone
+read_per_barcode <- RPE1_clones_pathway_assay %>%
+  dplyr::group_by(barcode, clone,replicate, gRNA) %>%
+  dplyr::summarise(total = sum(count))
+
+#Plot number of total reads per barcode
+ggplot(read_per_barcode) + 
+  geom_point(aes(barcode,log10(total))) + 
+  facet_wrap(~clone+gRNA) +
+  geom_hline(yintercept = 2.5, color = "red", linetype = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_blank())
+
+#Filter barcode total read > 250
+barcodes_RPE_clones <- read_per_barcode %>%
+  filter(total > 250)
+
+#Tile of barcodes per clone
+ggplot(barcodes_RPE_clones) +
+  geom_tile(aes(barcode,interaction(clone,gRNA), fill = total)) +
+  facet_wrap(~replicate) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+#CONCLUSION: The threshold between backgound integrations and real integrations is quite clear. I will filter them based on the total amount of reads. It confirms that all clones have the same three IPRs
+#NOTE #2: There is something weirg, but there seem to be some cross talk between samples or clone contamination. But this is not consistent across replicates. I need to double check this.
+
+#Calculate frequencies and create dcast tables
+```{r}
+# Check editing efficiency
+pathway_assay_clones <- RPE1_clones_pathway_assay %>% 
+  right_join(barcodes_RPE) %>%
+  left_join(barcodes_RPE_clones) %>%
+  na.omit() %>%
+  mutate(freq = count/total,
+         mut = paste(call, gsub("-","",indel), sep = "_"))
+
+#dcast total counts
+dcast_counts_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + exp + clone + gRNA + replicate ~ mut, value.var = "count", fill=0, fun.aggregate = mean)
+
+#dcast total counts
+dcast_freq_clones <- pathway_assay_clones %>% 
+  reshape2::dcast(barcode + exp + clone + gRNA + replicate ~ mut, value.var = "freq", fill= 0, fun.aggregate = mean)
+
+colnames(dcast_freq_clones)[6:length(colnames(dcast_freq_clones))] <- paste0("freq_", colnames(dcast_counts_clones)[6:length(dcast_counts_clones)])
+
+#combine both
+dcast_counts_freq_clones <- dcast_counts_clones %>%
+  left_join(dcast_freq_clones)
+```
+#CONCLUSION: the samples look decent, cutting efficiency is nearly 100% at 72h post transfection
+
+#Data processing
+# I will process the data as I did previously
+```{r}
+# Process kinase inhibitor data
+pathway_assay_clones.processed <- dcast_counts_freq_clones %>% 
+  filter(del_7 + ins_1 > 30) %>% #Apply the read number filtering step
+  mutate(freqCut = 1 - freq_wt_0,
+         log2MMEJNHEJratio = log2(del_7 / ins_1),
+         MMEJ_freq = del_7/(del_7+ins_1)) %>%
+  dplyr::select(barcode, exp,clone,gRNA, replicate,log2MMEJNHEJratio,MMEJ_freq,freqCut, del_7, ins_1, wt_0)  %>% distinct()
+
+#Filter wells with mean cutting efficiency lower than 25%
+filter.out.wells <- pathway_assay_clones.processed %>% 
+  dplyr::group_by(exp, replicate,gRNA,clone) %>%
+  dplyr::summarise(mean.cut = mean(freqCut, na.rm = T)) %>%
+  filter(mean.cut < 0.90) %>% 
+  dplyr::select(exp,replicate,gRNA,clone)
+
+#Filter based on cutting efficiency
+filtered.RPE.clones.tib <- pathway_assay_clones.processed %>% 
+  anti_join(filter.out.wells, by = c("exp", "replicate","gRNA","clone"))
+
+```
+#CONCLUSION: values are normalized and filtered out the samples with low editing efficiency
+
+#Control plots
+```{r}
+# Reproducibility across cell replicates
+dcast_replicates_log2 <- filtered.RPE.clones.tib %>% reshape2::dcast(barcode + clone + gRNA ~ replicate, value.var = "MMEJ_freq") %>% na.omit()
+
+dcast_replicates_freq <- filtered.RPE.clones.tib %>% reshape2::dcast(barcode + clone + gRNA ~ replicate, value.var = "freqCut") %>% na.omit()
+
+```
+#CONCLUSION: Editing efficiency is nearly 100% in all of them. I only get lower editing efficiency if I transfect x10 less gRNA. Could I use that to check for differences in editing eff???
+#CONCLUSION #2: Data looks noisier than in K562 cells, measurements are not so reproducible. At least in clone #32. I had problems with plating and replating, this might have affected read out.
+
+#average values for replicates
+```{r}
+#Plot averages with sd
+average_values <- filtered.RPE.clones.tib %>%
+  dplyr::group_by(barcode,clone,gRNA) %>%
+  dplyr::summarise(mean_ratio = mean(MMEJ_freq),
+                   sd_ratio = sd(MMEJ_freq),
+                   mean_cut = mean(freqCut),
+                   sd_cut = sd(freqCut))
+```
+
+#Plot clone #32 data
+```{r}
+#Plot with error bars
+ggplot(filter(average_values),
+       aes(reorder(barcode,mean_ratio),mean_ratio)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("9","11","12","14","16","19","23","27","30")), ncol = 5) + 
+  geom_errorbar(aes(ymax = mean_ratio+sd_ratio, 
+                    ymin = mean_ratio-sd_ratio)) +
+  ylab("MMEJ relative frequency") +
+  ggtitle("MMEJ frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + xlab("IPRs in clones")
+
+#Plot for power point
+#Plot with error bars
+p1 = ggplot(filter(average_values),
+       aes(reorder(barcode,mean_ratio),mean_ratio)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("9","11","12","14","16","19","23","27","30")), ncol = 5) + 
+  geom_errorbar(aes(ymax = mean_ratio+sd_ratio, 
+                    ymin = mean_ratio-sd_ratio)) +
+  ylab("MMEJ relative frequency") +
+  ggtitle("MMEJ frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")
+
+ggplotly(p1)
+
+```
+
+
+#Plot clone #32 data
+```{r}
+#Plot with error bars
+ggplot(filter(average_values),
+       aes(reorder(barcode,mean_ratio),mean_cut)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("9","11","12","14","16","19","23","27","30")), ncol = 5) + 
+  geom_errorbar(aes(ymax = mean_cut+sd_cut, 
+                    ymin = mean_cut-sd_cut)) +
+  ylab("MMEJ relative frequency") +
+  ggtitle("MMEJ frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + xlab("IPRs in clones")
+
+#Plot for power point
+#Plot with error bars
+ggplot(filter(average_values),
+       aes(reorder(barcode,mean_ratio),mean_cut)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("9","11","12","14","16","19","23","27","30")), ncol = 5) + 
+  geom_errorbar(aes(ymax = mean_cut+sd_cut, 
+                    ymin = mean_cut-sd_cut)) +
+  ylab("Editing relative frequency") +
+  ggtitle("Editing frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")+ ylim(c(0,1))
+
+```
+
+## Plot DamID values for different values
+```{r}
+#plot as heatmap
+heatmap_dt <- position_chromatin_feat %>% 
+  mutate(coordinate = paste(chr, start, sep = ":")) %>% 
+  reshape2::dcast(coordinate+clone_number ~ antibody, value.var = "score")
+
+#Plot clone 32 as heatmap
+clone_32_dt <- heatmap_dt %>%
+  filter(clone_number == 32) %>%
+  select(-clone_number) %>%
+  column_to_rownames(var = "coordinate")
+
+#plot
+rg <- max(abs(clone_32_dt))
+pheatmap(t(as.matrix(clone_32_dt)),
+         breaks = seq(-rg, rg, length.out = 100),
+         main = "pA_DamID_clone_32_RPE1")
+
+
+#For other clones
+others_dt <- heatmap_dt %>%
+  filter(clone_number == 11) %>%
+  select(-clone_number) %>%
+  column_to_rownames(var = "coordinate")
+
+#for clone 32
+pheatmap(t(as.matrix(others_dt)),
+         breaks = seq(-rg, rg, length.out = 100),
+         main = "pA_DamID_other_clones_RPE1")
+```
+#CONCLUSION: Only some integrations in clone 32 are in LADs (one or two maybe)
+
+## Plot zoom in of two types of clones
+```{r}
+# Editing efficiency in clone 32 & clone 11 (as example)
+ggplot(filter(average_values, clone %in% c("32","11")),
+       aes(reorder(barcode,mean_ratio),mean_cut)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("32","1")), ncol = 1) + 
+  geom_errorbar(aes(ymax = mean_cut+sd_cut, 
+                    ymin = mean_cut-sd_cut)) +
+  ylab("Editing relative frequency") +
+  ggtitle("Editing frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")+ ylim(c(0,1))
+
+# Editing efficiency in clone 32 & clone 11 (as example)
+ggplot(filter(average_values, clone %in% c("32","11")),
+       aes(reorder(barcode,mean_ratio),mean_ratio)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("32","1")), ncol = 1) + 
+  geom_errorbar(aes(ymax = mean_ratio+sd_ratio, 
+                    ymin = mean_ratio-sd_ratio)) +
+  ylab("MMEJ frequency") +
+  ggtitle("MMEJ in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")
+
+```
+
+#Can we use R1 (with 10x less gRNA) to check changes in balance with different transfection eff.?
+```{r}
+R1_values <- pathway_assay_clones.processed %>%
+  filter(replicate == "R1") %>%
+  dplyr::group_by(barcode,clone,gRNA) %>%
+  dplyr::summarise(R1_ratio = mean(MMEJ_freq),
+                   R1_cut= mean(freqCut))
+
+#Plot correlations
+
+correlation_tibble <- average_values %>% left_join(R1_values)
+
+
+#Individual values
+# Editing efficiency in clone 32 & clone 11 (as example)
+ggplot(filter(correlation_tibble, clone %in% c("32","11"))) + 
+  geom_point(aes(reorder(barcode,mean_ratio),R1_cut)) + 
+  facet_wrap(~ fct_relevel(clone, c("32","1")), ncol = 1) + 
+  ylab("Editing relative frequency") +
+  ggtitle("Editing frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")+ ylim(c(0,1))
+
+# Editing efficiency in clone 32 & clone 11 (as example)
+ggplot(filter(correlation_tibble, clone %in% c("32","11"))) + 
+  geom_point(aes(reorder(barcode,mean_ratio),R1_ratio)) + 
+  facet_wrap(~ fct_relevel(clone, c("32","1")), ncol = 1) + 
+  ylab("MMEJ relative frequency") +
+  ggtitle("MMEJ frequency in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")
+
+# Editing efficiency in clone 32 & clone 11 (as example)
+ggplot(filter(average_values, clone %in% c("32","11")),
+       aes(reorder(barcode,mean_ratio),mean_ratio)) + 
+  geom_point() + 
+  facet_wrap(~ fct_relevel(clone, c("32","1")), ncol = 1) + 
+  geom_errorbar(aes(ymax = mean_ratio+sd_ratio, 
+                    ymin = mean_ratio-sd_ratio)) +
+  ylab("MMEJ frequency") +
+  ggtitle("MMEJ in clone 32 (29 IPRs) and other clones (3 IPRs)") + 
+  theme_bw() +
+  theme(axis.text.x = element_blank()) + xlab("IPRs in clones")
+
+#MMEJ frequency
+ggplot(correlation_tibble %>% filter(clone == "32"), aes(mean_ratio,R1_ratio)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(color = "blue") +
+  stat_cor(method = "spearman", color = "red",label.y = 0.1) + 
+  ylab("MMEJ freq in R1 (n=1, x10 times less gRNA)") +
+  xlab("MMEJ freq (n =3)") +
+  theme_bw()
+
+#editing frequency
+ggplot(correlation_tibble %>% filter(clone == "32"), aes(mean_cut,R1_cut)) + 
+  geom_point() +
+  geom_smooth(method = "lm") +
+  stat_cor(color = "blue") +
+  stat_cor(method = "spearman", color = "red",label.y = 0.67) + 
+  ylab("Editing freq in R1 (n=1, x10 times less gRNA)") +
+  xlab("Editing freq (n = 3)") +
+  theme_bw()
+
+```

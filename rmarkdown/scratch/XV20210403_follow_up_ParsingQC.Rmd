@@ -1,0 +1,156 @@
+---
+title: "Parsing_QC"
+author: "Ruben Schep"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+knitr document van Steensel lab
+
+# Parsing and starcode quality control
+# Introduction
+After demultiplexing all the samples from the sequencing data, the data has been processed by the CRISPR-TRIP snakemake script. This script maps the barcodes from the iPCR (iPCR from 5 feb 2018). It calls the true barcodes with the starcode script for both the mutation and mapping reads. It call the mutations on all the mutation samples and spits them in mapped, unmapped and non genuine.
+
+Here we want to do a QC of the parsing of the mapping, the barcodes and mutations. We will load the statistics data of all the files. We will also look at barcode counts from the table files (those list the barcodes from the starcode stript). I obtained the counts though shell with 
+`cd ~/mydata/projects/CRISPR_TRIP/20180918_TRIP_5106/data/processed_20181107/mutation`
+`wc -l * > ~/mydata/projects/CRISPR_TRIP/20180918_TRIP_5106/data/processed_20181107/rs20181107_starcode_barcode_counts.txt`
+
+Pasted the result in a text editor and changes all `^ ` and changed the spaces to `\t`, removed the last total row, removed `.table` at the end and saved as text file. 
+I will export a bed file also containing the broad integrations for the generation of mean chip values over the integration sites. 
+
+## Description of Data
+The statistics files look like this for the mutations : 
+```{r table2, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+tabl <- "
+|	reads	|	bp	|	reads_written	|	bp_written	|	n_tooshort	|	pat1	|	barcode	|	pat2|
+|----|----|----|----|----|----|----|----|
+|	1917323	|	268435236	|	1523275	|	146262106	|	0	|	1802163	|	1802150	|	1523275|
+"
+cat(tabl) # output the table in a format good for HTML/PDF/docx conversion
+```
+
+# Data loading and processing  
+
+## Path, Libraries, Parameters and Useful Functions  
+
+```{r system setup, message=FALSE}
+StartTime <-Sys.time()
+
+# 6-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8) 
+
+# libraries:
+library(plyr)
+library(dplyr)
+library(GenomicRanges)
+library(RColorBrewer)
+library(ggplot2)
+library(magrittr)
+library(data.table)
+library(grid)
+library(gridExtra)
+library(platetools)
+```
+
+
+## Data loading  
+
+These are data from the crispr-trip.snake script, and a text file that has has been obtained as explained above.  
+
+```{r load and process the data}
+# First I load the statistics data from the mapping.
+setwd("/DATA/projects/DSBrepair/data/xv20200221_CRISPR_Screen/parsed/")
+file.list <- list.files(pattern='statistics.txt', full.names = TRUE)
+getwd()
+indel.statistics.list <- lapply(file.list, 
+                                read.table, 
+                                header = TRUE)
+
+names(indel.statistics.list)<- gsub('mutation.(.*?).statistics.txt', 
+                                    '', 
+                                    file.list)
+# we need to remove the index column for the time being
+indel.statistics.list <- lapply(indel.statistics.list, function(x) { x["index"] <- NULL; x })
+indel.statistics.df <- do.call(rbind.data.frame, 
+                               indel.statistics.list)
+# Extract the information from the sample names
+indel.statistics.df$sample.well <- rownames(indel.statistics.df)
+indel.statistics.df$run <- str_extract(indel.statistics.df$sample.well,"(?<=./)....")
+indel.statistics.df$replicate <- str_extract(indel.statistics.df$sample.well,"(?<=_R).")
+indel.statistics.df$sample <- str_extract(indel.statistics.df$sample.well,"(?<=_)R.*(?=_.*stat)")
+indel.statistics.df$plate <- str_extract(indel.statistics.df$sample.well,"(?<=_P).")
+indel.statistics.df$well <- str_extract(indel.statistics.df$sample.well,"(?<=P._).*(?=.stat)")
+
+```
+
+
+```{r plotting the reads per plate}
+getwd()
+pdf("xv20200225_QCplot.pdf", width = 12, height = 4)
+for (i in unique(indel.statistics.df$sample)) {
+  
+  # Select the flowjo data set
+  data <- indel.statistics.df %>% filter(sample== i)
+  
+  limits <- c(5000,max(data$reads))
+
+  # Plot this, first the PI staining with a custom color-coded density
+  y <- density(data$reads)
+  plt1 <- ggplot(data.frame(x = y$x, y = y$y),
+                 aes(x = x, y = y)) +
+    geom_line() +
+    geom_segment(aes(xend = x, yend = 0, colour = x)) +
+    xlim(limits) + xlab("reads") + ylab("frequency") +
+    ggtitle(paste("Read counts -",
+                unique(data$sample))) +
+    scale_color_distiller(type = "div", limits = limits, name = "PI_area") +
+    theme_bw() +
+    theme(legend.position="none")
+  
+  # Then the plate with color-coded wells
+  plt2 <- raw_map(data$reads, 
+                 data$well) +
+    ggtitle(unique(data$sample)) +
+    scale_fill_distiller(type = "div", limits = limits, name = "reads")
+  grid.arrange(plt1, plt2, ncol = 2, widths = c(1, 1.3))
+}
+dev.off()
+```
+
+## Mapping QC  
+
+Here we will have a look at the mapping quality and some conflicts.
+These conflicts can be of different nature:
+- mismatch in the barcode
+- multiple alignments
+- barcode present in both pools
+ 
+### Diplicated integrations (mismatch in the barcode)  
+
+
+#### Manual curation
+
+Are there duplicated start positions. Basically the same integration but with a different barcode (due to sequencing/PCR errors)?  
+  
+## Data output pour the next scripts
+We need bedfiles of 1kb surrounding the integration sites for all the barcodes. The mapped barcodes from read 2 (A.2 and B.2)
+```{r}
+
+```
+
+# Session Info  
+```{r}
+sessionInfo()
+getwd()
+date()
+paste("Run time: ",format(Sys.time()-StartTime))
+
+```

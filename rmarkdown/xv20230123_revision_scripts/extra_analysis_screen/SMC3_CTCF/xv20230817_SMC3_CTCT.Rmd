@@ -1,0 +1,127 @@
+---
+title: "xv20230816_CTCF_SMC3"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to address reviers comment about SMC3/CTCF.
+
+One of the reviewers, as if we can explore how repair is carried out in SMC3/CTCF sites
+
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    readRDS(correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  readRDS(correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# libraries:
+library(tidyverse)
+library(dendextend)
+library(ggdendro)
+library(grDevices)
+library(pheatmap)
+library(reshape2)
+library(tibble)
+library(ggpubr)
+library(scales)
+library(ggrepel)
+library(ggdendro)
+```
+
+# Import data tables
+```{r import , warning=FALSE, message=FALSE}
+#setwd
+setwd(in.dir)
+# Individual data point (intermediate step)
+step2.epistasis <- readRDS_proof("data/processed_data/CCD_analysis","log2_MMEJNHEJ_differentials_chromatin_KO")
+```
+
+#Select IPRs in SMC3/CTCF sites
+```{r}
+#This is a prelliminary analysis, so it might be made in a dirty way
+ggplot(step2.epistasis %>% select(barcode, CTCF, SMC3)) + 
+  geom_point(aes(CTCF,SMC3)) +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_vline(xintercept = 0, linetype = 2)
+
+#I consider three IPRs that have a value above 0.5 for CTCF and SMC3
+SMC3_CTCF_bined <- step2.epistasis %>% select(gene, barcode, mean.log2foldchange, CTCF, SMC3) %>% 
+  mutate(bin_CTCF_SMC3 = case_when(CTCF > 0 & SMC3 > 0 ~ T,
+                                   T ~ F))
+
+```
+
+#Test per gene if three reporters have a higher or lower value than the rest
+```{r}
+#Genes in the screen
+genes_list <- SMC3_CTCF_bined %>% pull(gene) %>% unique()
+
+wilcox_test <- SMC3_CTCF_bined %>% 
+  group_by(gene) %>%
+  rstatix::wilcox_test(mean.log2foldchange ~ bin_CTCF_SMC3) %>% 
+  mutate(FDR = p.adjust(p, method = "fdr"))
+
+```
+
+#CONCLUSION: We don't see any protein that has specific role in these SMC3/CTCF sites but doesn't in others.

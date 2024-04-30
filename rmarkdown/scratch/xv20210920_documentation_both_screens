@@ -1,0 +1,7 @@
+# xv20210920 = Screening data file summary (sequencing runs)
+What are the right files? 
+
+Chromatin screen => GCF-5858 (R1 and R2) and GCF-5927 (R3 and plate4). R1 and R2 done in the same biological replicate and R3 as a biological 2
+DDR screen => GCF-6442 (R1) and GCF-6238 (R2 and R3)
+
+Matafile information: I put all the metafiles in the following directory - "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20210920_meta_files_both_screens"

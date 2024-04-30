@@ -1,0 +1,44 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Job counts:
+	count	jobs
+	1	all_chip_align
+	2	bamcompare
+	3	bw_coverage
+	2	call_domains
+	2	convert2gff
+	2	filter_blackgrey
+	1	filter_blackgrey_ctrl
+	2	idxstats
+	3	index
+	2	make_compare_bw
+	1	markdup
+	21
+
+[Wed Sep 15 11:51:07 2021]
+rule filter_blackgrey:
+    input: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/mapping/Bcells/Wu2021/PAR_GSE167259_r1_SRR13764821.bam, /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/greylist/SRR13764820-grey.bed, /DATA/projects/DSBrepair/data/mm10_blakclist/mm10.blacklist.bed.gz
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/filtered/Bcells/Wu2021/PAR_GSE167259_r1_SRR13764821.bam
+    jobid: 10
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, genome=mm10, celltype=Bcells, experiment=Wu2021, target=PAR, sample=GSE167259, rep=r1, srr_id=SRR13764821
+
+[Wed Sep 15 11:51:07 2021]
+rule filter_blackgrey_ctrl:
+    input: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/mapping/control/SRR13764820.bam, /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/greylist/SRR13764820-grey.bed, /DATA/projects/DSBrepair/data/mm10_blakclist/mm10.blacklist.bed.gz
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/filtered/control/SRR13764820.bam
+    jobid: 11
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping, genome=mm10, srr_id=SRR13764820
+
+[Wed Sep 15 11:51:07 2021]
+rule markdup:
+    input: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/mapping/Bcells/Wu2021/PARPARGi_GSE167259_r1_SRR13764822.bam.tmp
+    output: /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10/mapping/Bcells/Wu2021/PARPARGi_GSE167259_r1_SRR13764822.bam
+    jobid: 24
+    wildcards: outdir=/DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping/mm10, celltype=Bcells, experiment=Wu2021, target=PARPARGi, sample=GSE167259, rep=r1, srr_id=SRR13764822
+    threads: 10
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/import/.snakemake/log/2021-09-15T115106.950728.snakemake.log

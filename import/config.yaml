@@ -1,0 +1,81 @@
+chip_out:
+    /DATA/projects/DSBrepair/data/xv20210827_E1889_PAR_mapping
+
+experiment:
+    Bcells:
+        Wu2021:
+            PAR:
+                GSE167259:
+                    treatment:
+                        [SRR13764821]
+                    control:
+                        [SRR13764820]
+                    source: GEO
+                    control_type: No_damage
+                    SOFA: PARchain
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1038/s41586-021-03468-5 
+                    PMID: 33767446
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+
+            PARPARGi:
+                GSE167259:
+                    treatment:
+                        [SRR13764822]
+                    control:
+                        [SRR13764820]
+                    source: GEO
+                    control_type: No_damage
+                    SOFA: PARchainPARGi
+                    narrowPeak: False
+                    keep_duplicates: False
+                    DOI: 10.1038/s41586-021-03468-5 
+                    PMID: 33767446
+                    hiddendomain_width: [1000]
+                    hiddendomain_p: 0.9
+                    aligner: bowtie2
+                    track_bs: [1000]
+                    digestion: 'sonication'
+                    is_paired: False
+
+
+forge:
+    /DATA/usr/c.leemans/data/forge/
+
+
+
+macs2_gsize: 'mm'
+
+blacklist:
+    mm10: /DATA/projects/DSBrepair/data/mm10_blakclist/mm10.blacklist.bed.gz
+
+replicate_cor_method:
+    'pearson'
+
+min_mapq:
+    30
+
+chrom_sizes:
+    mm10: /DATA/data/mouse/mm10/mm10.chrom.sizes
+
+aligner_index:
+    bowtie2:
+        mm10: '/DATA/data/mouse/mm10/index/bowtie2/mm10_1-19_XYM'
+    # hg19: '/DATA/data/bowtie2/hg19_ch1-22_XYM'
+    bwa:
+        mm10: '/DATA/data/mouse/mm10/genome/fasta/mm10_1-19_XYM.fa'
+
+chip_genome:
+    - mm10
+
+# domain_means:
+#     LMNB1.5kb: /DATA/usr/t.v.schaik/proj/3D_nucleus/results/ts180110_4DN_DataProcessing/results/HMM/bin-5kb/K562_LMNB1-5kb-combined_HMM.txt.gz
+
+encode_http:
+    https://www.encodeproject.org/files/{enc_id}/@@download/{enc_id}.fastq.gz

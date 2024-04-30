@@ -1,0 +1,196 @@
+---
+title: "xv20230831_CCD_RPE1_validation"
+author: "Xabier Vergara"
+date: "2023-08-31"
+output: html_document
+---
+
+Aim: In this file, I will explore some of the possible plots, where I get general conclusions from K562 and RPE1wt data.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+# Import data
+
+```{r}
+#Proteins_validation
+proteins_gRNA <- tibble(gRNA = c("36","38","40","42","44","46","48","50","52","54","56","58","60","62","64","66","68","70","72","74"),
+                        gene = c("ATM","ATR","BLM","BOD1L1","BRCA2","BRCC3","CHAF1A","CHEK2","FAAP24","FANCD2","FANCG","FANCM","MDC1","PARP1","POLL","RAD50","RBBP8","RMI2","SMC5","TOPBP1"))
+
+#Processed data
+RPE1wt_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230831_CCD_summary_table_RPE1wt.rds") %>% left_join(proteins_gRNA) %>% mutate(chrom_feature = str_extract(pattern = "(?<=_).*", feature))
+K562_CCD <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220819_Table_S7_DR_screen_results.rds") %>% left_join(proteins_gRNA)
+
+#All log2_values
+RPE1wt_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230831_delta_log2_balance_RPE1wt.rds") %>% left_join(proteins_gRNA)
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% left_join(proteins_gRNA)
+
+#K562 data on proteins in the validation screen
+K562_validation_prots <- K562_CCD %>% na.omit() %>% filter(chrom_feature %in% c("H3K4me1","H3K36me3","LMNB1","H3K27me3"))
+
+#Prepare data table for this figure
+#Modify cell lines
+RPE1_modified <- RPE1wt_log2 %>% 
+  select(barcode,gRNA, gene, mean_diff, H3K4me1 = chip_H3K4me1, H3K36me3 = chip_H3K36me3, H3K27me3 = dam_H3K27me3, LMNB1 = dam_LMNB1) %>% 
+  mutate(cell_line = "RPE1")
+
+#K562_modified_data
+K562_modified <- K562_log2 %>% 
+  select(barcode,gRNA, gene, mean_diff=mean.log2foldchange, H3K4me1, H3K36me3, H3K27me3, LMNB1) %>% 
+  mutate(cell_line = "K562")
+
+#Generate a data frame for both
+combined <- bind_rows(RPE1_modified, K562_modified)
+
+
+```
+
+#Plot global effect similarity in RPE1 and K562 cells
+```{r, fig.width=6, fig.height = 3}
+#Gene order based on K562 data
+combined_order <- combined %>% na.omit() %>% dplyr::group_by(gene,gRNA) %>% dplyr::summarise(mean = mean(mean_diff)) %>% arrange(mean) %>% pull(gene) 
+
+ggplot(combined %>% na.omit()) +
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_diff,fill = fct_relevel(cell_line, c("RPE1","K562"))),  position = position_dodge2(preserve = "single"), geom = "bar", fun.data = "mean_sd") + 
+  stat_summary(aes(fct_relevel(gene,combined_order),mean_diff, group = fct_relevel(cell_line, c("RPE1","K562"))), position = position_dodge2(preserve = "single"), geom = "errorbar", fun.data = "mean_sd",width = 0.5) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   hjust = 1,
+                                   vjust = 0.5),
+        legend.position = "top",
+        axis.title.x = element_blank()) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylab("∆log2 MMEJ::NHEJ") +
+  labs(fill = "Cell line")
+
+```
+
+#Plot correlation of global effects
+```{r pressure, echo=FALSE}
+#Global effect correlation data
+global_effect_correlation <- RPE1wt_CCD %>% 
+  select(gene,gRNA,RPE_global = global_effect) %>% 
+  left_join(K562_validation_prots %>% 
+              select(gene,gRNA, K562_global = global_diff)) %>%
+  distinct()
+
+#Plot this global effect
+ggplot(global_effect_correlation,aes(RPE_global,K562_global, gene = gene)) + 
+  geom_smooth(method = "lm", se = F) +
+  geom_point() +
+  ggpubr::stat_cor() +
+  theme_bw() + 
+  geom_abline(linetype = 2) +
+  coord_fixed()
+
+```
+
+#Plot correlation of CCD effects (How similar are they?)
+```{r pressure, echo=FALSE}
+#Global effect correlation data
+CCD_effect_correlation <- RPE1wt_CCD %>%
+  filter(CCD_p.adj < 0.1) %>%
+  select(gene,gRNA,chrom_feature,RPE_CCD = CCD_value) %>% 
+  left_join(K562_validation_prots %>% 
+              select(gene,gRNA,chrom_feature, K562_CCD = CCD_synergy_score))
+
+#Calculate cosine distance per gene
+K562_RPE1_distance <- map_dfr(unique(CCD_effect_correlation$gene), function(x){
+  CCD_table <- CCD_effect_correlation %>%
+    filter(gene == x) %>%
+    select(RPE_CCD, K562_CCD) 
+  
+  #calculate concordance
+  cosine_value <- cosine(as.matrix(CCD_table))[1,2]
+  tibble(gene = x, cosine_dist = cosine_value)
+})
+
+#Bind to initial data table
+CCD_correlation_cosine <- CCD_effect_correlation %>% left_join(K562_RPE1_distance)
+
+```
+#Conclusion: Cosine distances look quite good overall
+
+#Conclusion: Most of the proteins we highlight in the screen, have similar synergies
+
+#Calculate cosine distance for all proteins
+```{r}
+all_validation <- RPE1wt_CCD %>%
+  select(gene,gRNA,chrom_feature,RPE_CCD = CCD_value,CCD) %>% 
+  left_join(K562_validation_prots %>% 
+              select(gene,gRNA,chrom_feature, K562_CCD = CCD_synergy_score))
+
+#Calculate cosine distance per gene
+K562_RPE1_distance_all <- map_dfr(unique(all_validation$gene), function(x){
+  CCD_table <- all_validation %>%
+    filter(gene == x) %>%
+    select(RPE_CCD, K562_CCD) 
+  
+  #calculate concordance
+  cosine_value <- cosine(as.matrix(CCD_table))[1,2]
+  tibble(gene = x, cosine_dist = cosine_value)
+})
+
+ggplot(K562_RPE1_distance_all %>% select(gene,cosine_dist) %>% distinct()) +
+  geom_col(aes(reorder(gene, dplyr::desc(cosine_dist)),cosine_dist), fill = ) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype =2) +
+  xlab("Protein") 
+
+```
+
+#Plot some of them as data points
+```{R}
+#Modify cell lines
+RPE1_modified <- RPE1wt_log2 %>% 
+  select(barcode,gRNA, gene, mean_diff, H3K4me1 = chip_H3K4me1, H3K36me3 = chip_H3K36me3, H3K27me3 = dam_H3K27me3, LMNB1 = dam_LMNB1) %>% 
+  mutate(cell_line = "RPE1")
+
+#K562_modified_data
+K562_modified <- K562_log2 %>% 
+  select(barcode,gRNA, gene, mean_diff=mean.log2foldchange, H3K4me1, H3K36me3, H3K27me3, LMNB1) %>% 
+  mutate(cell_line = "K562")
+
+#Generate a data frame for both
+combined <- bind_rows(RPE1_modified, K562_modified)
+
+#ATMko and LMNB1
+ggplot(combined %>% filter(gene == "ATM"),aes(LMNB1, mean_diff, color = cell_line)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+#PARP1ko and H3K27me3
+ggplot(combined %>% filter(gene == "PARP1"),aes(H3K4me1, mean_diff, color = cell_line)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+#SMC5ko and H3K27me3
+ggplot(combined %>% filter(gene == "SMC5"),aes(LMNB1, mean_diff, color = cell_line)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+#FANCD2ko and H3K27me3
+ggplot(combined %>% filter(gene == "FANCD2"),aes(LMNB1, mean_diff, color = cell_line)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+#BRCA2ko and H3K4me1
+ggplot(combined %>% filter(gene == "BRCA2"),aes(H3K4me1, mean_diff, color = cell_line)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+
+```
+#Conclusion: With very noisy data, we validated several phenotypes! I am not sure this will get better even if we sequence deeper. 
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

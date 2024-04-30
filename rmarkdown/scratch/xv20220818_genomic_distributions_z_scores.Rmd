@@ -1,0 +1,156 @@
+---
+title: "xv20220818_track_density_comparison"
+output: html_document
+date: "2022-08-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+```{r}
+#Directory
+setwd("/DATA/scratch/usr/c.leemans/projects/chip_snake/hg38/tracks/K562/")
+
+#All files
+chip.files <- list.files(path = "/DATA/scratch/usr/c.leemans/projects/chip_snake/hg38/tracks/K562/", pattern = "_fcoc.bw", recursive = T)
+files_2kb <- chip.files[grep("2kb", chip.files)]
+
+
+#SRR names
+SRR_numb <- c("SRR227661","SRR568431","SRR227378","SRR7070730","SRR2148301","SRR227643","SRR2085871","SRR2085875","SRR2085903","SRR2085877","SRR6010166","SRR6010173","SRR6010175","SRR502194","SRR502001","SRR5111542","SRR6213961","SRR5111049","SRR8659957")
+chip_samples_id <- unique (grep(paste(SRR_numb,collapse="|"), files_2kb, value=TRUE)) %>% str_extract("(?<=2kb/).*(?=_r)")
+
+#Select values with replicates averaged
+files_chip_samples <- unique (grep(paste(chip_samples_id, collapse = "|"), files_2kb, value=TRUE))
+files_names <- files_chip_samples[-grep(("_r.*_"), files_chip_samples)]
+file_names <- files_names[-grep(("Liu2018"), files_names)]
+
+length(file_names)
+#import all bw files to an object
+list_bw_files <- map(file_names, function (x) {
+path_name = paste0("/DATA/scratch/usr/c.leemans/projects/chip_snake/hg38/tracks/K562/",x)
+bw_ranges <- import.bw(con = path_name)
+})
+names(list_bw_files) <- file_names
+
+#Number of bins per sample
+bins_per_sample <- tibble(chip_sample = file_names,
+                          bin_numer = map_dbl(list_bw_files, length),
+                          zero_values = map_dbl(list_bw_files, function(x) {
+                                length(x[x$score == 0])}),
+                          min_value = map_dbl(list_bw_files, function(x) {
+                                min(x$score)}),
+                          max_value = map_dbl(list_bw_files, function(x) {
+                                max(x$score)}),
+                          mean_value = map_dbl(list_bw_files, function(x) {
+                                mean(x$score)}))
+
+range(bins_per_sample$bin_numer)*2000 #Pretty much the whole genome is binned
+range(bins_per_sample$zero_values)*2000 #On average a 10% of the genome has a 0 value
+
+#Z-score
+#Z-score normalized with zero values
+list_bw_z_score <- map(names(list_bw_files), function(x) {
+value_dt <- list_bw_files[[x]]
+value_dt$z_score <- scale(value_dt$score) %>% as.numeric()
+value_dt
+})
+names(list_bw_z_score) <- file_names
+
+#summary table
+bins_per_sample_z_score <- tibble(chip_sample = file_names,
+                          bin_numer = map_dbl(list_bw_z_score, length),
+                          zero_values = map_dbl(list_bw_z_score, function(x) {
+                                length(x[x$score == 0])}),
+                          min_value = map_dbl(list_bw_z_score, function(x) {
+                                min(x$score)}),
+                          max_value = map_dbl(list_bw_z_score, function(x) {
+                                max(x$score)}),
+                          mean_value = map_dbl(list_bw_z_score, function(x) {
+                                mean(x$score)}))
+
+#Z-score normalized with zero values
+list_bw_z_score_no_zero <- map(names(list_bw_files), function(x) {
+value_dt <- list_bw_files[[x]]
+filt_value_dt <- value_dt[value_dt$score != 0]
+filt_value_dt$z_score <- scale(filt_value_dt$score) %>% as.numeric()
+filt_value_dt
+})
+names(list_bw_z_score_no_zero) <- file_names
+#Number of bins per sample
+bins_per_sample_z_score_filt <- tibble(chip_sample = file_names,
+                          bin_numer = map_dbl(list_bw_z_score_no_zero, length),
+                          zero_values = map_dbl(list_bw_z_score_no_zero, function(x) {
+                                length(x[x$score == 0])}),
+                          min_value = map_dbl(list_bw_z_score_no_zero, function(x) {
+                                min(x$score)}),
+                          max_value = map_dbl(list_bw_z_score_no_zero, function(x) {
+                                max(x$score)}),
+                          mean_value = map_dbl(list_bw_z_score_no_zero, function(x) {
+                                mean(x$score)}))
+
+```
+
+#Put all density values as tibble
+```{r}
+#Z-score normalized with zero values
+density_z_scores <- map_dfr(names(list_bw_z_score), function(j) {
+value_dt <- list_bw_z_score[[j]]
+density_dt <- density(value_dt$z_score)
+tibble(filename = j, distrib = "genome_zero", z_score = density_dt$x, freq = density_dt$y)
+})
+
+#Z-score normalized with zero values
+density_z_scores_no_zero <- map_dfr(names(list_bw_z_score_no_zero), function(j) {
+value_dt <- list_bw_z_score_no_zero[[j]]
+density_dt <- density(value_dt$z_score)
+tibble(filename = j, distrib = "genome_no_zero", z_score = density_dt$x, freq = density_dt$y)
+})
+
+#Pools
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+density_z_scores_IPR <- map_dfr(colnames(clone5_z.score_chrom_tib)[4:28], function(j) {
+value_dt <- clone5_z.score_chrom_tib %>% pull(j)
+density_dt <- density(value_dt)
+tibble(filename = paste0("IPR_",j), distrib = "TRIP_pools", z_score = density_dt$x, freq = density_dt$y)
+})
+
+```
+
+#Combine all values
+```{r}
+# Bind all data frames
+bind_distribution_values <- bind_rows(density_z_scores,density_z_scores_no_zero,density_z_scores_IPR) %>% 
+  mutate(feature = case_when(distrib != "TRIP_pools" ~ str_extract(filename, "(?<=2kb/).*(?=_.*_)"),
+                             T ~ str_extract(filename, "(?<=IPR_).*")))
+```
+
+#Plot
+```{r}
+ggplot(bind_distribution_values) + geom_line(aes(z_score,freq,color = distrib)) + facet_wrap(~feature)
+```
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

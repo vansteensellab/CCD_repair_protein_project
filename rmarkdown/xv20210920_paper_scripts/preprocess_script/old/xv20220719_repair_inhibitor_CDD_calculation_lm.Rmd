@@ -51,6 +51,7 @@ library(pls)
 library(broom)
 library(stats)
 library(utils)
+library(parallel)
 ```
 
 # Import raw indel counts from snakemake pipeline from C. Leemans

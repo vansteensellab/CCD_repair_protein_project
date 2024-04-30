@@ -1,0 +1,40 @@
+
+Update: 20220801
+Files created during the DR screen and analysis of chromatin context dependent effects
+All files will include datetags that show the date they were generated. Older versions will be moved to 'old_files' directory.
+This directory only contains intermediate files. Table S3 that includes main results of the screen are in the main folder.
+
+File list:
+screening_raw_data_repair_metrics.rds - This file includes raw CRISPR efficiencies and log2MMEJNHEJ balances
+differentials_log2_MMEJ_NHEJ_balance.rds - This file includes all the log2 transformed MMEJNHEJ balance scores
+z_test_null_distribution_parameters.rds - This file includes paramenter to calculate the mock KO fitted normal distribution
+z_test_per_replicate_transformation.rds - This file includes z-score transformed data for each replicate
+z_test_final_values.rds - This file includes all final z-scores used to assess significance
+log2_MMEJNHEJ_differentials_chromatin_KO - This file includes ∆log2 MMEJ:NHEJ scores for each IPR-KO combination and chromatin scores
+global_diff_MMEJNHEJ - This file includes all global changes
+-----------------------------------|
+Update: 20220801
+Files created during the DR screen and analysis of chromatin context dependent effects
+All files will include datetags that show the date they were generated. Older versions will be moved to 'old_files' directory.
+This directory only contains intermediate files. Table S3 that includes main results of the screen are in the main folder.
+
+File list:
+screening_raw_data_repair_metrics.rds - This file includes raw CRISPR efficiencies and log2MMEJNHEJ balances
+differentials_log2_MMEJ_NHEJ_balance.rds - This file includes all the log2 transformed MMEJNHEJ balance scores
+z_test_null_distribution_parameters.rds - This file includes paramenter to calculate the mock KO fitted normal distribution
+z_test_per_replicate_transformation.rds - This file includes z-score transformed data for each replicate
+z_test_final_values.rds - This file includes all final z-scores used to assess significance
+log2_MMEJNHEJ_differentials_chromatin_KO - This file includes ∆log2 MMEJ:NHEJ scores for each IPR-KO combination and chromatin scores
+----------------------------------|
+Files created during the CCD analysis of DR proteins.
+All files will include datetags that show the date they were generated. Older versions will be moved to 'old_files' directory.
+This directory only contains intermediate files. Data tables that were used to generate final figures are in the main folder.
+
+File list:
+log2_MMEJ_NHEJ_ratios.rds - This file includes all the log2 transformed MMEJNHEJ balance scores
+z_scores_IPR_log2.rds - This file includes z-score normalized values for each IPR. This file is used to filter out proteins that do not perturb MMEJ:NHEJ balance
+fold_change_ratio_KO.rds - (Main folder) This file includes log2 fold change of KO proteins per IPR
+fold_change_ratio_WT.rds - This file includes log2 fold change of NT samples per IPR
+fold_change_ratio_POLQ.rds - This file includes log2 fold changes of POLQ KO (positive control) samples per IPR
+CCD_model_values_NT.rds - This file includes principal component regression p-values for NT controls.
+DR_KO_CCD_summary.rds - (Main folder) This file includes all values needed for DR protein KO CCDs. This is the file that I mainly use for figure generation.

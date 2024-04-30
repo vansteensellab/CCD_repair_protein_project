@@ -1,0 +1,832 @@
+---
+title: "Figure 6 and supplementary figure 6"
+author: "Ruben Schep"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# knitr document van Steensel lab
+```{r}
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+## Select outdir
+out.dir = paste0("figures/rs", Date, "/")
+dir.create(out.dir)
+opts_chunk$set(dev=c('png', 'pdf'), fig.path = file.path(out.dir))
+pdf.options(useDingbats = FALSE)
+```
+
+# Introduction
+
+## Description of Data
+
+# Data processing
+## Path, Libraries, Parameters and Useful Functions
+```{r setup, message=FALSE, warnings=FALSE}
+# INPUT DIRECTORY
+in.dir.date = 20210202
+in.dir = paste0("/DATA/projects/DSBrepair/data/R/rs", in.dir.date, "/")
+
+# libraries:
+library(ggplot2)
+library(GenomicRanges)
+library(rtracklayer)
+library(ggpubr)
+library(ggbeeswarm)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(cowplot)
+library(stringr)
+library(report)
+
+clone5barcodes <- c("AGGGCGTAAAATATTT.B",
+                    "TATGGCTGTCGGGTAG.B",
+                    "TGTCCCTTAGTACTTT.B",
+                    "AGAAAATAATATGACG.B",
+                    "CGGCCTGAAGGTCAGG.B",
+                    "TTGAACGCGGGCTCGG.B",
+                    "GCTAACATCACGAATC.B",
+                    "GCGCACCCTTTAATTG.B",
+                    "ACTGTCGAGTTGTCCG.B",
+                    "CCGGGGACGTATGCAC.B",
+                    "TCTTTTGAGGAGCTGA.B",
+                    "ATATCGTTGCTGGAGA.B",
+                    "CATCCACCACACTTCA.B",
+                    "ACCCCTAAAGGCGCTG.B",
+                    "ATACTATATTTAACGG.B",
+                    "CATTTCTGATCAATAA.B",
+                    "GAGCGCGTCACCGGGT.B",
+                    "GTACCTCTCGATAGTG.B",
+                    "TGGCCAATATTTGTCT.B")
+
+```
+
+### Custom functions
+Functions used thoughout this script.
+```{r functions, message=FALSE, warnings=FALSE}
+cor_test <- function(y, X, left, right){
+  cor_list = lapply(X, function(x){
+    cor.test(x,y)
+  })
+  p_vec = unlist(lapply(cor_list, function(x){x$p.value}))
+  cor_vec = unlist(lapply(cor_list, function(x){x$estimate}))
+  p_adj = p.adjust(p_vec)
+  color = ifelse(p_adj < 0.05, ifelse(cor_vec > 0, left, right),
+                 'None')
+  importance = abs(cor_vec)
+  target=factor(colnames(X), levels=rownames(clustering))
+  feature_group = clustering[colnames(X), ]
+  return(list(correlation=cor_vec,importance = importance, p=p_vec,
+              p_adj=p_adj, target=target, color=color,
+              feature_group=feature_group))
+}
+
+
+get_combinations <- function(domain_vec){
+  n_domain = length(domain_vec)
+  get_ivec <-function (last_x, n_domain){
+    if (last_x < n_domain){
+      i_vec = c(0, c((last_x+1):n_domain))
+    } else{
+      i_vec = c(0)
+    }
+  }
+  
+  combine <- function(x_new, x_vec, n_domain){
+    new_vec = c(x_vec, x_new)
+    if (length(new_vec)==n_domain){
+      return(new_vec)
+    } else {
+      i_vec = get_ivec(max(new_vec), n_domain)
+      x_list = lapply(i_vec, combine, x_vec=new_vec,
+                      n_domain=n_domain)
+      return(do.call(rbind, x_list))
+    }
+  }
+  
+  comb_list = lapply(c(0:n_domain), combine, x_vec=c(), n_domain=n_domain)
+  
+  comb = do.call(rbind, comb_list)
+  comb_df = unique(t(apply(comb, 1, function(x){x[order(x)]})))
+  
+  name_list = apply(comb_df, 1, function(x){
+    name = paste(domain_vec[x], collapse='-')
+    if (name == ''){
+      name = 'iDomain'
+    }
+    return(name)
+  })
+  
+  opt_list = lapply(domain_vec, function(d){
+    apply(comb_df, 1, function(x){
+      opt = domain_vec[x]
+      return(d%in%opt)
+    })
+  })
+  
+  opt_df = do.call(cbind, opt_list)
+  colnames(opt_df) = domain_vec
+  rownames(opt_df) = name_list
+  
+  return(opt_df)
+}
+
+test_wilcox <- function(dt, group_by='condition', y_name='MMEJ_MMEJNHEJ'){
+  bc_vec = dt[,unique(barcode)]
+  name1 = unlist(unique(dt[,group_by, with=F])[1])
+  dt_c = dt[get(group_by)==eval(name1), ]
+  dt_s = dt[get(group_by)!=eval(name1), ]
+  setkey(dt_c, 'barcode')
+  setkey(dt_s, 'barcode')
+  
+  w = wilcox.test(unlist(dt_c[bc_vec,..y_name]),
+                  unlist(dt_s[bc_vec,..y_name]),
+                  paired=T)
+  return(list(p_value = w$p.value))
+}
+
+
+
+plot_comb_grid_beeswarm <- function(dt, opt_df, domains, y_name, min_count=0,
+                                    max_count=Inf, group_by=NULL, color=NULL, y_plabel=c(-1.5, 1.5)){
+  
+  opt_melt = reshape2::melt(opt_df)
+  colnames(opt_melt) = c('group', 'domain', 'is_in')
+  
+  opt_melt$is_in = ifelse(opt_melt$is_in, 'in', 'out')
+  opt_melt$domain = factor(opt_melt$domain, levels=domains)
+  
+  
+  group_list = lapply(rownames(opt_df), function(opt_name){
+    opt = opt_df[opt_name, ]
+    in_vec = domains[opt]
+    out_vec = domains[!opt]
+    
+    in_sum = rowSums(dt[,..in_vec])
+    out_sum = rowSums(dt[,..out_vec])
+    if (length(in_vec)==0){
+      in_group = which(out_sum == 0)
+    } else if (length(out_vec) == 0){
+      in_group = which(in_sum==length(in_vec))
+    } else  {
+      in_group = which(in_sum == length(in_vec) & out_sum==0)
+    }
+    return(in_group)
+  })
+  
+  names(group_list) = rownames(opt_df)
+  for (opt_name in names(group_list)){
+    i_vec = group_list[[opt_name]]
+    dt[i_vec, group := opt_name]
+  }
+  if (is.null(group_by)){
+    group_count_df = data.frame(dt[,table(group)])
+  } else {
+    group_count_df = data.frame(dt[,table(group)/length(unique(get(group_by)))])
+  }
+  group_count_df = group_count_df[order(match(group_count_df$group, rownames(opt_df))),]
+  # print(group_count_df)
+  group_count_sel = group_count_df[group_count_df$Freq>=min_count,]
+  group_count_sel = group_count_sel[group_count_sel$Freq<=max_count,]
+  group_levels =  group_count_sel$group
+  opt_sel = opt_melt[opt_melt$group %in% group_levels, ]
+  
+  opt_sel$group = factor(opt_sel$group, levels=group_levels)
+  # print(opt_sel)
+  
+  indel_selection = dt[group%in%group_levels, ]
+  indel_selection[,group:=factor(group, levels=group_levels)]
+  
+  # wilcox_list = lapply(group_levels[group_levels!='iDomain'],
+  #                      function(g){
+  #                          x = indel_selection[group==g, y_name, with=F]
+  #                          y = indel_selection[group=='iDomain', y_name,
+  #                                              with=F]
+  #                          wilcox.test(unlist(x),unlist(y))
+  #                      })
+  
+  group_count_sel$group = factor(group_count_sel$group, levels=group_levels)
+  
+  count_plot = ggplot(group_count_sel, aes(x=group,y=1, label=Freq)) +
+    geom_label() +
+    theme_void()
+  
+  
+  
+  dots = ggplot(opt_sel, aes(x=group, y=domain, color=is_in)) +
+    geom_point(size=2) +
+    geom_line(data=opt_sel[opt_sel$is_in=='in',], aes(group=group)) +
+    theme_bw() +
+    scale_color_manual(values=c('in'='black', 'out'='grey70')) +
+    guides(color=FALSE)  +
+    geom_vline(xintercept=seq(1.5, length(unique(dt$group))-0.5, 1),
+               lwd=0.5, colour="grey90") +
+    theme(axis.title=element_blank(),
+          axis.text=element_blank(),
+          axis.ticks=element_blank(),
+          panel.grid.major = element_blank())
+  
+  symnum = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+                symbols = c("****", "***", "**", "*", " "))
+  
+  
+  if (is.null(group_by)){
+    beeswarm = ggplot(indel_selection, aes_string(x='group', y=y_name)) +
+      geom_quasirandom(width=0.3) +
+      stat_summary(fun=median, fun.min = median,
+                   fun.max = median,
+                   geom="crossbar", width = 0.5,
+                   color='red') +
+      stat_compare_means(aes(label = ..p.signif..),
+                         symnum.args = symnum,
+                         method = 'wilcox.test',
+                         ref.group='iDomain')
+    
+  } else {
+    wilcox_dt = indel_selection[,test_wilcox(.SD, group_by, y_name),
+                                by='group']
+    wilcox_dt[,p_adj:=p.adjust(p_value)]
+    wilcox_dt[,p_signif:=symnum(p_adj, cutpoints=symnum$cutpoints,
+                                symbols=symnum$symbols)]
+    
+    
+    beeswarm = ggplot(indel_selection,
+                      aes_string(x='group', y=y_name, color=group_by)) +
+      geom_quasirandom(dodge.width=1) +
+      scale_color_manual(values=color) +
+      stat_summary(aes_string(group=group_by), fun=median,
+                   fun.min = median, fun.max = median,
+                   geom="crossbar", width = 0.5,
+                   color='red',
+                   position= position_dodge(width =1)) +
+      geom_text(data=wilcox_dt, aes(x=group, y=0.8, label=p_signif),
+                inherit.aes=F)
+    print(wilcox_dt)
+  }
+  beeswarm = beeswarm +
+    theme_bw() +
+    geom_vline(xintercept=seq(1.5, length(unique(dt$group))-0.5, 1),
+               lwd=0.5, colour="grey90") +
+    theme(axis.title=element_blank(),
+          axis.text.x=element_blank(),
+          panel.grid.major.x = element_blank(),
+          axis.ticks.x=element_blank()) +
+    ylim(y_plabel)
+  
+  count = data.frame(domain=gsub('_domain', '', domains),
+                     count=colSums(dt[,..domains], na.rm=T))
+  
+  count$domain = factor(count$domain, levels=domain_levels)
+  
+  histogram = ggplot(count, aes(x=1, y=domain, label = count)) +
+    geom_label() +
+    theme_bw() +
+    theme(plot.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          axis.title=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks=element_blank())
+  
+  empty = ggplot(data=data.frame(1,1),aes(x=1,y=1)) +
+    geom_point() +
+    theme_void()
+  
+  count_beeswarm = plot_grid(beeswarm, count_plot, ncol=1, rel_heights=c(20,1),
+                             align='v', axis='lr')
+  return(plot_grid(empty, beeswarm, empty, count_plot,
+                   histogram, dots, nrow=3,
+                   rel_widths=c(1,10), rel_heights=c(15,1,5), align='vh',
+                   axis='tlbr'))
+}
+
+
+PlotDataTracks <- function(bins, chr = "chr1", start = 1, end = 1e6, samples = NA, ipr_loc = 1, cols = NA) {
+  
+  # Get the data
+  data <- bins[seqnames(bins) == chr & 
+                 start(bins) >= start & 
+                 end(bins) <= end,]
+  
+  data <- as(data, "data.frame")
+  
+  if (any(!is.na(samples))) {
+    samplecols = which(colnames(data) %in% samples)
+    data <- data[, c(1:5, samplecols)]
+  } 
+  
+  # Melt the data
+  data.melt <- reshape2::melt(data, id.vars = c("seqnames", "start", "end", "width", "strand"))
+  data.melt <- data.melt[complete.cases(data.melt), ]
+  
+  # Plot the data
+  plt <- ggplot(data.melt, aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0, ymax = value,
+                               fill = variable)) +
+    geom_rect() +
+    geom_hline(yintercept = 0, size = 0.5) +
+    facet_grid(variable ~ .) +
+    xlab(paste0(chr, " (Mb)")) +
+    ylab("Score") +
+    geom_vline(xintercept = ipr_loc / 1e6) +
+    scale_x_continuous(expand = c(0, 0)) + 
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_fill_manual(values = cols) +
+    theme_classic()
+  
+  plot(plt)
+  
+}
+```
+
+# Data import
+```{r import, message=FALSE, warnings=FALSE}
+trip_tib_mut_2000 = readRDS(paste0(in.dir, "RSTP2_Indel_Chromatin_2kb.RDS"))
+trip_tib_2000 = readRDS(paste0(in.dir, "RSTP2_IndelRatios_Chromatin_2kb.RDS"))
+load(paste0(in.dir, "Analyis_Mapping_RSTP2_2000.RData"))
+
+
+# load(paste0(in.dir, "RSTP2_Indel_Chromatin_2kb.RData"))
+# load(paste0(in.dir, "RSTP2_IndelRatios_Chromatin_2kb.RData"))
+
+
+clone5_domains <- readRDS("/DATA/projects/DSBrepair/data/R/rs20200311_domains_clone5.RDS")
+
+ipr_order = c("IPR16", "IPR6", "IPR14", "IPR7", "IPR17", "IPR13", 
+              "IPR8", "IPR9", "IPR12", "IPR11", "IPR2", "IPR10", 
+              "IPR1", "IPR18", "IPR4", "IPR15", "IPR5", "IPR19", 
+              "IPR3")
+
+clone5_domains[,IPR:=factor(IPR, levels=ipr_order)]
+```
+
+```{r import pAdamID data, message=FALSE, warnings=FALSE}
+# Load the data sets required
+file_names <- c(#"LMNA_KO", 
+  "LMNA_KO1", "LMNA_KO2", "LMNA_KO3","LMNA_KO4",
+  #"LBR_KO", 
+  "LBR_KO1", "LBR_KO2", "LBR_KO3", "LBR_KO4",
+  "Clone5")
+
+# pAdam_dir = '/DATA/usr/t.v.schaik/proj/lamin_KO/ts200329_Ruben_clones_pADamID/results/tracks/normalized/bin-20kb/'
+# file_list = list.files(pAdam_dir, pattern='combined.bw', full.names=T)
+
+
+pAdam_dir = '/DATA/projects/DSBrepair/data/tracks_20200415/track/'
+file_list = list.files(pAdam_dir, pattern='20kb.bw', full.names=T)
+
+# LMNA_KO = import(file_list[])
+LMNA_KO1 = import(file_list[8]) 
+LMNA_KO2 = import(file_list[9])
+LMNA_KO3 = import(file_list[10])
+LMNA_KO4 = import(file_list[11])
+
+# LBR_KO = import(file_list[5])
+LBR_KO1 = import(file_list[4])
+LBR_KO2 = import(file_list[5])
+LBR_KO3 = import(file_list[6])
+LBR_KO4 = import(file_list[7])
+
+Clone5 = import(file_list[12])
+
+data_tracks <- list(#LMNA_KO, 
+  LMNA_KO1, LMNA_KO2,LMNA_KO3, LMNA_KO4,
+  #LBR_KO, 
+  LBR_KO1, LBR_KO2, LBR_KO3, LBR_KO4,
+  Clone5)
+names(data_tracks) <- file_names
+
+# Let's combine the various bigwig files into one
+# First, create a GRanges with all the bins
+bins <- read.table("/DATA/scratch/usr/t.v.schaik/proj/tests/results/ts180813_GCF5083_pADamIDtests/results/counts/bin-20kb/pADamID-Hap1_r4_Dam_semibad-Dam-20kb.counts.txt.gz",
+                   sep = "\t")[, 1:3]
+names(bins) <- c("seqnames", "start", "end")
+bins$start <- bins$start + 1
+bins <- as(bins, "GRanges")
+
+# Add the data
+mcols(bins)[, file_names] <- NA 
+
+for (i in file_names) {
+  track <- data_tracks[[i]]
+  ovl <- findOverlaps(track, bins)
+  mcols(bins)[subjectHits(ovl), i] <- (track$score[queryHits(ovl)] - mean(track$score)) / sd(track$score)
+}
+
+
+# add mean of each KO for plotting
+bins$LMNA_KO = rowMeans(as(mcols(bins)[, c("LMNA_KO1", "LMNA_KO2", "LMNA_KO3", "LMNA_KO4")],"data.frame"), na.rm = T)
+bins$LBR_KO = rowMeans(as(mcols(bins)[, c("LBR_KO1", "LBR_KO2", "LBR_KO3", "LBR_KO4")],"data.frame"), na.rm = T)
+
+
+```
+
+```{r christ damid data processing}
+dam_list = list.files('/DATA/projects/DSBrepair/data/tracks_20200415/dam/',
+                      pattern='clone_set-.*LMNB2-', full.names=T)
+
+file_dt = data.table(str_match(dam_list, '.*clone_set-([0-9]+).*-(.*).txt'))
+
+colnames(file_dt) = c('file', 'binsize', 'KO')
+file_dt[,binsize:=as.numeric(binsize)]
+
+dam_dt = file_dt[, fread(file,stringsAsFactors=F), by=c('binsize', 'KO')]
+
+
+# bw_list = lapply(dam_dt[binsize!=2000,unique(binsize)], function(bs){
+#         dir = paste0('/DATA/usr/t.v.schaik/proj/lamin_KO/',
+#                      'ts200329_Ruben_clones_pADamID/results/',
+#                      'tracks/normalized/bin-', as.numeric(bs)/1000, 'kb/')
+#         list.files(dir, pattern='combined', full.names=T)
+#     })
+# 
+# bw_dt = data.table(str_match(unlist(bw_list), '.*bin-([0-9]+)kb.*_5_(.*)_LMNB2.*'))
+# colnames(bw_dt) = c('file', 'kb', 'KO')
+# bw_dt[, binsize := 1000 * as.numeric(kb)]
+# 
+# locations = fread('/DATA/projects/DSBrepair/data/cl20200421_mapped_barcodes_clones.tsv',
+#                   stringsAsFactors=F,
+#                   col.names=c('seqnames', 'end', 'barcode', 'clone'))
+# locations[,start:=end-1]
+# 
+# bc_gr = makeGRangesFromDataFrame(locations, keep.extra.columns=T)
+# 
+# find_overlaps <- function(bw_file, bc_gr){
+#     bw_gr=import.bw(bw_file)
+#     o = distanceToNearest(bc_gr, bw_gr)
+#     return(data.table(barcode=bc_gr$barcode,
+#                       score=score(bw_gr[subjectHits(o)]),
+#                       dist=mcols(o)$distance))
+# }
+# 
+# track_score = bw_dt[, find_overlaps(file, bc_gr), by=c('binsize', 'KO')]
+# 
+# 
+# dam_merge = merge(dam_dt, track_score, by.x=c('name', 'binsize', 'KO'),
+#                   by.y=c('barcode', 'binsize', 'KO'))
+```
+
+
+## Data loading
+
+```{r preprocess experiments}
+trip_tib_mut <- copy(trip_tib_2000)
+trip_tib_2000 <- trip_tib_2000 %>% distinct(barcode, exp, .keep_all = TRUE)
+
+trip_tib <- trip_tib_2000 %>%
+  filter(exp_pool  %in% c("mean_RSTP2_2000_LBR2_64",
+                          "mean_RSTP2_2000_LBR2_BIX01294_64",
+                          "mean_RSTP2_2000_LBR2_DMSOGSK_64",
+                          "mean_RSTP2_2000_LBR2_GSK126_64"))
+
+trip_tib_mut <- trip_tib_mut_2000 %>%
+  filter(exp_pool %in% c("mean_RSTP2_2000_LBR2_64",
+                         "mean_RSTP2_2000_LBR2_BIX01294_64",
+                         "mean_RSTP2_2000_LBR2_DMSOGSK_64",
+                         "mean_RSTP2_2000_LBR2_GSK126_64"))
+
+mean_trip_tib_2000 <- trip_tib_2000 %>%
+  gather(NHEJ, MMEJ, other_indels, key = "pathway", value = 'ratios') %>%
+  distinct(barcode, exp, pathway, .keep_all = TRUE)
+
+mean_trip_tib_2000$pathway <- factor(mean_trip_tib_2000$pathway, levels=c("other_indels", "MMEJ", "NHEJ"))
+mean_trip_tib_2000 <- mean_trip_tib_2000[!is.na(mean_trip_tib_2000$ratios), ]
+```
+# Figures
+## Main Figures
+
+### Panel A
+```{r Fig6A, fig.height=5, fig.width=7}
+domain_levels = c('late_replicating', 'LAD', 'H3K9me2', 'H3K27me3')
+
+domains = paste0(domain_levels, '_domain')
+
+indel.dt = trip_tib %>% filter(drug %in% c("DMSO_GSK", "GSK126"), cell_line == "RSTP2_2000") %>%
+  dplyr::select(barcode, drug, MMEJ_MMEJNHEJ, domains) %>%
+  spread(drug, MMEJ_MMEJNHEJ) %>%
+  filter(!is.na(GSK126), !is.na(DMSO_GSK)) %>%
+  mutate(GSK_ratio = log2(GSK126/DMSO_GSK)) %>%
+  distinct(barcode, .keep_all = TRUE) %>%
+  data.table()
+
+dim(indel.dt)
+
+indel.dt[indel.dt=='iDomain'] <- 0
+indel.dt[indel.dt=='Domain'] <- 1
+
+indel.dt[is.na(LAD_domain), LAD_domain:=0]
+
+indel.dt[, (domains) := lapply(.SD, as.numeric), .SDcols = domains]
+
+colnames(indel.dt) = gsub('_domain', '', colnames(indel.dt))
+
+opt_df = get_combinations(domain_levels)
+
+# Ratio of SSTR vs MME
+plot_comb_grid_beeswarm(indel.dt, opt_df,
+                        domain_levels, 'GSK_ratio', min_count = 1, y_plabel=c(-1.5, 1.5))
+
+k27me3 = indel.dt %>% filter(late_replicating == 0, 
+                             LAD == 0,
+                             H3K9me2 == 0,
+                             H3K27me3 == 1) %>% 
+  pull(GSK_ratio)
+
+hetcomb = indel.dt %>% filter(late_replicating == 1, 
+                              LAD == 1,
+                              H3K9me2 == 1,
+                              H3K27me3 == 0) %>% 
+  pull(GSK_ratio)
+
+idomain = indel.dt %>% filter(late_replicating == 0, 
+                              LAD == 0,
+                              H3K9me2 == 0,
+                              H3K27me3 == 0) %>% 
+  pull(GSK_ratio)
+
+wilcox.test(idomain, k27me3)
+wilcox.test(idomain, hetcomb)
+```
+
+
+### Panel B
+```{r Fig6B, fig.height= 4, fig.width= 8}
+trip_tib_KO = trip_tib_2000 %>%
+  filter(exp_pool %in% c("mean_RSTP2_clone5_LBR_KO_1_LBR2_LBR_KO_1_72", "mean_RSTP2_clone5_LBR_KO_2_LBR2_LBR_KO_2_72", 
+                         "mean_RSTP2_clone5_LBR_KO_3_LBR2_LBR_KO_3_72", "mean_RSTP2_clone5_LBR_KO_4_LBR2_LBR_KO_4_72", 
+                         "mean_RSTP2_clone5_LMNA_KO_1_LBR2_LMNA_KO_1_72", "mean_RSTP2_clone5_LMNA_KO_2_LBR2_LMNA_KO_2_72", 
+                         "mean_RSTP2_clone5_LMNA_KO_3_LBR2_LMNA_KO_3_72", "mean_RSTP2_clone5_LMNA_KO_4_LBR2_LMNA_KO_4_72", 
+                         "mean_RSTP2_clone5_LBR2_KOCTRL1_72", 
+                         "mean_RSTP2_clone5_LBR2_KOCTRL2_72", 
+                         "mean_RSTP2_clone5_LBR2_KOCTRL3_72"),
+         barcode %in% clone5barcodes) %>%
+  distinct(barcode, exp_pool, .keep_all = TRUE) %>% 
+  mutate(KO = ifelse(drug %in% c("LMNA_KO_1",
+                                 "LMNA_KO_2",
+                                 "LMNA_KO_3",
+                                 "LMNA_KO_4"), 
+                     "LMNA_KO", 
+                     ifelse(drug %in% c("LBR_KO_1", 
+                                        "LBR_KO_2",
+                                        "LBR_KO_3",
+                                        "LBR_KO_4"), 
+                            "LBR_KO", 
+                            "Clone5")))
+
+indel.dt.LBRKO = trip_tib_KO %>%
+  dplyr::select(barcode, drug, MMEJ,NHEJ, LMNB1) %>%
+  mutate(NHEJMMEJratio = log2(NHEJ/MMEJ)) %>%
+  dplyr::group_by(drug,barcode) %>%
+  dplyr::summarise(mean.pert = mean(NHEJMMEJratio, na.rm = T),
+                   ID = gsub(".B","", barcode)) 
+
+wt.indel.dt.LBRKO <- filter(indel.dt.LBRKO, grepl("CTR",drug)) %>% group_by(ID) %>% dplyr::summarise(wt.mean.pert = mean(mean.pert, na.rm = T))
+
+epistasis.LBRKO <- indel.dt.LBRKO %>% left_join(wt.indel.dt.LBRKO) %>% mutate(log2.fc.LBR = mean.pert - wt.mean.pert) %>% left_join(clone5_z.score_chrom_tib)
+
+
+
+
+wt.LBRKO <- filter(indel.dt.LBRKO, grepl("CTR",drug)) 
+  
+  
+
+
+
+ko_group_colors = c("LMNA_KO" = "#f9b016",
+                    "LBR_KO" = "#006c68",
+                    "Clone5" = "black")
+
+clone5_domains
+
+ko_colors = c("LMNA_KO_1" = "#f9b016",
+              "LMNA_KO_2" = "#f9b016",
+              "LMNA_KO_3" = "#f9b016",
+              "LMNA_KO_4" = "#f9b016",
+              "LBR_KO_1" = "#006c68", 
+              "LBR_KO_2" = "#006c68",
+              "LBR_KO_3" = "#006c68",
+              "LBR_KO_4" = "#006c68",
+              "KOCTRL1" = "black",
+              "KOCTRL2" = "black",
+              "KOCTRL3" = "black")
+
+ko_group_colors = c("LMNA_KO" = "#f9b016",
+                    "LBR_KO" = "#006c68",
+                    "Clone5" = "black")
+
+trip_tib_KO_domains = trip_tib_KO %>% 
+  left_join(clone5_domains, by = "barcode") %>%  # add clone5 domains to table
+  mutate(KO_clone = gsub('(.*)_KO_([0-9]+)', '\\1\\2', drug)) # make KO_clone colum
+
+trip_tib_KO_domains[trip_tib_KO_domains$group == "iDomain", ]$group <- "euchromatin" 
+trip_tib_KO_domains[trip_tib_KO_domains$group == "LAD-H3K9me2", ]$group <- "other"
+trip_tib_KO_domains[trip_tib_KO_domains$group == "late_replicating-H3K9me2", ]$group <- "other"
+trip_tib_KO_domains[trip_tib_KO_domains$group == "late_replicating", ]$group <- "other"
+trip_tib_KO_domains[trip_tib_KO_domains$group == "late_replicating-LAD-H3K9me2", ]$group <- "triple"
+
+group_colors = c("euchromatin" = "#f7941d",
+                 "other" = "#838687",
+                 "triple" = "#662d91",
+                 "H3K27me3" = "#d21f8a")
+```
+
+
+
+
+```{r Fig6D, fig.height= 4, fig.width= 6}
+clone5_domains_damid = clone5_domains %>% left_join(analysis.mapped.integrations.df, by = "barcode")
+
+ipr = clone5_domains_damid %>% filter(IPR == "IPR17")
+
+PlotDataTracks(bins, 
+               chr = ipr$seqname, 
+               start = plyr::round_any(ipr$start, 20000)-2e6, 
+               end =  plyr::round_any(ipr$start, 20000)+2e6,
+               samples = c("LMNA_KO", "LBR_KO", "Clone5"),
+               ipr_loc = ipr$start, cols = ko_group_colors)
+
+```
+
+```{r Fig6E, fig.height= 4, fig.width= 6}
+clone5_domains_damid = clone5_domains %>% left_join(analysis.mapped.integrations.df, by = "barcode")
+
+ipr = clone5_domains_damid %>% filter(IPR == "IPR2")
+
+PlotDataTracks(bins, 
+               chr = ipr$seqname, 
+               start = plyr::round_any(ipr$start, 20000)-2e6, 
+               end = plyr::round_any(ipr$start, 20000)+2e6,
+               samples = c("LMNA_KO", "LBR_KO", "Clone5"),
+               ipr_loc = ipr$start, cols = ko_group_colors)
+
+```
+
+```{r Fig6FG, fig.height= 6, fig.width= 6}
+trip_tib_KO_domains2 <- trip_tib_KO_domains %>% 
+  dplyr::select(barcode, ID, drug, KO, KO_clone, IPR, MMEJ_MMEJNHEJ, efficiency) %>%  # select columns of interest
+  mutate(KO_clone = ifelse(KO == "Clone5", "wt", KO_clone)) %>% # rename so we can merge later
+  group_by(barcode, ID, KO_clone, IPR, KO) %>% # grouping for means
+  dplyr::summarise(MMEJ_MMEJNHEJ = mean(MMEJ_MMEJNHEJ), efficiency = mean(efficiency)) # calculate means for Clone5
+
+mean_dam = left_join(trip_tib_KO_domains2, dam_dt[dam_dt$binsize == 20000, ], by=c('ID' = 'name', 'KO_clone' = 'KO')) # join damid table, only 20kb bins
+
+ipr_dam = mean_dam %>% 
+  filter(IPR %in% c("IPR17", "IPR2")) %>% ungroup() %>% # select IPRs of interest 
+  mutate(KO_clone = ifelse(KO == "Clone5", "Clone5", KO_clone)) # rename wt to Clone5 for consistency
+
+ggplot(ipr_dam, aes(x=MMEJ_MMEJNHEJ, y=z_score, color = KO, shape = KO)) +
+  geom_point(size = 2.5) +
+  ggtitle('MMEJ:NHEJ vs DamID 20kb') +
+  theme_bw() +
+  theme(aspect.ratio=1) + 
+  xlim(0, 0.45) +
+  ylim(-2, 2) +
+  facet_grid(IPR ~ .) +
+  scale_color_manual(values = ko_group_colors)
+```
+
+## Supplementary
+### Panel S6A
+```{r FigS6A, fig.height=5, fig.width=7}
+indel.dt = trip_tib %>% filter(drug %in% c("-", "BIX01294")) %>%
+  dplyr::select(barcode, drug, MMEJ_MMEJNHEJ, domains) %>%
+  spread(drug, MMEJ_MMEJNHEJ) %>%
+  filter(!is.na(BIX01294),!is.na(`-`)) %>%
+  mutate(BIX_ratio = BIX01294/`-`) %>%
+  distinct(barcode, .keep_all = TRUE) %>%
+  data.table()
+
+dim(indel.dt)
+
+indel.dt[indel.dt=='iDomain'] <- 0
+indel.dt[indel.dt=='Domain'] <- 1
+
+indel.dt[is.na(LAD_domain), LAD_domain:=0]
+
+indel.dt[, (domains) := lapply(.SD, as.numeric), .SDcols = domains]
+
+colnames(indel.dt) = gsub('_domain', '', colnames(indel.dt))
+
+opt_df = get_combinations(domain_levels)
+
+
+# Ratio of SSTR vs all indels
+plot_comb_grid_beeswarm(indel.dt, opt_df,
+                        domain_levels, 'log2(BIX_ratio)', min_count = 1)
+
+k9me2 = indel.dt %>% filter(late_replicating == 0, 
+                            LAD == 0,
+                            H3K9me2 == 1,
+                            H3K27me3 == 0) %>% 
+  pull(BIX_ratio)
+
+triple = indel.dt %>% filter(late_replicating == 1, 
+                             LAD == 1,
+                             H3K9me2 == 1,
+                             H3K27me3 == 0) %>% 
+  pull(BIX_ratio)
+
+idomain = indel.dt %>% filter(late_replicating == 0, 
+                              LAD == 0,
+                              H3K9me2 == 0,
+                              H3K27me3 == 0) %>% 
+  pull(BIX_ratio)
+
+wilcox.test(idomain, triple)
+wilcox.test(idomain, k9me2)
+```
+
+### Panel S6B-E
+BIX & GSK western blot representative figure & quantification
+
+### Panel S6F
+LMNA KO TIDE plot
+
+### Panel S6G
+LBR KO TIDE plot
+
+### Panel S6H
+LMNA KO Western blots
+
+### Panel S6I
+LBR KO Western blots
+
+### Panel S7A
+LBR
+```{r FigS7A, fig.height 6, fig.width=7}
+ipr = clone5_domains_damid %>% filter(IPR == "IPR17")
+
+ko_colors = c("LMNA_KO1" = "#f9b016",
+              "LMNA_KO2" = "#f9b016",
+              "LMNA_KO3" = "#f9b016",
+              "LMNA_KO4" = "#f9b016",
+              "LBR_KO1" = "#006c68", 
+              "LBR_KO2" = "#006c68",
+              "LBR_KO3" = "#006c68",
+              "LBR_KO4" = "#006c68",
+              "Clone5" = "black")
+
+PlotDataTracks(bins, 
+               chr = ipr$seqname, 
+               start = plyr::round_any(ipr$start, 20000)-2e6, 
+               end = plyr::round_any(ipr$start, 20000)+2e6,
+               samples = c("LMNA_KO1", "LMNA_KO2", "LMNA_KO3","LMNA_KO4",
+                           "LBR_KO1", "LBR_KO2", "LBR_KO3", "LBR_KO4",
+                           "Clone5"),
+               ipr_loc = ipr$start, cols = ko_colors)
+```
+
+### Panel S7B
+```{r FigS7B, fig.height= 6, fig.width= 7}
+ipr = clone5_domains_damid %>% filter(IPR == "IPR2")
+
+PlotDataTracks(bins, 
+               chr = ipr$seqname,                
+               start = plyr::round_any(ipr$start, 20000)-2e6, 
+               end = plyr::round_any(ipr$start, 20000)+2e6,
+               samples = c("LMNA_KO1", "LMNA_KO2", "LMNA_KO3","LMNA_KO4",
+                           "LBR_KO1", "LBR_KO2", "LBR_KO3", "LBR_KO4",
+                           "Clone5"),
+               ipr_loc = ipr$start, cols = ko_colors)
+```
+
+### Panel S7C
+```{r FigS7C, fig.height= 8, fig.width= 8}
+ggplot(mean_dam, aes(x=MMEJ_MMEJNHEJ, y=z_score, color=KO, shape = KO)) +
+  geom_point() +
+  ggtitle('MMEJ:NHEJ vs DamID 20kb') +
+  facet_wrap(~IPR) +
+  theme_bw() +
+  theme(aspect.ratio=1) +
+  xlim(0, 0.45) +
+  scale_color_manual(values = ko_group_colors)
+```
+
+# Bibliography
+```{r citations}
+cite_packages()
+```
+
+# Session Info
+```{r session info}
+paste("Run time: ",format(Sys.time()-StartTime))
+getwd()
+date()
+sessionInfo()
+# rm(list = ls(all.names = TRUE)) #will clear all objects includes hidden objects.
+# gc() #free up memrory and report the memory usage.
+```

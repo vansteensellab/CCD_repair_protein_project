@@ -1,0 +1,246 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("exp_n","sample_ID","cell_line","condition","bio_rep","t_rep"))
+})
+```
+
+
+#Number of mapped IPRs with indel data (most optimistic)
+```{r}
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Import barcode sequences
+#RPE cells
+RPE_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_RPE_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+U2OS_IPR <- read_delim("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/DSB_TRIP_mapping/xv20230519_U2OS_pools_mapping.tsv") %>%
+  select(name) %>%
+  separate(name, into = c("barcode","iPCR_cell","iPCR_transfection","iPCR_complexity"))
+
+#Bind both
+all_IPRs <- bind_rows(RPE_IPR, U2OS_IPR) %>% mutate(pool = paste(iPCR_cell, iPCR_transfection,iPCR_complexity, sep = "_")) %>% filter(pool %in% selected_pools)
+```
+#CONCLUSION: We are recovering the whole complexity for U2OS & PRO (input 400 ng). With DEF & RPE we are not capturing full complexity (input 200 ng).
+
+
+```{r}
+#Filter by replicate
+indel_data <- clone_pools_pathway_assay %>% 
+  dplyr::group_by(barcode,outcome, exp_n, cell_line, condition, bio_rep) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F)) %>% left_join(all_IPRs) %>% na.omit()
+
+
+#Only look at LBR2 vs. tracr
+control_balance_bio <- indel_data %>% filter(condition %in% c("LBR2","tracr") & outcome %in% c("ins_1","del_-7","wt_0"))
+
+#Look at read numbers
+control_balance_bio_dcast <- control_balance_bio %>% reshape2::dcast(barcode + cell_line + condition + bio_rep ~ outcome, value.var = "counts", fun.aggregate = mean, fill = 0)
+
+#Control_measurements (bio_rep)
+pathway_metric_control_bio <- control_balance_bio_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1)) %>%
+  na.omit()
+
+#Filter by read number and plot noise level
+read_count <- c(0,25,50,100,250,500,1000,2500,5000)
+
+filter_read_count_test <- map_dfr(read_count , function(x) {
+  pathway_metric_control_bio %>%
+    filter(`del_-7`+ ins_1 >= x) %>%
+    mutate(read_filter = x)
+})
+
+#Number of IPRs in each
+IPR_summary <- filter_read_count_test %>% 
+  dplyr::group_by(cell_line, condition, read_filter, bio_rep) %>% 
+  dplyr::summarize(IPR_n = n()) 
+
+IPR_summary_dcast <- IPR_summary %>% 
+  reshape2::dcast(cell_line + condition + bio_rep ~ read_filter, value.var  = "IPR_n")
+
+#Plot loss of IPRs by each read_count filter
+
+ggplot(IPR_summary %>% 
+         filter(condition ==  "LBR2")) + 
+  geom_col(aes(x = bio_rep,
+               y = IPR_n,
+               fill = fct_relevel(as.character(read_filter),as.character(read_count))),
+           position = "dodge") +
+  labs(fill = "read_filter") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw()
+```
+#Conclusion: we always get some barcodes, but these are extremely low in RPE1 cells
+
+
+#Check reproducibility among replicates
+```{r}
+#Calculate co-ocurrence per replicate
+replicates_IPR <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  dplyr::group_by(barcode,cell_line, read_filter) %>%
+  dplyr::summarise(rep_n = n()) %>%
+  ungroup() %>%
+  dplyr::group_by(cell_line, read_filter,rep_n) %>%
+  dplyr::summarise(capture_IPR = n())
+
+total_IPR_rep <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  select(cell_line, barcode, read_filter) %>% 
+  distinct() %>%
+  dplyr::group_by(cell_line,read_filter) %>%
+  dplyr::summarise(total_IPR = n())
+
+#Calculate frequency
+freq_IPR_capture <- replicates_IPR %>% 
+  left_join(total_IPR_rep) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Absolute_numbers
+IPR_reps <- replicates_IPR %>% reshape2::dcast(cell_line + rep_n ~ read_filter)
+
+#IPRs in multiple reps
+ggplot(replicates_IPR) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = capture_IPR,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+#Frequency
+ggplot(freq_IPR_capture) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line, scales = "free") + 
+  theme_bw() + labs(x = "read_filter")
+
+
+```
+
+#Calculate frequency in absolute number of IPRs
+```{r}
+#Total mapped IPR per pool
+summary_mapped <- all_IPRs %>% 
+  dplyr::group_by(iPCR_cell) %>% 
+  dplyr::summarise(total_IPR = n()) %>%
+  mutate(cell_line = case_when(iPCR_cell == "RPE1Deff" ~ "RPEDef",
+                               iPCR_cell == "RPE1Proff" ~ "RPEPro",
+                               T ~ iPCR_cell)) %>%
+  select(cell_line, total_IPR)
+
+#Calculate frequency out of all IPRs mapped
+freq_IPR_capture_total <- replicates_IPR %>% 
+  left_join(summary_mapped) %>%
+  mutate(freq_capture = capture_IPR/total_IPR)
+
+#Frequency
+ggplot(freq_IPR_capture_total) + 
+  geom_col(aes(x = fct_relevel(as.character(read_filter),as.character(read_count)),
+               y = freq_capture,
+               fill = as.character(rep_n)),
+           position = "dodge") +
+  labs(fill = "IPR_reps") +
+  facet_wrap(~ cell_line) + 
+  theme_bw() + labs(x = "read_filter")
+
+#How many IPRs have at least n=2
+n2_IPRs <- freq_IPR_capture_total %>% 
+  filter(rep_n > 1) %>%
+  dplyr::group_by(cell_line, read_filter) %>%
+  dplyr::summarise(IPR_n = sum(capture_IPR)) %>%
+    left_join(summary_mapped) %>%
+  mutate(freq_capture_n2 = IPR_n/total_IPR)
+
+#Frequency
+ggplot(n2_IPRs) + 
+  geom_col(aes(x = cell_line,
+               y = freq_capture_n2,
+               fill = fct_relevel(as.character(read_filter),as.character(read_count))),
+           position = "dodge") +
+  labs(fill = "read_filter") +
+  theme_bw()
+```
+
+#Is pathway balance reproducible among replicates?
+```{r}
+read_counts_filter_reprod <- filter_read_count_test %>%
+  filter(condition == "LBR2") %>%
+  reshape2::dcast(barcode + cell_line + condition + read_filter ~ bio_rep, value.var = "balance")
+
+#Calculate mean & sd
+read_counts_filter_reprod_summary <- read_counts_filter_reprod %>% 
+  rowwise() %>% 
+  mutate(mean_bal = mean(c(R1,R2,R3,R4),na.rm = T),
+         sd_bal = sd(c(R1,R2,R3,R4), na.rm = T),
+         reps = 4 - sum(is.na(c(R1,R2,R3,R4))))
+
+ggplot(read_counts_filter_reprod_summary) + 
+  geom_point(aes(mean_bal, sd_bal, color = as.character(reps))) +
+  facet_grid(read_filter ~ cell_line) +
+  theme_bw()
+
+# Balance density
+ggplot(read_counts_filter_reprod_summary) + 
+  geom_density(aes(mean_bal, color = reps > 1)) +
+  facet_grid(read_filter ~ cell_line, scales = "free") +
+  theme_bw()
+
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R1,R2)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free")
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R2,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free")
+
+#R1 vs. R2
+ggplot(read_counts_filter_reprod_summary, aes(R1,R3)) +
+  geom_point(aes(color = as.character(reps))) + 
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor() +
+  facet_grid(cell_line ~ read_filter, scales = "free")
+
+```
+
+#Conclusion: To get high reproducibility in the results, we really need to be very stringent with the cut-off. I think the total number of read cutoff doesn't work as nicely as the enough reads on both.
+

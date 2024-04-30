@@ -1,0 +1,115 @@
+---
+title: "xv20230714_read_number_DSB_TRIP"
+author: "Xabier Vergara"
+date: "2023-07-14"
+output: html_document
+---
+#Quick check of read numbers
+
+```{r library}
+library(tidyverse)
+```
+
+#Load files
+```{r library}
+#Load 1st demux
+demux_1 <- read_delim(file = "/DATA/usr/v.franceschini/Workspaces/2023_07_XABI_INDEXES/vf230712_demux_log",col_names = F)
+colnames(demux_1) <-c("file","read_1demux")
+demux_1_sample <- demux_1 %>% mutate(sample = str_extract(file,"(?<=reads/).*")) %>% select(sample, read_1demux)
+
+#Load 2nd demux
+demux_2 <- read_delim(file = "/DATA/usr/v.franceschini/Workspaces/2023_07_XABI_INDEXES/vf230712_2nd_demux_log",col_names = F)
+colnames(demux_2) <-c("file","read_2demux")
+demux_2_sample <- demux_2 %>% mutate(sample = str_extract(file,"(?<=demux/).*")) %>% select(sample, read_2demux)
+
+#Merge and calculate total
+demux <- left_join(demux_1_sample,demux_2_sample) %>% mutate(total_reads = read_1demux + read_2demux)
+```
+
+# Some QC plots: E2268 vs.  AF
+```{r pressure, echo=FALSE}
+ggplot(demux) + 
+  ggbeeswarm::geom_quasirandom(aes(grepl("AF",sample), log10(total_reads))) +
+  theme_bw()
+```
+#Split the data by experiment
+```{r}
+E2286_files <- demux %>% filter(grepl("E2286",sample)) %>% separate(sample,into = c("exp","ID","cell","condition","bio_rep","tech_rep","ext"))
+
+#Per cell line
+ggplot(E2286_files) + 
+  ggbeeswarm::geom_quasirandom(aes(cell, total_reads)) +
+  theme_bw()
+```
+#Merge per biological sample
+```{r}
+#IPR_n
+IPR_number <- tibble(cell = c("RPE1","RPEDef","RPEPro","U2OS"), IPR_n = c(225,275,350,200))
+
+bio_E2286_files <- E2286_files %>% 
+  reshape2::dcast(exp+ID+cell+bio_rep+condition  ~ tech_rep, value.var = "total_reads") %>% 
+  rowwise() %>% 
+  mutate(bios_read = sum(T1,T2,na.rm = T)) %>%
+  left_join(IPR_number) %>%
+  mutate(read_per_IPR = bios_read/IPR_n)
+```
+
+#Plot per biological sample
+```{r}
+#Plot per bio sample
+ggplot(bio_E2286_files) + 
+  ggbeeswarm::geom_quasirandom(aes(cell, bios_read, color = bio_rep, shape=condition)) +
+  theme_bw()
+```
+
+#Plot per mapped IPR
+```{r}
+#Plot per IPR
+ggplot(bio_E2286_files) + 
+  ggbeeswarm::geom_quasirandom(aes(cell, read_per_IPR, color = bio_rep, shape=condition)) +
+  theme_bw() + 
+  geom_hline(yintercept  = 1000, linetype = 2)
+
+```
+
+#Create sample file
+```{r}
+#example file from E2216
+example <- read_delim("/DATA/projects/DSBrepair/data/xv20230424_E2222_RPE1_kinase_inh/xv20230424_7268_sample_list.tsv")
+
+#file_names
+filenames <- list.files(path = "/DATA/usr/v.franceschini/Workspaces/2023_07_XABI_INDEXES/VF230713_MERGED_1ST_AND_2ND_ROUNDS", full.names = T)
+
+#Table
+metadata_file <- tibble(PCR_TYPE = "indelPCR", guide = "LBR2_RPE1", file = filenames) %>% mutate(ID = str_extract(file, "(?<=ROUNDS/).*(?=.fastq.gz)")) %>% filter(grepl("E2286",ID))
+
+#Check if sample name and file are matching
+check_match <- map2_lgl(metadata_file$ID, metadata_file$file, function(x,y) {
+  str_detect(y,x)
+})
+
+#The sum of TRUEs should equal to sample n
+sum(check_match)/nrow(metadata_file)
+
+#Export metadata_file
+write.table(metadata_file %>% select(ID,PCR_TYPE,guide,file), file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20230123_revision_scripts/RPE_DSB_TRIP/pool_pathway_assay/xv20230714_sample_metadata_file.tsv", row.names = F, quote = F,col.names = T,  sep="\t")
+
+```
+
+#Import read number after processing
+```{r}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

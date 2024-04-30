@@ -1,0 +1,483 @@
+---
+title: "xv20230817_mutations_analysis"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+
+# Script to generate Supplementary Figure 5
+
+Fig. S10: Impact of CCDs on human tumor genomes. 
+
+```{r, message = F, warning = F}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+
+```
+
+# Libraries:
+```{r libraries, message = F, warning = F}
+library(readxl)
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+library(ggbeeswarm)
+```
+
+# Import data tables
+```{r, warning=F, message=F}
+setwd(in.dir)
+
+#Function to import all the data
+#List of all driver mutations
+driver_mutations_indels <- list.files(path = "import/xv20231017_indel_data_mathijs_new/BOOTSTRAP", full.names = T)[c(1:4,6,7)]
+
+control_indel_file_names <- map_dfr(driver_mutations_indels, function(y) {
+  control_directory <- paste0(y,"/controls_indel")
+  #Import all data for a single driver mutation
+tumor_file_names <- list.files(path = control_directory, full.names = T)
+  mutation_files <- map_dfr(tumor_file_names,function(x) {
+    tibble(file_names = list.files(path = x, full.names = T))
+  })
+  })
+
+#list of files
+control_indel_data <- map_dfr(control_indel_file_names$file_names, function(x) {
+  read.delim(x) %>%
+    mutate(file = str_extract(x, "(?<=BOOTSTRAP/).*LAD")) %>%
+    separate(file, into = c("driver",NA,"project","chromatin"), sep = "/")
+}) %>% reshape2::melt(vars.id = c("TYPE","driver","project")) %>%
+  reshape2::dcast(TYPE+driver+project~chromatin+variable, fun.aggregate = sum)  %>% 
+  mutate(sample = "control")
+
+
+#Load samples
+indel_file_names <- map_dfr(driver_mutations_indels, function(y) {
+  #Import all data for a single driver mutation
+tumor_file_names <- list.files(path = y, full.names = T)
+  mutation_files <- map_dfr(tumor_file_names,function(x) {
+    tibble(file_names = list.files(path = x, full.names = T))
+  })
+  }) %>% filter(grepl(".txt", file_names))
+
+#list of files
+mutant_indel_data <- map_dfr(indel_file_names$file_names, function(x) {
+  read.delim(`x`) %>%
+    mutate(file = str_extract(x, "(?<=BOOTSTRAP/).*LAD")) %>%
+    separate(file, into = c("driver","project","chromatin"), sep = "/")
+}) %>% reshape2::melt(vars.id = c("TYPE","driver","project")) %>%
+  reshape2::dcast(TYPE+driver+project~chromatin+variable, fun.aggregate = sum)  %>% 
+  mutate(sample = "mutant")
+
+#Load data from manuscript
+#Tumor analysis
+setwd(in.dir)
+indel_data_tumors <- readRDS_proof("data/processed_data/","SCC_indel_MMEJ_NHEJ")
+
+#Process data
+distribution_tumor_indel_pathway <- indel_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(tumor_type, tumor_id, LAD_status, total_mutation, CLASS) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(tumor_type + tumor_id ~ CLASS+LAD_status, value.var = "mut_count", fill = 0)
+
+#Tumor analysis
+setwd(in.dir)
+SV_MH_del_data_tumors <- readRDS_proof("data/processed_data/","SCC_SV_MH_deletions")
+setwd(in.dir)
+indel_data_tumors <- readRDS_proof("data/processed_data/","SCC_indel_MMEJ_NHEJ")
+
+#Import bootstrap counts
+setwd(in.dir)
+boot_matched_distribution <- readRDS_proof("data/processed_data/","bootstrap")
+
+```
+
+# Data processing of PCAWG data
+## Load tumor info data
+```{r, message = F, warning = F}
+#Import qualitative data
+pcaw_TCGA_donor <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/pcawg_TCGA_to_donorID.txt")
+selection <- read_delim("/DATA/projects/DSBrepair/data/xv20230818_PCAWG_data_revision/DATA_PCAWG/INFO/selection.txt")
+
+#Combine them
+tumor_info <- left_join(pcaw_TCGA_donor,selection, c("TCGA_ID" = "sample_id"))
+
+#Multiple driver genes
+multiple_drivers_data <- mutant_indel_data %>% 
+  select(TYPE, project,driver) %>% 
+  distinct() %>%
+  dplyr::group_by(TYPE, project) %>%
+  dplyr::summarise(counts = n()) %>%
+  filter(counts > 1)
+
+#Controls that are not properly assigned
+controls_with_driver_mutations <- control_indel_data %>%
+  filter(TYPE %in% unique(mutant_indel_data$TYPE))
+
+```
+
+## Filter data from repeated samples
+```{r, message = F, warning = F}
+filtered_indels_samples <- mutant_indel_data %>% 
+  bind_rows(control_indel_data) %>%
+  filter(!TYPE %in% multiple_drivers_data$TYPE) %>%
+  anti_join(controls_with_driver_mutations)
+```
+
+## Tumor biases (per project)
+```{r, message = F, warning = F}
+total_changes_indels_project <- filtered_indels_samples %>% 
+  dplyr::group_by(project,driver,sample) %>%
+  dplyr::summarise(sum_CILAD_NHEJ = sum(CILAD_NHEJ)+1,
+                   sum_CILAD_MMEJ = sum(CILAD_MMEJ)+1,
+                   sum_CLAD_NHEJ = sum(CLAD_NHEJ)+1,
+                   sum_CLAD_MMEJ = sum(CLAD_MMEJ)+1,
+                   sample_n = n()) %>%
+  rowwise() %>%
+  mutate(LAD_bal = log2(sum_CLAD_MMEJ/sum_CLAD_NHEJ),
+                 iLAD_bal = log2(sum_CILAD_MMEJ/sum_CILAD_NHEJ),
+         global_bal = log2((sum_CLAD_MMEJ+sum_CILAD_MMEJ)/(sum_CLAD_NHEJ+sum_CILAD_NHEJ)),
+                 bias = LAD_bal - iLAD_bal,
+         total_indel = sum(sum_CILAD_NHEJ,sum_CILAD_MMEJ, sum_CLAD_NHEJ,sum_CLAD_MMEJ)) %>%
+  filter(total_indel > 10)
+
+```
+
+## Bootstrap per project
+```{r, message=F, warning=F}
+#calculate mean and sd
+null_distriution <- boot_matched_distribution %>%
+  filter(is.finite(bias)) %>%
+  dplyr::group_by(driver,project) %>%
+  dplyr::summarise(mean_null = mean(bias),
+                   sd_null = sd(bias))
+
+#plot densities
+mean_project_value <- total_changes_indels_project %>%
+  filter(sample == "mutant") %>%
+  filter(is.finite(bias)) %>%
+  select(project, driver, bias, sample_n) %>%
+  left_join(null_distriution) %>%
+  mutate(z_score = (bias - mean_null)/sd_null) %>% na.omit()
+
+driver_significance <- mean_project_value %>%
+  dplyr::group_by(driver) %>%
+  dplyr::summarise(combined = sum(z_score, na.rm = T)/sqrt(n()),
+         p_value = 2*pnorm(abs(combined), lower.tail=F)) %>%
+  mutate(fdr = p.adjust(p_value, method = "BH"))
+
+
+#Combinations to plot
+combinations_to_plot <- total_changes_indels_project %>%
+  filter(sample == "mutant") %>%
+  select(project, driver) %>%
+  distinct()
+
+```
+#Conclusion: This also gives significant effects, on the right direction.
+
+
+# Figure S10A
+```{r, fig.width=5, fig.height=4, message = F, warning = F}
+tumor_count_summary <- filtered_indels_samples %>%
+  select(project,driver, sample, TYPE) %>%
+  distinct() %>%
+  dplyr::count(project, driver, sample)
+
+#Plot
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231128_S9A_tumor_counts.pdf", width = 5, height = 4)
+ggplot(tumor_count_summary) +
+  geom_col(aes(fct_relevel(driver, c("EGFR","BRCA2","ATM","SETD2","MEN1","ATRX","BRCA1","TRRAP")),n,fill = project), color = "grey40", size = 0.25) +
+  facet_wrap(~ fct_relevel(sample, c("mutant","control")), scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "top") + 
+  ylab("Number of genomes")
+#dev.off()
+```
+(A) Total number of human tumor genomes analyzed, classified by tumor types and driver genes in mutant cohorts (left) and controls (right). We analyzed genomes from 29 different tumor subtypes and 6 different driver genes.
+
+
+# Figure S10B
+```{r, fig.width=4,fig.height=3.5, message = F, warning = F}
+bias_per_tissue_type <- filtered_indels_samples %>%
+  filter(sample == "control") %>%
+  select(TYPE,driver, project, CILAD_MMEJ, CILAD_NHEJ,CLAD_NHEJ, CLAD_MMEJ) %>%
+  distinct() %>%
+  dplyr::group_by(project) %>%
+  dplyr::summarize(sum_CILAD_NHEJ = sum(CILAD_NHEJ)+1,
+                   sum_CILAD_MMEJ = sum(CILAD_MMEJ)+1,
+                   sum_CLAD_NHEJ = sum(CLAD_NHEJ)+1,
+                   sum_CLAD_MMEJ = sum(CLAD_MMEJ)+1,
+                   sample_n = n()) %>%
+  rowwise() %>%
+  mutate(LAD_bal = log2(sum_CLAD_MMEJ/sum_CLAD_NHEJ),
+                 iLAD_bal = log2(sum_CILAD_MMEJ/sum_CILAD_NHEJ),
+         global_bal = log2((sum_CLAD_MMEJ+sum_CILAD_MMEJ)/(sum_CLAD_NHEJ+sum_CILAD_NHEJ)),
+                 bias = LAD_bal - iLAD_bal,
+         total_indel = sum(sum_CILAD_NHEJ,sum_CILAD_MMEJ, sum_CLAD_NHEJ,sum_CLAD_MMEJ)) %>%
+  filter(total_indel > 10)
+
+#Plot differences
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231128_S9B_control_tissue_type.pdf", width=4,height=3.5)
+ggplot(bias_per_tissue_type) +
+  geom_col(aes(project, global_bal)) +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ylab("∆log2MMEJ:NHEJ het/eu")
+#dev.off()
+```
+(B) log2MMEJ:NHEJ short deletion ratios per tumor subtype in control genomes. 
+
+
+# Figure S10C
+## Plot
+```{r, fig.width=6, fig.height=5, warning=F, message = F}
+#ggplot difference densities
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231128_S9C_distribution_per_tissue.pdf", width = 7, height = 6)
+ggplot(boot_matched_distribution %>% right_join(combinations_to_plot), aes(project,bias)) + 
+  geom_quasirandom(color = "grey80") + 
+  stat_summary(geom = "errorbar", fun.min = function(z) { quantile(z,0.05) },
+               fun.max = function(z) { quantile(z,0.95) }, color = "red", width = 0.25) +
+  theme_bw() + geom_point(data = total_changes_indels_project  %>% right_join(combinations_to_plot), aes(project,bias, color = sample), size = 3) +
+  facet_wrap(~ fct_relevel(driver, c("ATM","ATRX","SETD2","MEN1","BRCA2","BRCA1")), scales = "free", ncol = 3) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        panel.grid = element_blank(),
+        legend.position = "top")
+dev.off()
+```
+
+## Concordant tissues
+```{r, message = F, warning = F}
+phenotype_conserved <- total_changes_indels_project %>%
+  reshape2::dcast(project+driver ~ sample, value.var = "bias") %>%
+  na.omit() %>%
+  dplyr::group_by(driver) %>%
+  dplyr::summarise(tissue_higher = sum(mutant > control),
+                   tissue_lower = sum(mutant < control))
+
+print(phenotype_conserved)
+```
+
+
+(C) Differential of log2MMEJ:NHEJ balance (∆log2MMEJ:NHEJHet/Eu) in heterochromatin (cLADs) and eu-chromatin (ciLADs) in controls and mutants, split by tumor type and driver gene. The null-distribution generated by bootstrapping of the control data is shown in grey for each tissue and driver cohort. Red dots indicate the mean ∆log2MMEJ:NHEJHet/Eu of the control distribution (with red error-bars showing 95% CI); blue dots indicate mean ∆log2MMEJ:NHEJHet/Eu of the indicated tumor type and driver gene. The fraction in the header of each panel summarizes the fraction of tumor types that follow the expect trend according to the K562 screen results.
+
+
+# Plot Figure S10D-E
+## Data processing
+```{r, message = F, warning = F}
+total_changes_indels_patient <- filtered_indels_samples %>% 
+  rowwise() %>%
+  mutate(total_indel = sum(CILAD_NHEJ,CILAD_MMEJ, CLAD_NHEJ,CLAD_MMEJ))
+
+
+#Original dataset
+total_changes_indels_HNSCC <- distribution_tumor_indel_pathway %>% 
+  rowwise() %>%
+  mutate(total_indel = sum(cNHEJ_ciLAD,cNHEJ_cLAD, MMEJ_ciLAD,MMEJ_cLAD))
+```
+
+
+## Plot Figure S10D
+```{r, fig.width=3,fig.height=4, message = F, warning = F}
+mutation_accumulation_table <- filtered_indels_samples %>%
+  rowwise() %>%
+  mutate(total_indel = sum(CILAD_NHEJ,CILAD_MMEJ,CLAD_NHEJ,CLAD_MMEJ)) %>%
+  dplyr::group_by(driver, sample) %>%
+  dplyr::summarise(median_mut = median(total_indel),
+                   mean_mut = mean(total_indel),
+                   n_sample = n())
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231128_S9C_total_indel_accumulation.pdf", width = 3, height = 4)
+ggplot(mutation_accumulation_table) +
+  geom_col(aes(driver, median_mut, fill = sample), position = "dodge") +
+  theme_bw() +
+  theme(legend.position = "top",
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) + 
+  ylab("Median number of mutations per genome")
+#dev.off()
+ 
+```
+
+## Plot Figure S10E
+```{r, fig.width=2,fig.height=4, message = F, warning = F}
+mutation_accumulation_table <- total_changes_indels_patient %>%
+  select(TYPE, driver,sample, total_indel) %>%
+  distinct() %>%
+  dplyr::group_by(driver,sample) %>%
+  dplyr::summarise(median_mut = median(total_indel),
+                   mean_mut = mean(total_indel),
+                   n_sample = n())
+
+#Calculate median mutation number between HNSSC
+mutation_accumulation_table_HNSCC <- total_changes_indels_HNSCC %>%
+  select(tumor_id,tumor_type, total_indel) %>%
+  distinct() %>%
+  dplyr::group_by(tumor_type) %>%
+  dplyr::summarise(median_mut = median(total_indel),
+                   mean_mut = mean(total_indel))
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231117_S8E_HNSCC_total_indel_accumulation.pdf", width = 2, height = 4)
+ggplot(mutation_accumulation_table_HNSCC) +
+  geom_col(aes(fct_relevel(tumor_type, c("HHNSC_indel","BRCA2mut_indel")), median_mut, fill = tumor_type), position = "dodge") +
+  theme_bw() +
+  theme(legend.position = "top",
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank()) + 
+  ylab("Median number of mutations per genome")
+dev.off()
+
+```
+(D) in mutant cancer genomes compared to same tissue subtype controls by driver gene and (E) BRCA2-/- compared to genome-instable HPVneg HNSCC. 
+
+
+# Analyse SV data from the manuscript in the same way as PCAWG data
+## Data processing
+```{r, message = F, warning = F}
+SV_distribution_tumor_indel_pathway <- SV_MH_del_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(type, tumor_id, LAD_status) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(type + tumor_id ~ LAD_status, value.var = "mut_count", fill = 0)
+
+#Export SV counts
+openxlsx::write.xlsx(SV_distribution_tumor_indel_pathway, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/supplementary_tables/xv20231128_TableS9c_SV_HNSCC_BRCA2.xlsx")
+
+#Calculate mean values
+SV_mean_balances_bias <- SV_distribution_tumor_indel_pathway %>%
+  dplyr::group_by(type) %>%
+  dplyr::summarise(CILAD_SV = sum(ciLAD),
+                   CLAD_SV = sum(cLAD),
+                   sample_n = n()) %>%
+  rowwise() %>%
+  mutate(bias = log2(CLAD_SV/CILAD_SV),
+         total_indel = sum(CLAD_SV,CLAD_SV))
+
+```
+
+## Bootstrap
+```{r, message = F, warning = F}
+#Filter controls
+SV_controls_HNSCC <- SV_distribution_tumor_indel_pathway %>%
+  filter(type == "sporadic_HPVneg")
+
+
+#bootstrap_general_tumors
+boot_HNSCC_SV <-  map_dfr(c(1:1000), function(j) {
+    set.seed(j)
+      SV_controls_HNSCC %>% 
+        ungroup() %>%
+        sample_n(nrow(SV_controls_HNSCC),replace = TRUE) %>%
+        mutate(iteration = j) %>% 
+          dplyr::group_by(iteration) %>%
+          dplyr::summarise(CILAD_SV = sum(ciLAD)+1,
+                   CLAD_SV = sum(cLAD)+1,
+                   sample_n = n()) %>%
+  rowwise() %>%
+  mutate(bias = log2(CLAD_SV/CILAD_SV),
+         total_indel = sum(CLAD_SV,CLAD_SV))
+        })
+
+#calculate mean and sd
+null_distriution_HNSCC_SV <- boot_HNSCC_SV %>%
+  mutate(control = "HNSCC_control") %>%
+  filter(is.finite(bias)) %>%
+  dplyr::group_by(control) %>%
+  dplyr::summarise(mean_null = mean(bias),
+                   sd_null = sd(bias))
+
+#plot densities
+mean_HNSCC_value_SV <- SV_mean_balances_bias %>%
+  filter(is.finite(bias)) %>%
+  select(type, bias, sample_n) %>%
+  bind_cols(null_distriution_HNSCC_SV %>% select(-control)) %>%
+  mutate(z_score = (bias - mean_null)/sd_null) %>% na.omit()
+
+HNSCC_significance_SV <- mean_HNSCC_value_SV %>%
+  mutate(p_value = 2*pnorm(abs(z_score), lower.tail=F)) 
+
+```
+
+# Figure S8F
+```{r Fig_S8_D, warning=FALSE, message=FALSE, fig.width=2,fig.height=3, message = F, warning = F}
+#Plot SV S8D
+plot_SV_data <- SV_mean_balances_bias %>% select(-sample_n,-bias, -total_indel) %>% reshape2::melt()
+
+#pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/fiigure_S8_tumor_analysis/xv20231031_S8E_SV_differences.pdf", width = 2, height = 3)
+ggplot(plot_SV_data,aes(fct_relevel(variable, c("CILAD_SV","CLAD_SV")),value, fill = variable)) +
+  stat_summary(geom = "col", fun.y = "median") +
+  facet_wrap(~ fct_relevel(type, c("sporadic_HPVneg","BRCA2mut")), ncol = 1) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.title.x = element_blank()) +
+  ylab("MH_Del") +
+  scale_fill_manual(values = c("#F39200","#5D277F"))
+#dev.off()
+
+
+```
+(F) Distribution of large deletions with MH at break sites counts over euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.) in genome-instable HPV negative HNSCC and BRCA2-/- tumors. Two-sided p-value is shown in the figure.
+

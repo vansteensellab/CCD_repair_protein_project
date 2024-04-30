@@ -1,0 +1,383 @@
+---
+title: "xv20230822_RPE1_PRO_DEF_combinatorial"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+In this markdown, I will explore the effect of combinatorial perturbations. I will use PRO as a control and take DEF +/- treatment
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+library(broom)
+library(scales)
+```
+
+# Patwhay balance in clone 32: After mapping
+
+## Import data
+```{r, warning=F}
+# List files in mcclintock
+pathway_assay_files <- list.files("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts",pattern = '*[.]co', full.names = T) 
+
+#Read and parse files
+clone_pools_pathway_assay <- map_dfr(pathway_assay_files, function(x){
+  read_delim(x, show_col_types = F) %>% 
+  mutate(filename = gsub("/DATA/projects/DSBrepair/data/xv20230714_E2286_pool_pathway_assay/indelPCR_counts/","",x),
+         outcome = paste(call, indel, sep = "_")) %>%
+  separate(filename, into = c("exp_n","sample_ID","cell_line","condition","bio_rep","t_rep"))
+})
+```
+
+
+#Number of mapped IPRs with indel data (most optimistic). From previous analysis
+```{r}
+#DSB TRIP pools used in this experiment
+selected_pools <- c("RPE1Deff_Low_1000","RPE1Proff_Low_250")
+
+#Reliable IPRs
+high_confidence_IPR <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_high_confidence_IPR_set.rds") %>%
+ filter(condition == "LBR2") %>% 
+  select(barcode, cell_line,bio_rep) %>% 
+  distinct()
+
+#Mapped barcodes
+#RPE1
+high_confidence_IPR_chromatin_RPE1 <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_chromatin_features_zscore_RPE1.rds")
+
+#Cell lines
+cells <- c("RPEPro","RPEDef")
+binsizes <- c("2000")
+
+```
+
+
+
+
+#Process indel data
+```{r}
+#Filter by replicate with high confidence in control
+indel_data_high_confidence <- clone_pools_pathway_assay %>% 
+  dplyr::group_by(barcode,outcome, exp_n, cell_line, condition, bio_rep) %>%
+  dplyr::summarise(counts = sum(count, na.rm = F) + 1) %>% right_join(high_confidence_IPR)
+
+#select +1 and -7 indels
+control_balance_inh <- indel_data_high_confidence %>% filter(outcome %in% c("ins_1","del_-7"))
+
+#Look at read numbers
+control_balance_bio_dcast <- control_balance_inh %>% reshape2::dcast(barcode + cell_line + condition + bio_rep ~ outcome, value.var = "counts", fun.aggregate = mean, fill = 1)
+
+#Control_measurements (bio_rep)
+pathway_metric_control_bio <- control_balance_bio_dcast %>%
+  mutate(balance = `del_-7`/(ins_1 + `del_-7`),
+         log2_bal = log2(`del_-7`/ins_1)) %>%
+  na.omit()
+
+```
+#Conclusion: we always get some barcodes, but these are extremely low in RPE1 cells
+
+#Calculate global differentials per replicate
+```{r}
+#Per replicate global balance
+per_rep_global_bal <- pathway_metric_control_bio %>% 
+  dplyr::group_by(cell_line, bio_rep,condition) %>%
+  dplyr::summarise(global_bal = mean(log2_bal)) %>%
+  filter(condition != "tracr" & cell_line %in% c("RPEPro","RPEDef"))
+
+#Control balance
+dmso_balance <- pathway_metric_control_bio %>% 
+  filter(condition == "LBR2" & 
+        cell_line == "RPEPro") %>% 
+  dplyr::group_by(cell_line, bio_rep) %>%
+  dplyr::summarise(dmso_bal = mean(log2_bal)) %>%
+  ungroup() %>%
+  select(-cell_line)
+
+inhibitor_balance_calculation <- per_rep_global_bal %>% 
+  left_join(dmso_balance) %>% 
+  mutate(diff_bal = global_bal - dmso_bal)
+
+mean_inhibitor_effect <- inhibitor_balance_calculation %>%
+  mutate(background = case_when(grepl("Pro",cell_line) ~ "WT",
+                                grepl("Def",cell_line) ~ "BRCA1"),
+         perturb = paste0(background,":",condition))
+```
+
+#Plot pathway balance changes, as combinatorial measurements
+```{R}
+perturb_order <- c("WT:LBR2","BRCA1:LBR2","WT:ATMi","BRCA1:ATMi","WT:DNAPKi","BRCA1:DNAPKi")
+
+ggplot(mean_inhibitor_effect) +
+  ggbeeswarm::geom_quasirandom(aes(fct_relevel(perturb,perturb_order), diff_bal)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+```
+
+#Calculate global differences
+```{r}
+#Calculate mean effect
+mean_effects <- mean_inhibitor_effect %>% 
+  dplyr::group_by(cell_line, condition) %>%
+  dplyr::summarise(global_diff = mean(mean_diff, na.rm = T))
+
+#Calculate p.value calculation
+p_val_global <- mean_inhibitor_effect %>% 
+  dplyr::group_by(cell_line, condition) %>%
+  rstatix::t_test(mean_diff ~ 0)
+
+#Adjust p-value
+adj_pvalue <- map_dfr(cells, function(x) {
+  p_val_global %>% filter(cell_line == x) %>% mutate(global_p_adj = p.adjust(p, method = "BH"))
+}) 
+
+#Create data frame
+global_effects <- mean_effects %>% 
+  left_join(adj_pvalue) %>%
+  select(cell_line, drug = condition, global_diff, global_p_adj)
+```
+
+#PCA for al RPE1 PRO & DEF IPRs
+```{r}
+#Chromatin data Pro & Def IPRs
+chrom_data <- inhibitor_effect_chromatin_RPE1 %>%
+  filter(binsize == 2000 & cell_line != "RPE1" & condition != "tracr") %>%
+  ungroup() %>%
+  select(barcode,cell_line, chip_H3K36me3, dam_H3K27me3, dam_H3K9me3, mean_diff,condition) %>%
+  distinct()
+
+#Check that profiles are similar for Pro & Def
+#chip_K36me3
+ggplot(chrom_data) +
+  geom_histogram(aes(chip_H3K36me3, fill = cell_line), alpha = 0.3, binwidth = 0.3) +
+  theme_bw() +
+  ylim(c(0,25))
+
+#dam_K27me3
+ggplot(chrom_data) +
+  geom_histogram(aes(dam_H3K27me3, fill = cell_line), alpha = 0.3, binwidth = 0.25) +
+  theme_bw() +
+  ylim(c(0,25))
+
+#dam_K9me3
+ggplot(chrom_data) +
+  geom_histogram(aes(dam_H3K9me3, fill = cell_line), alpha = 0.3, binwidth = 0.25) +
+  theme_bw() +
+  ylim(c(0,25))
+
+```
+
+#Control values for 10 percentile bins in the control set
+```{r}
+#Arrange control data set
+indel_data_inh <- pathway_metric_control_bio %>%
+  dplyr::group_by(cell_line, condition,barcode) %>%
+  dplyr::summarise(mean_bal = mean(log2_bal),
+                   reps = n()) %>%
+  filter(reps > 1) %>% 
+  left_join(high_confidence_IPR_chromatin_RPE1) %>%
+  filter(binsize == "2000") %>%
+  select(barcode, cell_line, condition, mean_bal,chip_H3K36me3,dam_H3K27me3, dam_H3K9me3)
+
+#Melt chromatin data
+melt_chromatin <- indel_data_inh %>%
+  select(-mean_bal) %>%
+  reshape2::melt() %>%
+  separate(variable, into = c("tech", "antibody")) %>%
+  select(-tech) %>%
+  left_join(indel_data_inh %>% 
+              select(barcode,cell_line, condition,mean_bal) %>% 
+              distinct())
+
+#Control data
+control_data_chromatin <- melt_chromatin %>% 
+  filter(cell_line == "RPEPro" & condition == "LBR2")
+
+#Calculate bins per antibody
+binned_control_chromatin_data <- map_dfr(c("H3K36me3","H3K9me3","H3K27me3"), function(x) {
+  control_data_chromatin %>%
+    filter(antibody == x) %>%
+    mutate(percentile = ntile(value, n = 20)) %>%
+    group_by(percentile,antibody) %>%
+    dplyr::summarise(bin_balance = mean(mean_bal),
+                     bin_min = case_when(percentile == 1 ~ -10,
+                                         T ~ min(value)),
+                     bin_max = case_when(percentile == 20 ~ 10,
+                                         T ~ max(value)),
+                     bin_mean_chrom = mean(value),
+                     IPR_n = n()) %>% distinct()
+})
+
+```
+
+#Control plots
+```{r}
+ggplot() + 
+  geom_point(data = tmp_data_def, aes(bin_mean_chrom, bin_balance, size = as.character(IPR_n)), color = "red") +
+  geom_smooth(data = tmp_data_def, aes(bin_mean_chrom, bin_balance),method = "lm") +
+  geom_point(data = tmp_data, aes(bin_mean_chrom, bin_balance, size = as.character(IPR_n))) +
+  geom_smooth(data = tmp_data, aes(bin_mean_chrom, bin_balance),method = "lm") +
+  facet_wrap(~ antibody) +
+  theme_bw()
+
+```
+#Conclusion: After bining the correlations are there. The coefficient got better, H3K9me3 correlation is not significant
+
+#Assign every barcode to a control bin and calculate differentials
+```{r}
+#Create a function to match values with ranges
+test_data <- melt_chromatin %>% 
+  filter(cell_line %in% c("RPEPro","RPEDef") & condition != "tracr") %>%
+  mutate(perturb = paste0(cell_line,":",condition)) %>%
+  left_join(binned_control_chromatin_data, by = "antibody")
+
+closest_percentile_dt <- map_dfr(unique(test_data$perturb),function(z) {
+  single_pert <- filter(test_data, perturb == z)
+  map_dfr(unique(single_pert$barcode), function(x){
+  map_dfr(unique(single_pert$antibody), function(y) {
+  single_barcode <- filter(single_pert, barcode == x & antibody == y)
+  if (sum(single_barcode$value >= single_barcode$bin_min & single_barcode$value < single_barcode$bin_max) != 0) {
+    filter(single_barcode, value > bin_min & value < bin_max)
+  } else {
+    closest_percentile <- single_barcode %>% 
+      select(percentile, chrom = value, bin_min, bin_max) %>% 
+      reshape2::melt(id.vars = c("percentile","chrom")) %>%
+      mutate(distance = abs(chrom - value)) %>%
+      slice_min(order_by = distance) %>%
+      pull(percentile)
+    filter(single_barcode, percentile == closest_percentile)
+  }
+  })
+})
+})
+
+#Summarise data
+perturbation_differentials <- closest_percentile_dt %>% 
+  dplyr::group_by(percentile,antibody,bin_balance,bin_mean_chrom,perturb) %>%
+  dplyr::summarise(perturb_bal = mean(mean_bal),
+                   IPR_n = n()) %>%
+  mutate(diff_bal = perturb_bal - bin_balance)
+
+```
+
+#Plot all correlations
+```{r, fig.width=6,fig.height=8}
+ggplot(perturbation_differentials %>% filter(perturb != "RPEPro:LBR2"),
+       aes(bin_mean_chrom,diff_bal)) + 
+  geom_point() +
+  ggpubr::stat_cor(method = "spearman") +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_grid(perturb ~ antibody) +
+  geom_hline(yintercept = 0, linetype = 2)
+
+```
+#Conclusion: Only Pro:ATMi & Pro:DNAPKi treatments have CCDs with chromatin. Also, not BRCA1 only
+
+#Calculate statistics and p-value
+```{r}
+correlation_pairs <- perturbation_differentials %>% 
+  ungroup() %>%
+  select(antibody, perturb) %>%
+  distinct() %>%
+  filter((grepl("ATMi",perturb) & antibody == "H3K27me3") | (grepl("DNAPKi",perturb) & antibody %in% c("H3K9me3","H3K36me3")))
+
+correlation_stats <- map2_dfr(correlation_pairs$antibody, correlation_pairs$perturb, function(x,y){
+  table <- perturbation_differentials %>% 
+    filter(antibody == x & perturb == y)
+  
+  cor.test(table$diff_bal, table$bin_mean_chrom, method = "spearman") %>% 
+    tidy() %>% 
+    mutate(antibody = x, perturb = y)
+}) %>% mutate(fdr = p.adjust(p.value, method= "BH"))
+
+```
+
+
+#Conclusion: Binned is less noisy than single barcode read-out, but it has lower power. Pro: we can compare different cell lines (PRO and DEF). Cons: PCA is not possible between cell lines, because we don't have enough IPRs in similar chromatin-contexts. I need to wait for higher quality data, it might be that in the new run I can get reliable data in more IPRs.
+
+
+#PCR modeling in RPE pro and def data on only three data sets.
+```{r}
+#Calculate differentials
+control_data_inh <- pathway_metric_control_bio %>%
+  filter(condition == "LBR2" & cell_line %in% c("RPEPro","RPEDef")) %>%
+  dplyr::group_by(cell_line,barcode,bio_rep) %>%
+  dplyr::summarise(mean_bal = mean(log2_bal)) %>%
+  select(barcode, bio_rep, cell_line, control_bal = mean_bal)
+
+diff_data_inh <- pathway_metric_control_bio %>% 
+  filter(condition %in% c("ATMi","DNAPKi") & cell_line %in% c("RPEPro","RPEDef")) %>%
+  left_join(control_data_inh) %>%
+  mutate(diff = log2_bal - control_bal) %>%
+  dplyr::group_by(cell_line, condition,barcode) %>%
+  dplyr::summarise(mean_diff = mean(diff),
+                   reps = n()) %>%
+  filter(reps > 1) %>% 
+  left_join(high_confidence_IPR_chromatin_RPE1) %>%
+  filter(binsize == "2000") %>%
+  select(barcode, cell_line, condition, mean_diff,chip_H3K36me3,dam_H3K27me3, dam_H3K9me3)
+  
+
+#Create an empty dt with CCDs of DDR proteins
+drug_CCDs_dt_RPE1_test <- tibble(cell_line = NA, drug = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+for (j in c("RPEPro","RPEDef")){
+  for (i in unique(diff_data_inh$condition)){
+    gene.library.dt <- filter(diff_data_inh, condition == i & cell_line == j)
+    set.seed(1)
+    PCR_model_DDR_test <- pls::pcr(mean_diff~ dam_H3K9me3+dam_H3K27me3+chip_H3K36me3, data=gene.library.dt , validation="CV") #Run principal component regression
+    pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+    combined.dt <- tibble(measured = gene.library.dt$mean_diff, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+    pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% broom::glance() #Predicted vs. measured correlation plot
+    drug_CCDs_dt_RPE1_test <- drug_CCDs_dt_RPE1_test %>% add_row(cell_line = j, drug = i, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+  }
+  }
+
+#Adjust per cell line
+adj_drug_dt_RPE1_adjs_pro <- drug_CCDs_dt_RPE1_test %>% na.omit() %>% mutate(p.adj = p.adjust(p.value, method = "BH"))
+```
+
+#Calculate the slopes of these three features
+```{r}
+#Create empty dataframe to calculate synergy scores
+drug_CCD_slopes <- tibble(drug = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA, cell_line = NA)
+
+#Loop to run linear models on the values
+for (h in unique(diff_data_inh$condition)) {
+  for(i in unique(diff_data_inh$cell_line)) {
+  for (j in colnames(diff_data_inh)[5:7]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- diff_data_inh %>% filter(condition == h & cell_line == i) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean_diff ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   drug_CCD_slopes <- drug_CCD_slopes %>% add_row(drug = h, feature = j,cell_line = i, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+  }
+}
+
+#Retain slopes that 
+drug_CCD_all_values <- drug_CCD_slopes %>% 
+  reshape2::dcast(drug + feature + cell_line ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(drug, cell_line,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  mutate(CCD_value = case_when(drug == "ATMi" & slope < 0 ~ slope, drug == "ATMi"& slope > 0 ~ 0, drug == "DNAPKi" & slope > 0 ~ slope, drug == "DNAPKi" & slope < 0 ~ 0, T ~ slope)) %>% #Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+  na.omit()
+```
+
+#Plot these values
+```{r}
+#Plot in the same style as 
+ggplot(drug_CCD_all_values) + 
+  geom_tile(aes(fct_relevel(cell_line,c("RPEPro","RPEDef")), feature, fill = CCD_value)) + 
+  scale_fill_gradient2(low = "#8c510a" ,mid = "#f5f5f5", high = "#01665e", breaks = c(-1,-0.5,0, 0.5,1), limits = c(-1,1), oob = squish)  + 
+  coord_fixed(expand = F) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), axis.title = element_blank(), legend.position = "top") + facet_wrap(~ drug)
+
+```
+
+#Export data table
+```{r}
+write_rds(CCD_dt, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_CCD_analysis_summary.rds")
+```

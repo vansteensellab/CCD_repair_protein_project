@@ -1,0 +1,107 @@
+---
+title: "xv20210315_screening_visualization_heatmap"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(pheatmap)
+library(dendextend)
+library(Hmisc)
+library(umap)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+screen.score <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+screen.detail <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+screen.score.totals <-  readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_dcast.rds")
+screen.controls <- readRDS("~/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+```
+
+## Heat map of hits: Plot z-scores as a heatmap
+```{r}
+gene.hits.hmap <- screen.score.totals
+CI.90.hits.list <- apply(gene.hits.hmap[2:length(gene.hits.hmap)],2, function(x){gene.hits.hmap %>% filter(x > 1.65 | x < -1.65) %>% pull(gene)})
+CI.90.hits <- Reduce(union,CI.90.hits.list)
+gene.hits.hmap.b <- gene.hits.hmap %>% filter(gene %in% CI.90.hits) %>% column_to_rownames(var = "gene")
+
+pheatmap(as.matrix(gene.hits.hmap.b), breaks = c(min(gene.hits.hmap.b), -1.65,1.65,max(gene.hits.hmap.b)), color = c("blue", "grey90", "red"), cellwidth = 10,cellheight = 2, treeheight_row = 50, treeheight_col = 5, fontsize_row = 5)
+
+#Change colnames
+colnames(gene.hits.hmap.b) <- c("Regulatory elements (4 IPRs)","H3K27me3 (4 IPRs)","Triple heterochromatin (4 IPRs)","Others (5 IPRs)","Gene bodies (2 IPRs)")
+
+# The dendrogram for rows
+dst <- dist(gene.hits.hmap.b)
+hc_row <- hclust(dst)
+row_dend <- as.dendrogram(hc_row)
+row_dend <- seriate_dendrogram(row_dend, dst, method="OLO")
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210315_gene_heatmap_horizontal.pdf", width = 20)
+pheatmap(as.matrix(t(gene.hits.hmap.b)), breaks = seq(-5,5, by = 0.1), cellwidth = 7,cellheight = 7, treeheight_row = 30, treeheight_col = 80, fontsize_col = 7, fontsize_row = 7, border_color = NA)
+dev.off()
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210314_gene_heatmap_horizontal.pdf", width = 10)
+pheatmap((as.matrix(t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)')))), breaks = seq(-5,5, by = 0.1), cellwidth = 3,cellheight = 12, treeheight_col = 80, show_colnames = F, border_color = NA, cluster_row = F, cluster_cols=as.hclust(row_dend), color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+dev.off()
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20210314_gene_heatmap_horizontal_names.pdf", width = 20)
+pheatmap((as.matrix(t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)')))), breaks = seq(-5,5, by = 0.1), cellwidth = 8,cellheight = 12, treeheight_col = 80, show_colnames = T, border_color = NA, cluster_row = F, cluster_cols=as.hclust(row_dend), color=colorRampPalette(c("#EB2030","grey90","#2E358F"))(100))
+dev.off()
+
+#Correlogram for last heatmap
+plot.genes <- t(gene.hits.hmap.b %>% select('Regulatory elements (4 IPRs)','Gene bodies (2 IPRs)','H3K27me3 (4 IPRs)','Triple heterochromatin (4 IPRs)','Others (5 IPRs)'))
+tmp <- cor(plot.genes)
+tmp.test <- rcorr(plot.genes)
+pheatmap(tmp)
+
+```
+
+#UMAP of hits
+```{r}
+
+umap.all <- umap(screen.score %>% column_to_rownames(var = "gene"))
+all.umap <- bind_cols(screen.score,as_tibble(umap.all$layout))
+ggplot(all.umap) + geom_point(aes(V1,V2))
+
+#Plot umap
+umap.hits <- umap(gene.hits.hmap.b)
+gene.hits.hmap.b.umap <- bind_cols(gene.hits.hmap.b,as_tibble(umap.hits$layout))
+
+  
+ggplot(gene.hits.hmap.b.umap) + geom_point(aes(V1,V2, color = `Triple heterochromatin (4 IPRs)`)) + scale_color_distiller(type = "div",, palette = 7, limits = c(-4,4))
+ggplot(gene.hits.hmap.b.umap) + geom_point(aes(V1,V2, color = `H3K27me3 (4 IPRs)`)) + scale_color_distiller(type = "div", palette = 7, limits = c(-4,4))
+ggplot(gene.hits.hmap.b.umap) + geom_point(aes(V1,V2, color = `Regulatory elements (4 IPRs)`)) + scale_color_distiller(type = "div", palette = 7, limits = c(-4,4))
+ggplot(gene.hits.hmap.b.umap) + geom_point(aes(V1,V2, color = `Gene bodies (2 IPRs)`)) + scale_color_distiller(type = "div", palette = 7, limits = c(-4,4))
+
+#Separate both clusters and repeat UMAP
+umap.cluster1 <- filter(gene.hits.hmap.b.umap, V1 > 0 & V2 >0) %>% select(-V1,-V2)
+umap.cluster2 <- filter(gene.hits.hmap.b.umap, V1 < 0 & V2 <0) %>% select(-V1,-V2)
+
+#Bind together
+umap.c1 <- umap(umap.cluster1)
+umap.c2 <- umap(umap.cluster2)
+
+#
+c1.umap.plot <- bind_cols(umap.cluster1,as_tibble(umap.c1$layout))
+c2.umap.plot <- bind_cols(umap.cluster2,as_tibble(umap.c2$layout))
+
+#
+ggplot(c1.umap.plot) + geom_point(aes(V1,V2))
+ggplot(c2.umap.plot) + geom_point(aes(V1,V2))
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

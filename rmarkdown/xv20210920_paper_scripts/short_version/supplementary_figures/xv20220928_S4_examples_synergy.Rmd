@@ -12,9 +12,11 @@ output:
   editor_options:
     chunk_output_type: console
 ---
-# Script to generate figure S4 in the short version of the paper. 
+# Script to generate Supplementary Figure 4
 
- Fig. S4: Examples of linear fit correlation with individual chromatin features. Examples of three proteins with significant CCDs on individual chromatin features. All correlation plots show data of the 19 IPRs, the linear regression fit, and regression analysis parameters that are relevant for the synergy score. (R = Pearson correlation coefficient, p.value = p value of the correlation coefficient, slope = slope of the linear fit, synergy score = final value of CCD interaction between protein and chromatin feature after corrections). Color scheme of the figure shows if the protein - chromatin feature has an M-synergy (brown), N-synergy (green) or no synergy (black). A) N-synergy between BRCA2 and H3K4me1. B) No synergy between BRCA2 and H3K9me2. This interaction is explained by the ab-sence of the chromatin feature and therefore is discarded (favor NHEJ and slope < 0). C) No synergy between RAD50 and H3K4me3. Same as for B applies here (favor MMEJ and slope > 0). D) M-synergy between RAD50 and interactions with the nuclear lamina (LMNB1). E) N-synergy between BOD1L1 and H3K4me1. F) M-synergy between BOD1L1 and late replicating chromatin. 
+Fig. S4: Examples of linear fit correlation with individual chromatin features.
+
+Examples of three proteins with significant CCDs on individual chromatin features. All correlation plots show data of the 19 IPRs (n = 3), the linear regression fit, and regression analysis parameters that are relevant for the synergy score. (R = Pearson correlation coefficient, p.value = two-sided p value of the correlation coefficient, slope = slope of the linear fit, synergy score = final value of CCD interaction be-tween protein and chromatin feature after corrections). Color scheme of the figure shows if the protein - chromatin feature has an M-synergy (brown), N-synergy (green) or no synergy (black). 
 
 ```{r, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
@@ -101,10 +103,9 @@ fit.z.scores.ratio.mean <- readRDS_proof( "data/processed_data/CCD_analysis","z_
 
 ```
 
-#Supplementary Figures
 
-#Figure S4A
-A) N-synergy between BRCA2 and H3K4me1. 
+# Figure S4A
+
 ```{r Fig_S4_A, warning=FALSE, message=FALSE}
 # Plot BRCA2 with H3K4me1
 signif_barcode_BRCA2_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "BRCA2") %>% pull(barcode)
@@ -120,9 +121,9 @@ ggplot(step2.epistasis %>%
   geom_point(data = . %>% filter(barcode %in% signif_barcode_BRCA2_NHEJ), aes(H3K4me1,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
+A) N-synergy between BRCA2 and H3K4me1.
 
-#Figure S4B:
-No synergy between BRCA2 and H3K9me2. This interaction is explained by the absence of the chro-matin feature and therefore is discarded (favor NHEJ and slope < 0). 
+# Figure S4B
 ```{r Fig_S4_B, message=FALSE, warning=FALSE}
 # Plot BRCA2 with H3K9me2
 signif_barcode_BRCA2_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "BRCA2") %>% pull(barcode)
@@ -139,9 +140,9 @@ ggplot(step2.epistasis %>%
   geom_point(data = . %>% filter(barcode %in% signif_barcode_BRCA2_NHEJ), aes(H3K9me2,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(BRCA2 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
+B) No synergy between BRCA2 and H3K9me2. This interaction is explained by the absence of the chromatin feature and therefore is discarded (favor NHEJ and slope < 0). 
 
-#Figure S4C:
-C) No synergy between RAD50 and H3K4me3. Same as for B applies here (favor MMEJ and slope > 0). 
+# Figure S4C
 ```{r Fig_S4_C, message=FALSE, warning=FALSE}
 # Plot RAD50 with LMNB1
 signif_barcode_RAD50_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "RAD50") %>% pull(barcode)
@@ -158,9 +159,9 @@ ggplot(step2.epistasis %>%
     geom_point(data = . %>% filter(barcode %in% signif_barcode_RAD50_NHEJ), aes(H3K4me3,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
+C) No synergy between RAD50 and H3K4me3. Same as for B applies here (favor MMEJ and slope > 0). 
 
-#Figure S4D:
-D) M-synergy between RAD50 and interactions with the nuclear lamina (LMNB1). 
+# Figure S4D
 ```{r Fig_S4_D, warning=FALSE, message=FALSE}
 # Plot RAD50 with LMNB1
 signif_barcode_RAD50_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "RAD50") %>% pull(barcode)
@@ -176,9 +177,9 @@ ggplot(step2.epistasis %>%
     geom_point(data = . %>% filter(barcode %in% signif_barcode_RAD50_NHEJ), aes(LMNB1,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(RAD50 FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
+D) M-synergy between RAD50 and interactions with the nuclear lamina (LMNB1). 
 
-#Figure S4E:
-E) N-synergy between BOD1L and H3K4me1. 
+# Figure S4E
 ```{r Fig_S4_E, warning=FALSE, message=FALSE}
 # Plot BRCA2 with H3K36me3
 signif_barcode_BOD1L_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "BOD1L1") %>% pull(barcode)
@@ -196,9 +197,9 @@ ggplot(step2.epistasis %>%
   geom_point(data = . %>% filter(barcode %in% signif_barcode_BOD1L_NHEJ), aes(H3K4me1,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(BOD1L FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
+E) N-synergy between BOD1L and H3K4me1. 
 
-#Figure S4F:
-F) M-synergy between BOD1L and late replicating chromatin. 
+# Figure S4F
 ```{r Fig_S4_F, message=FALSE, warning=FALSE}
 signif_barcode_BOD1L_MMEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR < -1.95, gene == "BOD1L1") %>% pull(barcode)
 signif_barcode_BOD1L_NHEJ <- fit.z.scores.ratio.mean %>% filter(mean.z.score.IPR > 1.95, gene == "BOD1L1") %>% pull(barcode)
@@ -215,6 +216,6 @@ ggplot(step2.epistasis %>%
   geom_point(data = . %>% filter(barcode %in% signif_barcode_BOD1L_NHEJ), aes(late_replicating,mean.log2foldchange), size = 4, color = "#01665e") +
   theme_bw() + ylab("log2(BOD1L FC MMEJ:NHEJ balance)") + theme(legend.position = "none")
 ```
-
+F) M-synergy between BOD1L and late replicating chromatin. 
 
  

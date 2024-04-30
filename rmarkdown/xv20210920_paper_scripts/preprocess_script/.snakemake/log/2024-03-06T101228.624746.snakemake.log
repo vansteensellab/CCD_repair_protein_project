@@ -1,0 +1,1264 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 20
+Rules claiming more threads will be scaled down.
+Conda environments: ignored
+Job stats:
+job                 count    min threads    max threads
+----------------  -------  -------------  -------------
+all                     1              1              1
+call_mutation          12              1              1
+combine_mutation       12              1              1
+count_barcode          12              1              1
+count_mutation         12              5              5
+genuine_barcodes       12              1              1
+parse_mutation         12              1              1
+starcode               12              3              3
+structure              12              1              1
+total                  97              1              5
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.structure.txt
+    jobid: 46
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.structure.txt
+    jobid: 62
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.structure.txt
+    jobid: 6
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.structure.txt
+    jobid: 78
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.structure.txt
+    jobid: 22
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.structure.txt
+    jobid: 94
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.structure.txt
+    jobid: 38
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.structure.txt
+    jobid: 54
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.structure.txt
+    jobid: 70
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.structure.txt
+    jobid: 14
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.structure.txt
+    jobid: 86
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:28 2024]
+rule structure:
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.structure.txt
+    jobid: 30
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed, type=indelPCR, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:29 2024]
+Finished job 62.
+1 of 97 steps (1%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:29 2024]
+Finished job 78.
+2 of 97 steps (2%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 46.
+3 of 97 steps (3%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 6.
+4 of 97 steps (4%) done
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_5_K562_DMSO_r2_AACGTGAT_S5_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_DMSO_r2_parser.log
+    jobid: 61
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:29 2024]
+Finished job 70.
+5 of 97 steps (5%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 22.
+6 of 97 steps (6%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:29 2024]
+Finished job 54.
+7 of 97 steps (7%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 38.
+8 of 97 steps (8%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 94.
+9 of 97 steps (9%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 86.
+10 of 97 steps (10%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 14.
+11 of 97 steps (11%) done
+[Wed Mar  6 10:12:29 2024]
+Finished job 30.
+12 of 97 steps (12%) done
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_3_K562_AT9283_r1_ACATTGGC_S3_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_AT9283_r1_parser.log
+    jobid: 45
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_12_K562_Tuba_r3_AGTGGTCA_S12_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_Tuba_r3_parser.log
+    jobid: 21
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_10_K562_PCI_r3_AGTACAAG_S10_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_PCI_r3_parser.log
+    jobid: 5
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_7_K562_AT9283_r2_CAGATCTG_S7_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_AT9283_r2_parser.log
+    jobid: 77
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_6_K562_PCI_r2_CGCTGATC_S6_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_PCI_r2_parser.log
+    jobid: 69
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_8_K562_Tuba_r2_ATGCCTAA_S8_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_Tuba_r2_parser.log
+    jobid: 85
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_1_K562_DMSO_r1_ACAAGCTA_S1_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_DMSO_r1_parser.log
+    jobid: 29
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_9_K562_DMSO_r3_CTGTAGCC_S9_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_DMSO_r3_parser.log
+    jobid: 93
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_2_K562_PCI_r1_AAACATCG_S2_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_PCI_r1_parser.log
+    jobid: 37
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_4_K562_Tuba_r1_ACCACTGT_S4_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_Tuba_r1_parser.log
+    jobid: 53
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:29 2024]
+rule parse_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/raw/7648_11_K562_AT9283_r3_CATCAAGT_S11_R1_001.fastq.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.structure.txt
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.barcode.txt.gz, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.statistics.txt
+    log: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/stats/indelPCR.K562_AT9283_r3_parser.log
+    jobid: 13
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 69.
+13 of 97 steps (13%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:31 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.raw.count
+    jobid: 72
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:31 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r2.raw.table
+    jobid: 68
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 37.
+14 of 97 steps (14%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:31 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r1.raw.table
+    jobid: 36
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.raw.count
+    jobid: 40
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 72.
+15 of 97 steps (15%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:31 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.count.cut
+    jobid: 71
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_PCI_r2
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 40.
+16 of 97 steps (16%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:31 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.count.cut
+    jobid: 39
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_PCI_r1
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 77.
+17 of 97 steps (18%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:31 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.raw.count
+    jobid: 80
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:31 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r2.raw.table
+    jobid: 76
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:31 2024]
+Finished job 71.
+18 of 97 steps (19%) done
+[Wed Mar  6 10:12:31 2024]
+Finished job 39.
+19 of 97 steps (20%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 5.
+20 of 97 steps (21%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.raw.count
+    jobid: 8
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_PCI_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r3.raw.table
+    jobid: 4
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 80.
+21 of 97 steps (22%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.count.cut
+    jobid: 79
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_AT9283_r2
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 68.
+22 of 97 steps (23%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 36.
+23 of 97 steps (24%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r2.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r2.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r2.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r2.genuine.table
+    jobid: 67
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r1.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r1.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r1.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r1.genuine.table
+    jobid: 35
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 61.
+24 of 97 steps (25%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.raw.count
+    jobid: 64
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r2.raw.table
+    jobid: 60
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 79.
+25 of 97 steps (26%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 8.
+26 of 97 steps (27%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 35.
+27 of 97 steps (28%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 67.
+28 of 97 steps (29%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.count.cut
+    jobid: 7
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_PCI_r3
+    threads: 3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r2.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r2.tsv
+    jobid: 66
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r2
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 53.
+29 of 97 steps (30%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r1.raw.table
+    jobid: 52
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.raw.count
+    jobid: 56
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 7.
+30 of 97 steps (31%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 85.
+31 of 97 steps (32%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 21.
+32 of 97 steps (33%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r1.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r1.tsv
+    jobid: 34
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r1
+    threads: 5
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 64.
+33 of 97 steps (34%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 45.
+34 of 97 steps (35%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 76.
+35 of 97 steps (36%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r2.raw.table
+    jobid: 84
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r2.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.raw.count
+    jobid: 88
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.raw.count
+    jobid: 48
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+Select jobs to execute...
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 66.
+36 of 97 steps (37%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r3.raw.table
+    jobid: 20
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_Tuba_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.raw.count
+    jobid: 24
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r1.raw.table
+    jobid: 44
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r2.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r2.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r2.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r2.genuine.table
+    jobid: 75
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:32 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r2.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r2.count.table
+    jobid: 65
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 56.
+37 of 97 steps (38%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 29.
+38 of 97 steps (39%) done
+[Wed Mar  6 10:12:32 2024]
+Finished job 34.
+39 of 97 steps (40%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.count.cut
+    jobid: 63
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_DMSO_r2
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.count.cut
+    jobid: 55
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_Tuba_r1
+    threads: 3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 75.
+40 of 97 steps (41%) done
+
+[Wed Mar  6 10:12:32 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r1.raw.table
+    jobid: 28
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r1.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.raw.count
+    jobid: 32
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:32 2024]
+Finished job 4.
+41 of 97 steps (42%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:32 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r3.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_PCI_r3.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r3.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r3.genuine.table
+    jobid: 3
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:32 2024]
+Finished job 48.
+42 of 97 steps (43%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 88.
+43 of 97 steps (44%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r1.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r1.count.table
+    jobid: 33
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 63.
+44 of 97 steps (45%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:33 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.count.cut
+    jobid: 87
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_Tuba_r2
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:33 2024]
+Finished job 55.
+45 of 97 steps (46%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 13.
+46 of 97 steps (47%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.count.cut
+    jobid: 47
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_AT9283_r1
+    threads: 3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 24.
+47 of 97 steps (48%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.raw.count
+    jobid: 16
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:33 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_AT9283_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r3.raw.table
+    jobid: 12
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 3.
+48 of 97 steps (49%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 60.
+49 of 97 steps (51%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:33 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.count.cut
+    jobid: 23
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_Tuba_r3
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:33 2024]
+Finished job 87.
+50 of 97 steps (52%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 47.
+51 of 97 steps (53%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r2.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r2.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r2.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r2.genuine.table
+    jobid: 59
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 32.
+52 of 97 steps (54%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r2.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r2.tsv
+    jobid: 74
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r2
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 65.
+53 of 97 steps (55%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 23.
+54 of 97 steps (56%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 59.
+55 of 97 steps (57%) done
+[Wed Mar  6 10:12:33 2024]
+Finished job 52.
+56 of 97 steps (58%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_PCI_r3.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r3.tsv
+    jobid: 2
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r3
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:33 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r1.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r1.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r1.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r1.genuine.table
+    jobid: 51
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 93.
+57 of 97 steps (59%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 16.
+58 of 97 steps (60%) done
+[Wed Mar  6 10:12:33 2024]
+Finished job 84.
+59 of 97 steps (61%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule call_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r3.raw.table
+    jobid: 92
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:33 2024]
+rule count_barcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/parsed/indelPCR.K562_DMSO_r3.barcode.txt.gz
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.raw.count
+    jobid: 96
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, count_type=counts, read_type=indelPCR, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 44.
+60 of 97 steps (62%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r2.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r2.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r2.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r2.genuine.table
+    jobid: 83
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:33 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r1.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r1.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r1.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r1.genuine.table
+    jobid: 43
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 74.
+61 of 97 steps (63%) done
+[Wed Mar  6 10:12:33 2024]
+Finished job 33.
+62 of 97 steps (64%) done
+[Wed Mar  6 10:12:33 2024]
+Finished job 51.
+63 of 97 steps (65%) done
+
+[Wed Mar  6 10:12:33 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r2.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r2.tsv
+    jobid: 58
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r2
+    threads: 5
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:33 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.count.cut
+    jobid: 31
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_DMSO_r1
+    threads: 3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+Select jobs to execute...
+Select jobs to execute...
+[Wed Mar  6 10:12:33 2024]
+Finished job 20.
+64 of 97 steps (66%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:33 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r2.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r2.count.table
+    jobid: 73
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+Finished job 2.
+65 of 97 steps (67%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 83.
+66 of 97 steps (68%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r1.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r1.tsv
+    jobid: 50
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r1
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 43.
+67 of 97 steps (69%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r3.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r3.count.table
+    jobid: 1
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_PCI_r3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:34 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r3.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_Tuba_r3.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r3.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r3.genuine.table
+    jobid: 19
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+Finished job 31.
+68 of 97 steps (70%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:34 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.count.cut
+    jobid: 15
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_AT9283_r3
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+Finished job 28.
+69 of 97 steps (71%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 96.
+70 of 97 steps (72%) done
+[Wed Mar  6 10:12:34 2024]
+Finished job 58.
+71 of 97 steps (73%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r1.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r1.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r1.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r1.genuine.table
+    jobid: 27
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:34 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r2.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r2.count.table
+    jobid: 57
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r2
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r2.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r2.tsv
+    jobid: 82
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r2
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 19.
+72 of 97 steps (74%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 15.
+73 of 97 steps (75%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:34 2024]
+rule starcode:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.raw.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.starcode.count, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.genuine.cut, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.count.cut
+    jobid: 95
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, read_type=indelPCR, name=K562_DMSO_r3
+    threads: 3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+Finished job 12.
+74 of 97 steps (76%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 50.
+75 of 97 steps (77%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r3.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_AT9283_r3.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r3.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r3.genuine.table
+    jobid: 11
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 27.
+76 of 97 steps (78%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r1.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r1.count.table
+    jobid: 49
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:34 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_Tuba_r3.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r3.tsv
+    jobid: 18
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r3
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 95.
+77 of 97 steps (79%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 73.
+78 of 97 steps (80%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:34 2024]
+Finished job 82.
+79 of 97 steps (81%) done
+[Wed Mar  6 10:12:34 2024]
+Finished job 11.
+80 of 97 steps (82%) done
+
+[Wed Mar  6 10:12:34 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r1.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r1.tsv
+    jobid: 26
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r1
+    threads: 5
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+
+[Wed Mar  6 10:12:34 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r3.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r3.tsv
+    jobid: 10
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r3
+    threads: 5
+    resources: tmpdir=/tmp
+
+
+[Wed Mar  6 10:12:34 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r2.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r2.count.table
+    jobid: 81
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r2
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:35 2024]
+Finished job 1.
+81 of 97 steps (84%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:35 2024]
+Finished job 57.
+82 of 97 steps (85%) done
+[Wed Mar  6 10:12:35 2024]
+Finished job 18.
+83 of 97 steps (86%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:35 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r3.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r3.count.table
+    jobid: 17
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_Tuba_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:35 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_AT9283_r1.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r1.tsv
+    jobid: 42
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r1
+    threads: 5
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:35 2024]
+Finished job 92.
+84 of 97 steps (87%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:35 2024]
+rule genuine_barcodes:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r3.raw.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/counts/indelPCR.K562_DMSO_r3.starcode.count
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r3.not_genuine.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r3.genuine.table
+    jobid: 91
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, type=indelPCR, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:35 2024]
+Finished job 49.
+85 of 97 steps (88%) done
+[Wed Mar  6 10:12:35 2024]
+Finished job 10.
+86 of 97 steps (89%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:35 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r3.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r3.count.table
+    jobid: 9
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:35 2024]
+Finished job 26.
+87 of 97 steps (90%) done
+Select jobs to execute...
+[Wed Mar  6 10:12:35 2024]
+Finished job 91.
+88 of 97 steps (91%) done
+
+[Wed Mar  6 10:12:35 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r1.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r1.count.table
+    jobid: 25
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r1
+    resources: tmpdir=/tmp
+
+Select jobs to execute...
+[Wed Mar  6 10:12:35 2024]
+Finished job 81.
+89 of 97 steps (92%) done
+
+[Wed Mar  6 10:12:35 2024]
+rule count_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR/K562_DMSO_r3.genuine.table
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r3.tsv
+    jobid: 90
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r3
+    threads: 5
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:35 2024]
+Finished job 42.
+90 of 97 steps (93%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:35 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r1.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r1.count.table
+    jobid: 41
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_AT9283_r1
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:36 2024]
+Finished job 17.
+91 of 97 steps (94%) done
+[Wed Mar  6 10:12:36 2024]
+Finished job 9.
+92 of 97 steps (95%) done
+[Wed Mar  6 10:12:36 2024]
+Finished job 25.
+93 of 97 steps (96%) done
+[Wed Mar  6 10:12:36 2024]
+Finished job 90.
+94 of 97 steps (97%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:36 2024]
+rule combine_mutation:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r3.tsv
+    output: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r3.count.table
+    jobid: 89
+    wildcards: outdir=/DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed, name=K562_DMSO_r3
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:36 2024]
+Finished job 41.
+95 of 97 steps (98%) done
+[Wed Mar  6 10:12:37 2024]
+Finished job 89.
+96 of 97 steps (99%) done
+Select jobs to execute...
+
+[Wed Mar  6 10:12:37 2024]
+localrule all:
+    input: /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r3.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r3.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r3.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r1.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r1.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r1.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r1.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r2.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_PCI_r2.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_AT9283_r2.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_Tuba_r2.count.table, /DATA/projects/DSBrepair/Drug_screen_rev2/RNP_transfection/data/processed/indelPCR_counts/K562_DMSO_r3.count.table
+    jobid: 0
+    resources: tmpdir=/tmp
+
+[Wed Mar  6 10:12:37 2024]
+Finished job 0.
+97 of 97 steps (100%) done
+Complete log: /home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/preprocess_script/.snakemake/log/2024-03-06T101228.624746.snakemake.log

@@ -1,0 +1,199 @@
+---
+title: "xv20220829_S8_BRCA2_tumors"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+#Intro: This figure corresponds to figure S8 in the main text. 
+
+Fig. S8: BRCA2+/+ and BRCA2-/- mutation analysis. (A) log2 fold change of the five indel signatures called per tumor in BRCA2-/- compared to BRCA2+/+. (B) Total NHEJ and MMEJ counts on BRCA2+/+ tumors (n = 22) in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.). A Fisher’s count exact test was run on these values to test for differential accumulation of MMEJ and NHEJ deletions in Eu. and Het. (C) Total NHEJ and MMEJ counts on BRCA2-/- tumors (n = 41) in Eu. and Het. (D) Total number of large deletions with MH at break sites in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.) in BRCA2+/+ and BRCA2-/-.
+
+#Script set-up
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    saveRDS(object, file)
+    #write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    base::readRDS(file = correct_file)
+    #write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  base::readRDS(file = correct_file)
+  #write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# setwd
+setwd(in.dir)
+
+# libraries:
+library(tidyverse)
+library(reshape2)
+library(broom)
+library(ggrepel)
+library(dendextend)
+library(umap)
+library(igraph)
+library(lsa)
+library(tibble)
+library(utils)
+library(base)
+library(scales)
+library(openxlsx)
+```
+
+# Input files for this script: Data needed for figure 4 and come from the processed_data directory
+```{r import, warning=F, message=FALSE}
+# setwd
+setwd(in.dir)
+
+#Print note:
+print(paste("The following datasets will be loaded for this script:"))
+
+#Tumor analysis
+SV_MH_del_data_tumors <- readRDS_proof("data/processed_data/","SCC_SV_MH_deletions")
+indel_data_tumors <- readRDS_proof("data/processed_data/","SCC_indel_MMEJ_NHEJ")
+HPVneg_HNSCC_export_indel <- read.xlsx(paste0(in.dir,"data/supplementary_tables/xv20220922_Table_S10a_indel_mutations_tumors_COSMIC.xlsx"))
+BRCA2_HNSCC_export_indel <-  read.xlsx(paste0(in.dir,"data/supplementary_tables/xv20220922_Table_S10b_indel_mutations_tumors_COSMIC.xlsx"))
+
+```
+
+
+#Preparatory chunk: Prepare BRCA2-/- data for plotting and compute statistics
+```{r, warning=FALSE, message=FALSE}
+#Quick check of mutation accumulation
+#Check indels and see how they look quickly (HNSC)
+summary_table_HNSCC <- HPVneg_HNSCC_export_indel %>% dplyr::group_by(CLASS) %>% dplyr::summarise(total_numbers = n()/22,
+                                                                                     tumortype = "HNSC")
+
+#Check indels and see how they look quickly (HNSC)
+summary_table_BRCA2 <- BRCA2_HNSCC_export_indel %>% dplyr::group_by(CLASS) %>% dplyr::summarise(total_numbers = n()/41,
+                                                                                     tumortype = "BRCA2")
+
+## Merge
+summary_table <- bind_rows(summary_table_BRCA2, summary_table_HNSCC) %>% 
+  reshape2::dcast(CLASS ~ tumortype, value.var = "total_numbers") %>%
+  mutate(fold_change = BRCA2/HNSC)
+  
+# SV data
+distribution_tumor <- SV_MH_del_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(type, tumor_id, LAD_status, total_MH_del) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(type + tumor_id + total_MH_del ~ LAD_status, value.var = "mut_count", fill = 0) %>%
+  dplyr::group_by(type) %>%
+  dplyr::summarise(freq_ciLAD = sum(ciLAD,na.rm = T)/sum(total_MH_del, na.rm = T),
+                   freq_cLAD = sum(cLAD,na.rm = T)/sum(total_MH_del, na.rm = T), 
+                   log2_ratio = log2(sum(cLAD, na.rm = T)/sum(ciLAD, na.rm = T)),
+                  tot_cLAD = sum(cLAD),
+                   tot_ciLAD = sum(ciLAD))
+
+
+#Indel data
+distribution_tumor_indel <- indel_data_tumors %>% 
+  filter(ciLAD == 1 | cLAD == 1) %>%
+  mutate(LAD_status = case_when(ciLAD == 1 ~ "ciLAD",
+                                cLAD == 1 ~ "cLAD")) %>%
+  dplyr::group_by(tumor_type, tumor_id, LAD_status, total_mutation, CLASS) %>% dplyr::summarise(mut_count = n(), .groups = "drop") %>% 
+  reshape2::dcast(tumor_type + tumor_id + total_mutation + CLASS ~ LAD_status, value.var = "mut_count", fill = 0) %>%
+dplyr::group_by(tumor_type, CLASS) %>%
+  dplyr::summarise(freq_ciLAD = sum(ciLAD,na.rm = T)/sum(total_mutation, na.rm = T),
+                   freq_cLAD = sum(cLAD,na.rm = T)/sum(total_mutation, na.rm = T), 
+                   log2_ratio = log2(sum(cLAD, na.rm = T)/sum(ciLAD, na.rm = T)),
+                   tot_cLAD = sum(cLAD),
+                   tot_ciLAD = sum(ciLAD))
+
+```
+
+#Figure S8A:
+(A) log2 fold change of the five indel signatures called per tumor in BRCA2-/- compared to BRCA2+/+. 
+```{r Fig_S8_A, warning=FALSE, message=FALSE}
+# 
+ggplot(summary_table) + geom_col(aes(CLASS, log2(fold_change))) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5)) + geom_hline(yintercept = 0, linetype = 2)
+```
+
+#Figure S8B: 
+(B) Total NHEJ and MMEJ counts on BRCA2+/+ tumors (n = 22) in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.). 
+
+```{r, Fig_S8_B, warning=FALSE, message=FALSE}
+# Data for plotting
+plot_data_bars_test <- distribution_tumor_indel %>% select(-freq_ciLAD,-freq_cLAD, -log2_ratio) %>% reshape2::melt()
+
+#Plot HNSC S8B
+ggplot(plot_data_bars_test %>% filter(tumor_type == "HHNSC_indel")) + geom_col(aes(fct_relevel(variable, c("tot_ciLAD","tot_cLAD")),value)) + facet_wrap(~fct_relevel(CLASS, c("cNHEJ","MMEJ")), ncol = 1, scales = "free") + theme_bw()
+```
+#Figure S8C
+(C) Total NHEJ and MMEJ counts on BRCA2-/- tumors (n = 41) in Eu. and Het.
+```{r Fig_S8_C, warning=FALSE, message=FALSE}
+#Plot BRCA2 S8C
+ggplot(plot_data_bars_test %>% filter(tumor_type == "BRCA2mut_indel")) + geom_col(aes(fct_relevel(variable, c("tot_ciLAD","tot_cLAD")),value)) + facet_wrap(~fct_relevel(CLASS, c("cNHEJ","MMEJ")), ncol = 1, scales = "free") + theme_bw()
+```
+
+#Figure S8D
+(D) Total number of large deletions with MH at break sites in euchromatin (Eu.) and constitutive lamina-associated heterochromatin (Het.) in BRCA2+/+ and BRCA2-/-.
+```{r Fig_S8_D, warning=FALSE, message=FALSE}
+#Plot SV S8D
+plot_SV_data <- distribution_tumor %>% select(-freq_ciLAD,-freq_cLAD, -log2_ratio) %>% reshape2::melt()
+
+ggplot(plot_SV_data) + geom_col(aes(fct_relevel(variable, c("tot_ciLAD","tot_cLAD")),value)) + facet_wrap(~fct_relevel(type, c("sporadic_HPVneg","BRCA2mut")), ncol = 1, scales = "free") + theme_bw()
+
+SV_fisher <- distribution_tumor %>% ungroup() %>% select(-freq_ciLAD, -freq_cLAD, -log2_ratio) %>% column_to_rownames(var = "type") %>% fisher.test() %>% tidy()
+
+print(SV_fisher)
+
+```
+

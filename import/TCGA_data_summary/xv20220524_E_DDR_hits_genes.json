@@ -1,0 +1,136 @@
+[{
+  "biotype": "protein_coding", 
+  "symbol": "CHEK2", 
+  "cytoband": [
+    "22q12.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "checkpoint kinase 2", 
+  "gene_id": "ENSG00000183765"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "EGFR", 
+  "cytoband": [
+    "7p11.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "epidermal growth factor receptor", 
+  "gene_id": "ENSG00000146648"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "BLM", 
+  "cytoband": [
+    "15q26.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "BLM RecQ like helicase", 
+  "gene_id": "ENSG00000197299"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "MEN1", 
+  "cytoband": [
+    "11q13.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "menin 1", 
+  "gene_id": "ENSG00000133895"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "BRCA2", 
+  "cytoband": [
+    "13q13.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "BRCA2 DNA repair associated", 
+  "gene_id": "ENSG00000139618"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "FEN1", 
+  "cytoband": [
+    "11q12.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "flap structure-specific endonuclease 1", 
+  "gene_id": "ENSG00000168496"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "RAD17", 
+  "cytoband": [
+    "5q13.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "RAD17 checkpoint clamp loader component", 
+  "gene_id": "ENSG00000152942"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "ATM", 
+  "cytoband": [
+    "11q22.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "ATM serine/threonine kinase", 
+  "gene_id": "ENSG00000149311"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "ATR", 
+  "cytoband": [
+    "3q23"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "ATR serine/threonine kinase", 
+  "gene_id": "ENSG00000175054"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "FANCG", 
+  "cytoband": [
+    "9p13.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "FA complementation group G", 
+  "gene_id": "ENSG00000221829"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "TRRAP", 
+  "cytoband": [
+    "7q22.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "transformation/transcription domain associated protein", 
+  "gene_id": "ENSG00000196367"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "FANCD2", 
+  "cytoband": [
+    "3p25.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "FA complementation group D2", 
+  "gene_id": "ENSG00000144554"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "RMI2", 
+  "cytoband": [
+    "16p13.13"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "RecQ mediated genome instability 2", 
+  "gene_id": "ENSG00000175643"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "XPA", 
+  "cytoband": [
+    "9q22.33"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "XPA, DNA damage recognition and repair factor", 
+  "gene_id": "ENSG00000136936"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "FANCF", 
+  "cytoband": [
+    "11p14.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "FA complementation group F", 
+  "gene_id": "ENSG00000183161"
+}]

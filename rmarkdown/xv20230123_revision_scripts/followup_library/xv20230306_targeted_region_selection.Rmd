@@ -1,0 +1,249 @@
+---
+title: "xv20230227_follow_up_library"
+author: "Xabier Vergara"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Follow up library design
+in this markdown, I will design a library to validate the main findings on the screen.
+Potential candidate list for genes to target
+NHEJ_factors <- POLL, BRCA2, CHAF1A ('D'), BABAM2, UIMC1, BRCC3.
+MMEJ_factors_TH <- RBBP8 ('D'), ATM, FANCD2, TOPBP1 ('E'), MDC1, RAD50, ATR ('E')
+MMEJ_factors_K27 <- CHEK2, FANCM ('D'), FANCG, FAAP24, SMC5 ('E')
+MMEJ_factors_euch <- RMI2 ('D'), BLM, PARP1
+Dual <- BOD1L1
+
+
+```{r libraries}
+library(tidyverse)
+library(ggbeeswarm)
+```
+#Functions
+```{r}
+#Function find reference kgID
+kgID_reference_finding <- function(x) {
+  kgID_summary <- x %>% 
+  select(kgID, Exon.number) %>%
+  distinct() %>%
+  dplyr::group_by(kgID) %>% 
+  dplyr::summarise(exon_counts = n())
+  
+  #max exons
+  kgID_reference <- top_n(kgID_summary, 1, exon_counts) %>% pull(kgID)
+  
+  #Select the kgID to use: If overlap is big take one randomly
+  kgID_to_use <- if (length(kgID_reference) > 1) {
+  
+  #Unique gRNAs
+  unique_gRNAs <- x %>%
+    filter(kgID %in% kgID_reference) %>%
+    pull(gRNA) %>% unique()
+  
+  #All gRNAs
+  all_gRNAs <- x %>%
+    filter(kgID %in% kgID_reference) %>%
+    pull(gRNA)
+  
+  #What's the overlap frequency
+  overlap <- length(all_gRNAs)/(length(unique_gRNAs)*length(kgID_reference))
+
+  if (overlap > 0.95) { #If overlap is high take only one
+  kgID_reference[1]
+  } else { #If overlap is not high keep both
+    kgID_reference
+  }
+} else { #In case there is only one reference pick that one
+  kgID_reference
+}
+}
+
+#Summary gene table calculation (x = high_quality)
+make_summary_table <- function(x) {
+  #Number of gRNAs per exon
+summary_gRNA_hs <- x %>% 
+  dplyr::group_by(kgID, Exon.number) %>%
+  dplyr::summarise(gRNA_n = n(),
+                   common_gRNA_n = sum(gRNA %in% gRNAs_both_species),
+                   Exon.length = Exon.end - Exon.start)
+
+#Calculate distance to previous and next exon
+distance_exon <- map_dfr(unique(interaction(x$kgID, x$Exon.number, sep = "_")), function(y){
+  gene <- as.character(str_extract(y, ".*(?=_)"))
+  exon <- as.integer(str_extract(y, "(?<=_).*"))
+  prev_exon_end <- filter(x, kgID == gene & Exon.number == (exon - 1)) %>% pull(Exon.end) %>% unique()
+  exon_start <- x %>% filter(kgID == gene & Exon.number == exon) %>% pull(Exon.start) %>% unique()
+  exon_end <- x %>% filter(kgID == gene & Exon.number == exon) %>% pull(Exon.end) %>% unique()
+  next_exon_start <- filter(x, kgID == gene & Exon.number == (exon + 1)) %>% pull(Exon.start) %>% unique()
+  
+  tibble(kgID = gene,
+         Exon.number = exon,
+         Dist.prev.exon = exon_start - prev_exon_end,
+         Dist.next.exon = next_exon_start - exon_end)
+  })
+
+#Left_join
+summary_gene_hs <- left_join(summary_gRNA_hs, distance_exon, by = c("kgID","Exon.number")) %>% distinct()
+}
+
+#Function to add one more exons
+  add_exon_gRNA <- function(x,y){
+    targetted_area <- x %>%
+      filter(Exon.number == y)
+    targetted_prev <- 0
+    i = 1
+    while (targetted_prev < 5000){
+    #Set_counter
+    exon <- y - i
+    #Add previous 
+    prev_exon <- x %>% 
+      filter(Exon.number == exon)
+    #Bind columns
+    targetted_area <- targetted_area %>% bind_rows(prev_exon)
+    #Check if the condition is met
+    targetted_prev <- sum(targetted_area$Exon.length) + sum(targetted_area$Dist.prev.exon)
+    #Add one to the counter
+    i = i + 1
+    }
+    return(targetted_area)
+  }
+```
+
+#Import data tables: mouse and human
+```{r pressure, echo=FALSE}
+#ATM example
+human_gRNA <- read.delim(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_human/ATM_hg38.csv", sep = ",")
+
+mouse_gRNA <- read.delim(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_library/indelphi_mouse/ATM_mm10.csv", sep = ",")
+
+#Common gRNAs: select for the common gRNAs
+gRNAs_both_species <- intersect(human_gRNA$gRNA,mouse_gRNA$gRNA)
+
+```
+
+#
+```{r}
+#kgID summary table
+kgID_summary <- human_gRNA %>% 
+  select(kgID, Exon.number) %>%
+  distinct() %>%
+  dplyr::group_by(kgID) %>% 
+  dplyr::summarise(exon_counts = n())
+
+#max exons
+kgID_reference <- top_n(kgID_summary, 1, exon_counts) %>% pull(kgID)
+
+#Select the kgID to use: If overlap is big take one randomly
+kgID_to_use <- if (length(kgID_reference) > 1) {
+  
+  #Unique gRNAs
+  unique_gRNAs <- human_gRNA %>%
+    filter(kgID %in% kgID_reference) %>%
+    pull(gRNA) %>% unique()
+  
+  #All gRNAs
+  all_gRNAs <- human_gRNA %>%
+    filter(kgID %in% kgID_reference) %>%
+    pull(gRNA)
+  
+  #What's the overlap frequency
+  overlap <- length(all_gRNAs)/(length(unique_gRNAs)*length(kgID_reference))
+
+  if (overlap > 0.95) { #If overlap is high take only one
+  kgID_reference[1]
+  } else { #If overlap is not high keep both
+    kgID_reference
+  }
+} else { #In case there is only one reference pick that one
+  kgID_reference
+}
+
+#Summary sentence
+print(paste("All gRNAs are taken form the following gene built",kgID_to_use))
+
+```
+
+#Plot different kgIDs
+```{r}
+# Plot kgID
+ggplot(human_gRNA) + geom_point(aes(Cutsite.coordinate, kgID, color = kgID %in% kgID_to_use)) +
+  theme_bw()
+```
+#Filter high quality gRNAs
+```{r}
+# Relative exon number
+relative_exon_number <- human_gRNA %>%
+  dplyr::group_by(kgID) %>%
+  dplyr::mutate(rel_ex_number = Exon.number/max(Exon.number))
+
+#High quality gRNAs (Frameshift > 80%)
+high_quality_gRNAs <- human_gRNA %>%
+  dplyr::group_by(kgID) %>%
+  dplyr::mutate(rel_ex_number = Exon.number/max(Exon.number)) %>%
+  ungroup() %>%
+  filter(kgID %in% kgID_to_use & Frameshift.... > 80 & rel_ex_number < 0.2) %>%
+  distinct()
+```
+
+#Calculate summary table of gRNAs
+```{r}
+
+```
+
+#Summary plots: Exons
+```{r}
+#number of gRNAs per exon per position
+ggplot(summary_gene_hs) +
+  geom_point(aes(as.numeric(Exon.number), gRNA_n,size = common_gRNA_n, color = common_gRNA_n > 0)) + 
+  facet_wrap(~kgID) + theme_bw() + 
+  theme(legend.position = "top") +
+  coord_cartesian(ylim = c(0, max(summary_gene_hs$gRNA_n))) + xlab("Exon number") + ylab("Number of high quality gRNA per exon")
+
+```
+
+
+#Select the exon or exonst that will be targetted
+```{r}
+
+#Select the exon with the highest_number of gRNA
+highest_gRNA <- summary_gene_hs %>% 
+  ungroup() %>% 
+  top_n(1,gRNA_n)
+
+#Exon with highest common_gRNAs
+highest_common <- summary_gene_hs[1:2,] %>% 
+  ungroup() %>% 
+  filter(common_gRNA_n > 0) %>%
+  top_n(1,common_gRNA_n)
+
+#Make a quick if to select starting exon number
+exons_to_target <- if (nrow(highest_common) > 0){
+  add_exon_gRNA(summary_gene_hs, highest_common$Exon.number)
+} else {
+  add_exon_gRNA(summary_gene_hs, highest_gRNA$Exon.number)
+}
+
+#Which exon to target
+print(exons_to_target)
+```
+
+#How many gRNAs could be used in mouse cells?
+```{r}
+#Print
+print(paste("There are a total of", sum(exons_to_target$gRNA_n), "gRNAs in the selected region and",sum(exons_to_target$common_gRNA_n), "target both species."))
+```
+
+#Select gRNAs and export them
+```{r}
+# Filter high quality gRNAs in targetted regions
+gRNA_to_select <- high_quality_gRNAs %>% 
+  filter(Exon.number %in% exons_to_target$Exon.number) %>%
+  mutate(common_gRNA = gRNA %in% gRNAs_both_species)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,385 @@
+---
+title: "xv20220712_S7_editing_efficiency"
+author: "x.vergara"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    theme: journal #cerulean
+    highlight: monochrome
+    toc: true
+    toc_float: true
+    code_folding: show
+  editor_options:
+    chunk_output_type: console
+---
+# Script to generate figure S7 in the short version of the paper.
+
+Fig. S7: Editing efficiency estimation. A) Transcribed (n = 8) and non-transcribed (n = 11) IPRs in clone 5. We classified IPRs based on the transcription-related feature signals (light orange). B) Editing efficiencies in transcribed IPRs for each replicate in mock transfected samples (n = 33). Error bars show mean ± sd.
+
+```{r functions, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(root.dir = '/DATA/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/rmarkdown/xv20210920_paper_scripts/short_version/knit_html/')
+
+StartTime <-Sys.time()
+library(knitr)
+
+# 8-digit Date tag:
+Date <- substr(gsub("-","",Sys.time()),1,8)
+
+#Change in.dir accordingly
+in.dir <- "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/"
+
+#Check if output contain datetag
+saveRDS_proof <- function(object, file) {
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  if (grepl(Date, file) == T) {
+    write(c(document_name, as.character(sys_time),"Output", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    saveRDS(object, file)
+  }
+  else {
+    print("Incorrect datetag!")
+  }
+}
+
+#Read rds check through different versions
+readRDS_proof <- function(path, pat) {
+  full.path <- paste0(in.dir, path)
+  document_path <- rstudioapi::getSourceEditorContext()$path %>% str_split(pattern = "/") %>% unlist()
+  document_name <- document_path[length(document_path)]
+  sys_time <- Sys.time()
+  
+  if(file.exists(full.path) == T){
+    if(paste0(in.dir,path) != getwd()){
+      setwd(paste0(in.dir, path))
+  }
+    file.list <- list.files(pattern = pat)
+    correct_file <- str_sort(file.list, decreasing = T)[1]
+    print(correct_file)
+    write(c(document_name,as.character(sys_time) ,"Input", correct_file), file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+    readRDS(correct_file)
+    
+  }
+  else{
+  setwd(path)
+  file.list <- list.files(pattern = pat)
+  correct_file <- str_sort(file.list, decreasing = T)[1]
+  print(correct_file)
+  write(c(document_name, as.character(sys_time),"Input", correct_file),file = paste0(in.dir,"log"), ncolumns = 4, sep = "\t", append = T)
+  readRDS(correct_file)
+  }
+}
+```
+
+
+# Libraries
+```{r libraries, warning=FALSE, message=FALSE}
+# libraries:  
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(rstatix)
+library(stats)
+library(tibble)
+library(reshape2)
+```
+
+
+
+# Import data tables
+```{r import, warning=FALSE, message=FALSE}
+
+setwd(in.dir)
+#Import MMEJ:NHEJ balance ratio measurements per replicate
+ddr.screen.all <- readRDS_proof( "data/processed_data/CCD_analysis","raw_data")
+
+inhibtor.screen.all <- readRDS_proof("data/processed_data/CCD_inhibitors","repair_metrics")
+
+revision_data_RPE1 <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/","RPE1_control")
+revision_data_PRO <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/","PRO_control")
+revision_data_DEF <- readRDS_proof("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/","DEF_control")
+
+# heatmap chromatin order
+heatmap.chromatin.order <- c("HDAC3","LMNB1","late_replicating","H3K9me2","H3K9me3","HDAC1","EZH2","H3K27me3","CTCF","SMC3","m5C","HDAC2","POL2","POL2AS2","H3K36me3","TTseq","Dam","H3K79me2","H2AFZ","DNAse","H3K4me3","H4K5acK8ac","H3K4me1","H3K27ac","H3K4me2")
+
+clone5_bc_cluster <-  c("CATCCACCACACTTCA","ATATCGTTGCTGGAGA","GTACCTCTCGATAGTG","TCTTTTGAGGAGCTGA","CATTTCTGATCAATAA","TGGCCAATATTTGTCT","ACTGTCGAGTTGTCCG","GAGCGCGTCACCGGGT","GCGCACCCTTTAATTG","ACCCCTAAAGGCGCTG","CGGCCTGAAGGTCAGG","AGAAAATAATATGACG","TTGAACGCGGGCTCGG","CCGGGGACGTATGCAC","GCTAACATCACGAATC","ATACTATATTTAACGG","TATGGCTGTCGGGTAG","AGGGCGTAAAATATTT","TGTCCCTTAGTACTTT")
+
+#Import delta log2 balance effects
+PRO_log2 <-  readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_PRO_all_mean_freq_0.0025.rds") %>% filter(is.finite(log2_bal))
+K562_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_analysis/xv20220819_screening_raw_data_repair_metrics.rds")
+DEF_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230911_DEF_all_mean_freq_0.0075_.rds") %>%
+  filter(is.finite(log2_bal))
+RPE1_log2 <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230915_RPE1_min_read_5.rds") %>% 
+  filter(!gRNA %in% c("LBR2","halfLBR2","empty") & cell_line == "RPE1")
+
+#Import CCD effects
+CCD_effects_all_cells <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230917_CCD_summary_cell_lines.rds")
+
+```
+
+#Data arrangement in K562 cells
+```{r}
+#Merge transfection and nucleofection examples
+editing_efficiency_WT <-  ddr.screen.all %>% filter(sample == "WT") %>% dplyr::select(barcode,well,plate, rep, freqCut) %>% mutate(delivery = "lipofection")
+editing_efficiency_inhibitor <-  inhibtor.screen.all %>% filter(drug == "DMSO") %>% dplyr::select(barcode, rep = replicate, freqCut) %>% mutate(delivery = "nucleofection")
+
+mergedt_K562_data <- editing_efficiency_WT %>% bind_rows(editing_efficiency_inhibitor)
+
+#Calculate value per replicate
+mean_per_replicate_TIF <- mergedt_K562_data %>%
+  dplyr::group_by(barcode, delivery) %>%
+  dplyr::summarise(mean_TIF = mean(freqCut))
+ 
+#Reporters in transcribed regions 
+transcr_reporters <- clone5_bc_cluster[c(12:19)]
+editing_eff_transcr_reporters_inhibitor <- editing_efficiency_inhibitor %>% filter(barcode %in% transcr_reporters) 
+```
+
+#Supplementary Figures
+
+#Figure S7A
+Modified from Fig. 1C
+A) Transcribed (n = 8) and non-transcribed (n = 11) IPRs in clone 5. We classified IPRs based on the transcription-related feature signals (light orange). 
+
+#Figure S7B: 
+B) Editing efficiencies in transcribed IPRs for each replicate in mock transfected samples (n = 33). Error bars show mean ± sd.
+```{r}
+#Plot as beeswarm plot
+ggplot(mean_per_replicate_TIF %>% filter(barcode %in% transcr_reporters)) +
+  geom_quasirandom(aes(delivery, mean_TIF)) + theme_bw() + ylim(c(0,1))
+
+ #Correlation of both measurements
+t_test_IPR <- mean_per_replicate_TIF %>% 
+  filter(barcode %in% transcr_reporters) %>%
+  ungroup() %>%
+  t_test(mean_TIF ~ delivery, paired = T)
+
+```
+#CONCLUSION: In all IPRs nucleofection efficiency is higher than before.
+
+#Data arrangement in RPE1 cells
+```{r, fig.width=3, fig.height=4}
+#Merge transfection and nucleofection examples
+editing_efficiency_RPE1 <-  revision_data_RPE1 %>% mutate(TIF = 1 - (wt_0/total_IPR_reads)) %>% filter(gRNA == "LBR2") %>% select(barcode, cell_line,rep = bio_rep, TIF)
+editing_efficiency_PRO <-  revision_data_PRO %>% mutate(TIF = 1 - (wt_0/total_IPR_reads)) %>% filter(gRNA == "halfLBR2") %>% select(barcode, cell_line,rep = bio_rep, TIF)
+editing_efficiency_DEF <-  revision_data_DEF %>% mutate(TIF = 1 - (wt_0/total_IPR_reads)) %>% filter(gRNA == "LBR2") %>% select(barcode, cell_line,rep = bio_rep, TIF)
+
+#K562 data
+editing_efficiency_K562 <- mergedt_K562_data %>% 
+  filter(delivery == "lipofection" & barcode %in% transcr_reporters) %>%
+  ungroup() %>%
+  dplyr::group_by(rep) %>%
+  dplyr::summarise(mean_TIF = mean(freqCut)) %>%
+  mutate(cell_line = "K562")
+
+
+
+#Merge RPE1 data
+merge_RPE1_data_TIF <- bind_rows(editing_efficiency_RPE1, editing_efficiency_PRO, editing_efficiency_DEF) %>% 
+  dplyr::group_by(rep,cell_line) %>% 
+  dplyr::summarise(mean_TIF = mean(TIF)) %>%
+  bind_rows(editing_efficiency_K562)
+
+#Calcualte TIF
+t_test_TIF <- merge_RPE1_data_TIF %>%
+  ungroup() %>%
+  t_test(mean_TIF ~ cell_line, ref.group = "K562", alternative = "less")
+
+#Plot as beeswarm plot
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S6_editing_efficiency/xv20231006_TIF_validation_experiment.pdf", width = 3, height= 4)
+ggplot(merge_RPE1_data_TIF,aes(fct_relevel(cell_line, c("K562","DEF","PRO","RPE1")), mean_TIF)) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom() +
+  ylab("Total indel frequency") +
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+dev.off()
+```
+
+#How to plot this effects?
+```{r, fig.width=3, fig.height=4}
+global_effects_plot <- CCD_effects_all_cells %>% select(gene,global_diff, cell_line) %>% distinct() %>% na.omit()
+#Overall ∆log2 balance global changes
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S6_editing_efficiency/xv20231006_global_effect.pdf", width = 3, height= 4)
+ggplot(global_effects_plot, aes(fct_relevel(cell_line, c("K562","DEF","PRO","RPE1")), abs(global_diff))) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom() +
+  ylab("abs(Global ∆log2 MMEJ::NHEJ)") +
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+dev.off()
+
+#Perform test (differences between cell lines?)
+
+global_effect_test <- map_dfr(c("DEF","PRO","RPE1"), function(x) {
+  cell_line1 <- CCD_effects_all_cells %>% filter(cell_line == "K562" & toxic == F & gRNA != "NTC") %>% select(cell_line, gRNA, global_diff) 
+  cell_line2 <- CCD_effects_all_cells %>% filter(cell_line == x & toxic == F & gRNA != "NTC") %>% select(cell_line, gRNA, global_diff)
+  proteins <- intersect(cell_line1$gRNA, cell_line2$gRNA)
+  cell_lines <- bind_rows(cell_line1, cell_line2) %>% filter(gRNA %in% proteins) %>% distinct() %>% mutate(abs_global = abs(global_diff))
+  cell_lines %>% ungroup() %>% wilcox_test(abs_global ~ cell_line, paired = T, ref.group = "K562", alternative = "less")
+  }) %>% mutate(fdr = p.adjust(p, method = "BH"))
+
+```
+#Conclusion: Effect sizes are also larger RPE1 cells compared to K562
+
+#Is this true for CCDs?
+#How to plot this effects?
+```{r, fig.width=2, fig.height=3, warning=F}
+#Create data frame with only matching pairs
+CCD_effect_matched <- map(c("DEF","PRO","RPE1"), function(x) {
+  cell_line1 <- CCD_effects_all_cells %>% filter(cell_line == "K562" & toxic == F & gRNA != "NTC" & CCD_score != 0) %>% select(cell_line, gRNA, CCD_score, chrom_feature) %>% mutate(assay = paste(gRNA, chrom_feature, sign(CCD_score), sep = "_"))
+  cell_line2 <- CCD_effects_all_cells %>% filter(cell_line == x & toxic == F & gRNA != "NTC" & CCD_score != 0) %>% select(cell_line, gRNA, CCD_score, chrom_feature) %>% mutate(assay = paste(gRNA, chrom_feature, sign(CCD_score), sep = "_"))
+  proteins <- intersect(cell_line1$assay, cell_line2$assay)
+  assay <- tibble(assay = proteins) %>% separate(assay, into = c("gRNA","chrom_feature"))
+  cell_lines <- bind_rows(cell_line1, cell_line2) %>% right_join(assay) %>% distinct() %>% mutate(effect_CCD = abs(CCD_score)) %>% na.omit()
+  })
+
+#Overall ∆log2 balance global changes (K562 vs. DEF)
+ggplot(CCD_effect_matched[[1]] %>% na.omit() %>% filter(CCD_score != 0), aes(fct_relevel(cell_line, c("K562","DEF")), effect_CCD)) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom(alpha = 0.5) +
+  ylab("abs(CCD score)") +
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+
+ggplot(CCD_effect_matched[[2]] %>% na.omit() %>% filter(CCD_score != 0), aes(fct_relevel(cell_line, c("K562","PRO")), abs(CCD_score))) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom(alpha = 0.5) +
+  ylab("abs(CCD score)") +
+  theme_bw()  +
+  scale_fill_manual(values = c("grey70","#95c482")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+
+ggplot(CCD_effect_matched[[3]] %>% na.omit() %>% filter(CCD_score != 0), aes(fct_relevel(cell_line, c("K562","RPE1")), abs(CCD_score))) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom(alpha = 0.5) +
+  ylab("abs(CCD score)") +
+  theme_bw()  +
+  scale_fill_manual(values = c("grey70","#98bad5")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+
+#Perform test (differences between cell lines?)
+cell_lines_pairs <- t(combn(c("K562","DEF","PRO","RPE1"), 2)) %>% as_tibble()
+
+CCD_effect_test <- map_dfr(c("DEF","PRO","RPE1"), function(x) {
+  cell_line1 <- CCD_effects_all_cells %>% filter(cell_line == "K562" & toxic == F & gRNA != "NTC" & CCD_score != 0) %>% select(cell_line, gRNA, CCD_score, chrom_feature) %>% mutate(assay = paste(gRNA, chrom_feature, sign(CCD_score), sep = "_"))
+  cell_line2 <- CCD_effects_all_cells %>% filter(cell_line == x & toxic == F & gRNA != "NTC" & CCD_score != 0) %>% select(cell_line, gRNA, CCD_score, chrom_feature) %>% mutate(assay = paste(gRNA, chrom_feature, sign(CCD_score), sep = "_"))
+  proteins <- intersect(cell_line1$assay, cell_line2$assay)
+  assay <- tibble(assay = proteins) %>% separate(assay, into = c("gRNA","chrom_feature"))
+  cell_lines <- bind_rows(cell_line1, cell_line2) %>% right_join(assay) %>% distinct() %>% mutate(effect_CCD = abs(CCD_score))
+  cell_lines %>% ungroup() %>% wilcox_test(effect_CCD ~ cell_line, ref.group = "K562", alternative = "less")
+  }) %>% mutate(fdr = p.adjust(p, method = "BH"))
+```
+
+#Is this true for CCDs? - Take the strongest per gene
+#How to plot this effects?
+```{r, fig.width=3, fig.height=4, warning=F}
+chrom_features_RPE <- CCD_effects_all_cells %>% filter(cell_line == "DEF") %>% pull(chrom_feature) %>% unique()
+
+
+#Create data frame with only matching pairs
+strongest_CCD_proteins <- CCD_effects_all_cells %>%
+  filter(toxic == F & CCD_score != 0 & chrom_feature %in% chrom_features_RPE & fdr < 0.25) %>%
+  mutate(effect_CCD = abs(CCD_score)) %>%
+  dplyr::group_by(gene,cell_line) %>%
+  dplyr::slice_max(effect_CCD)
+
+pdf(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20220117_paper_figure_short/supplementary_figures/figure_S6_editing_efficiency/xv20231006_CCD_effect.pdf", width = 3, height= 4)
+ggplot(strongest_CCD_proteins, aes(fct_relevel(cell_line, c("K562","DEF","PRO","RPE1")), effect_CCD)) +
+  stat_summary(geom = "col",fun.y = "mean", aes(fill = cell_line)) +
+  geom_quasirandom() +
+  ylab("abs(Max. CCD ∆log2MMEJ:NHEJ)") +
+  theme_bw()  +
+  scale_fill_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x = element_blank())
+dev.off()
+
+
+CCD_greater_test <- map_dfr(c("DEF","PRO","RPE1"), function(x) {
+  cell_line1 <- strongest_CCD_proteins %>% filter(cell_line == "K562" & toxic == F & gRNA != "NTC" & fdr < 0.25) %>% select(cell_line, gRNA, effect_CCD) 
+  cell_line2 <- strongest_CCD_proteins %>% filter(cell_line == x & toxic == F & gRNA != "NTC" & fdr < 0.25) %>% select(cell_line, gRNA, effect_CCD)
+  proteins <- intersect(cell_line1$gRNA, cell_line2$gRNA)
+  cell_lines <- bind_rows(cell_line1, cell_line2) %>% filter(gRNA %in% proteins) %>% distinct()
+  cell_lines %>% ungroup() %>% t_test(effect_CCD ~ cell_line, paired = T, ref.group = "K562", alternative = "less")
+  }) %>% mutate(fdr = p.adjust(p, method = "fdr"))
+
+```
+
+
+#Are effect sizes bigger if editing frequency is bigger: Arrange data
+```{r}
+#Create table with mean ∆log2balance and TIF
+merge_RPE1_data_bal <- bind_rows(DEF_log2, PRO_log2 , RPE1_log2) %>%
+  filter(!gRNA %in% c("halfLBR2","LBR2","empty"))
+
+#Extract controls
+control_RPE1_cells <- filter(merge_RPE1_data_bal, gRNA == "NTC") %>%
+  select(barcode, cell_line, dmso_log2_bal = log2_bal)
+
+#Left_join
+RPE1_cells <- merge_RPE1_data_bal %>% left_join(control_RPE1_cells) %>%
+  mutate(delta_log2_bal = log2_bal- dmso_log2_bal) %>%
+  dplyr::group_by(cell_line, bio_rep, gRNA) %>%
+  dplyr::summarise(mean_delta = abs(mean(delta_log2_bal, na.rm = T))) %>%
+  ungroup() %>%
+  dplyr::group_by(bio_rep, cell_line) %>%
+  dplyr::summarise(overall_delta = mean(mean_delta))  %>%
+  select(rep = bio_rep, overall_delta, cell_line)
+
+
+#K562 log2 plot
+control_K562_log2 <- K562_log2 %>% 
+  filter(sample == "WT") %>%
+  dplyr::group_by(barcode, rep) %>%
+  dplyr::summarise(dmso_control = mean(log2MMEJNHEJratio))
+
+K562_log2_data <- K562_log2 %>%
+  left_join(proteins_gRNA) %>%
+  na.omit() %>%
+  left_join(control_K562_log2) %>%
+  mutate(delta_log2_bal = log2MMEJNHEJratio- dmso_control) %>%
+  dplyr::group_by(rep, gRNA) %>%
+  dplyr::summarise(mean_delta = abs(mean(delta_log2_bal, na.rm = T))) %>%
+  ungroup() %>%
+  dplyr::group_by(rep) %>%
+  dplyr::summarise(overall_delta = mean(mean_delta)) %>%
+  mutate(cell_line = "K562")
+
+
+```
+
+#Is there correlation between editing frequency and effect sizes?
+```{r}
+#Bind editing and ∆log2 balance
+correlation_effect_size <- K562_log2_data %>% 
+  bind_rows(RPE1_cells) %>%
+  left_join(merge_RPE1_data_TIF)
+
+#Are these two variable correlated
+correlation_test <- cor.test(correlation_effect_size$overall_delta, correlation_effect_size$mean_TIF, method = "spearman") %>% tidy()
+
+#plot scatter plot
+ggplot(correlation_effect_size, aes(overall_delta, mean_TIF)) +
+  geom_point(aes(color = cell_line)) +
+  stat_cor(method = "spearman",label.x = 1.5, label.y.npc = "bottom") + 
+  theme_bw() + ylab("Total indel frequency per replicate") + xlab("Average ∆log2 MMEJ::NHEJ per replicate")  +
+  scale_color_manual(values = c("#9f86bf","grey70","#95c482","#98bad5"))
+```
+
+```
+

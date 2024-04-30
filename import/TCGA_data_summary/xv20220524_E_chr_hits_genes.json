@@ -1,0 +1,137 @@
+[{
+  "biotype": "protein_coding", 
+  "symbol": "DNMT3A", 
+  "cytoband": [
+    "2p23.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "DNA methyltransferase 3 alpha", 
+  "gene_id": "ENSG00000119772"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "ARID1A", 
+  "cytoband": [
+    "1p36.11"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "AT-rich interaction domain 1A", 
+  "gene_id": "ENSG00000117713"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "KDM6A", 
+  "cytoband": [
+    "Xp11.3"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "lysine demethylase 6A", 
+  "gene_id": "ENSG00000147050"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "SETD2", 
+  "cytoband": [
+    "3p21.31"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "SET domain containing 2, histone lysine methyltransferase", 
+  "gene_id": "ENSG00000181555"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "NPM1", 
+  "cytoband": [
+    "5q35.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "nucleophosmin 1", 
+  "gene_id": "ENSG00000181163"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "MEN1", 
+  "cytoband": [
+    "11q13.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "menin 1", 
+  "gene_id": "ENSG00000133895"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "KAT6B", 
+  "cytoband": [
+    "10q22.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "lysine acetyltransferase 6B", 
+  "gene_id": "ENSG00000156650"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "NCOR1", 
+  "cytoband": [
+    "17p12", 
+    "17p11.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "nuclear receptor corepressor 1", 
+  "gene_id": "ENSG00000141027"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "SMC1A", 
+  "cytoband": [
+    "Xp11.22"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "structural maintenance of chromosomes 1A", 
+  "gene_id": "ENSG00000072501"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "STAG2", 
+  "cytoband": [
+    "Xq25"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "stromal antigen 2", 
+  "gene_id": "ENSG00000101972"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "NSD3", 
+  "cytoband": [
+    "8p11.23"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "nuclear receptor binding SET domain protein 3", 
+  "gene_id": "ENSG00000147548"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "EP300", 
+  "cytoband": [
+    "22q13.2"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "E1A binding protein p300", 
+  "gene_id": "ENSG00000100393"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "TRRAP", 
+  "cytoband": [
+    "7q22.1"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "transformation/transcription domain associated protein", 
+  "gene_id": "ENSG00000196367"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "KMT2D", 
+  "cytoband": [
+    "12q13.12"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "lysine methyltransferase 2D", 
+  "gene_id": "ENSG00000167548"
+},{
+  "biotype": "protein_coding", 
+  "symbol": "SET", 
+  "cytoband": [
+    "9q34.11"
+  ], 
+  "is_cancer_gene_census": true, 
+  "name": "SET nuclear proto-oncogene", 
+  "gene_id": "ENSG00000119335"
+}]

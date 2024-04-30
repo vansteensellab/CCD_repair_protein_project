@@ -1,0 +1,329 @@
+---
+title: "xv20211230_2_General_effects_and_conclusions"
+output: html_document
+---
+# Script to generate figure #2 in the paper. This figure describes the main general hits, by library and by chromatin type. Figure outline:
+A- Hits that favor NHEJ and MMEJ
+B- Complex enrichment analysis
+C- Perturbaation of each protein
+D- Hits fom Chromatin and DNA repair libraries
+E- Proteins from Chromatin libraries
+F- SAP130 and SUPT5H follow. up
+
+Data in text:
+A-...
+B-...
+
+Supplementary figure 2:
+A- POLL effect
+B- All complexes that favor MMEJ
+C- Complexes that favor NHEJ (non-significant)
+
+Supplementary figure 3:
+
+This script generates the plots for figure 2 and S2 & S3
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r libraries}
+# libraries:
+library(tidyverse)
+library(data.table)
+library(parallel)
+library(gtools)
+library(pheatmap)
+library(ggbeeswarm)
+library(reshape2)
+library(gridExtra)
+library(broom)
+library(ggrepel)
+library(gprofiler2)
+library(dendextend)
+library(Hmisc)
+library(scales)
+library(ggdendro)
+```
+
+# Aesthetic legend for the whole paper
+This are the colors that I will use for the whole paper. This chunk will be copied in every file.
+```{r}
+# Pathway color palette
+pathway.colors <- tibble(color = c("#EB2030","grey90","#2E358F"), label = c("MMEJ","no_effect","NHEJ"), feature = "pathway_balance")
+
+#Library colors 
+library.colors <- tibble(color = c("#E69F03","#56B3E6"), label = c("Chromatin","DNA_repair"),  feature = "library")
+
+#KAT5 example color
+KAT5.example <- tibble(color = "#EF6817", label = "KAT5", feature = "example")
+
+#Epistatic interaction colors
+slope.colors <- tibble(color = c("#01665e","#f5f5f5","#8c510a"),label = c("negative","none","positive"), feature = "epistasis")
+
+#Inhibitor and protein KO colors
+inh.colors <- tibble(color = c("#2A52BE","#2B3035"), label = c("drug","protein"), feature = "inh_KO")
+
+#Four complex selection
+complex.colors <- tibble(color = c("#EA3442","#EA5C68","#2E358F","#EA717A"), label = c("NHEJ","FANC_core_complex","MRN_complex","RNF8_RNF168"), feature = "protein_complexes")
+
+#RNF8_RNF168 slope examples
+ubq.response.colors <-  tibble(color = c("#1732ef","#179eef","#ef6817","#efd417"), label = c("RNF8_RNF168","H2AK15ub","H2AK15ac","H1ub"), feature = "RNF8_RNF168_example")
+
+# Chromatin correlations
+chr.correlation.colors <- tibble(color = c("#009B9E","#F1F1F1","#C75DAB"), label = c("negative","none","positive"), feature = "chromatin_correlation")
+
+#Bind all and plot
+paper.palette <- bind_rows(pathway.colors, library.colors,KAT5.example,slope.colors,inh.colors, complex.colors,ubq.response.colors,chr.correlation.colors) 
+ggplot(paper.palette) +
+  geom_tile(aes(label,"1", fill = color, width = 1)) +
+  geom_text(aes(label,"1", label = color)) +
+  scale_fill_manual(values = levels(as.factor(paper.palette$color))) +
+  facet_wrap(~ feature, scales = "free", nrow = 4, strip.position = "top") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Import data tables
+```{r libraries}
+#detailed table
+#ddr
+ddr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_scores.rds")
+colnames(ddr.screen.detail)[9] <- "b.rep"
+colnames(ddr.screen.detail)[10] <- "t.rep"
+ddr.screen.detail$library <- "DNA_repair"
+#chromatin
+chr.screen.detail <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_mmej.rds")
+chr.screen.detail$library <- "Chromatin"
+
+# I think I don't need these ones for this figure
+#Control table (WT & POLQ)
+#ddr
+ddr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210609_screen_ddr_controls.rds")
+colnames(ddr.screen.controls)[9] <- "b.rep"
+colnames(ddr.screen.controls)[10] <- "t.rep"
+ddr.screen.controls$library <- "DNA_repair"
+
+#chromatin
+chr.screen.controls <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv20200421_ChromDSBscreen/data/xv20201014_frozen_chz_scores_controls.rds")
+chr.screen.controls$library <- "Chromatin"
+
+
+#indel data
+indel.data.ddr <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv20201204_agm_ddr_screen/data/xv20210526_screen_DDR_indel_data.rds")
+
+# Chromatin follow up data
+chromatin.followup <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_chromatin_follow_up.rds")
+
+# Chromatin followup mutate IPRscore
+chromatin.fup.IPR <- chromatin.followup %>% filter(plate == "P1") %>% dplyr::group_by(well,gene,gRNA,barcode,plate) %>% dplyr::summarise(IPR.z.score = sum(z.score,na.rm = T)/sqrt(n()), count = n())
+
+# Put both screens together
+#detailed table with all the variables
+both.screen.detail <- bind_rows(ddr.screen.detail, chr.screen.detail) %>% mutate(ID_gene = paste(gene, library, sep = "_")) %>% filter(sample == "KO" & !ID_gene %in% c("DMSO_DNA_repair","LBR_ctrl_DNA_repair"))
+
+both.screen.gene.value.pre <- both.screen.detail %>% select(ID_gene, b.rep, t.rep,barcode, mmej.z.score) %>% 
+  mutate(tech.rep = case_when(t.rep == "R5" ~ "R3", t.rep == "R4" ~ "R2", T ~ t.rep)) %>%
+  dplyr::group_by(ID_gene,tech.rep) %>% 
+  dplyr::summarise(replicate.score = mean(mmej.z.score, na.rm = T)) %>% 
+  dplyr::group_by(ID_gene) %>%
+  dplyr::mutate(IPR.z.score = sum(replicate.score, na.rm = T)/sqrt(n()))
+
+#Data for plotting reproducibility
+both.screen.gene.value <- both.screen.gene.value.pre %>%
+  reshape2::dcast(ID_gene ~ tech.rep, value.var = "IPR.z.score") %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(comb.data = (R1+R2+R3)/sqrt(3))
+
+# Data to call hits
+hits.both.screens <- both.screen.gene.value.pre %>% mutate(pathway = case_when(IPR.z.score < -1.95 ~ "MMEJ", IPR.z.score > 1.95 ~ "NHEJ", T ~ "NA"), library = case_when(grepl("DNA", ID_gene) ~ "DNA_repair", grepl("Chromatin", ID_gene) ~ "Chromatin"))
+
+# Filter
+per_19IPR_data <- both.screen.detail %>% 
+  dplyr::group_by(gene,barcode,library) %>% 
+  dplyr::summarise(IPR.z.score = sum(mmej.z.score, na.rm = T)/sqrt(n()), count = n()) %>% ungroup()
+
+#Clone 5 chromatin
+clone5_z.score_chrom_tib <- readRDS('/DATA/projects/DSBrepair/data/R/cl20201026_ChIP_zscore_selection.RDS')
+
+#Epistasis analysis
+slope.protein.features.all <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_all_genes.rds")
+
+step1.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_1_step.rds")
+step2.epistasis <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_epistasis_2_step.rds")
+
+#Inhibitor perturbation data
+combined.inhibitor.data.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_effect.rds") 
+
+#Export epistasis interactions
+slope.protein.features.inhibitors.filt <- readRDS(file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211230_kinase_inhib_epistasis.rds")
+```
+
+Fig 2A: Hits that favor NHEJ and MMEJ
+```{r}
+# How many genes perturb each pathway
+hits.per.pathway <- hits.both.screens %>% select(ID_gene,pathway) %>% distinct() %>% group_by(pathway) %>% dplyr::summarise(counts = n())
+
+#Plot
+ggplot(hits.per.pathway %>% filter(pathway != "NA")) + 
+  geom_col(aes(pathway, counts, fill = pathway)) + 
+  theme_bw() + coord_cartesian(ylim = c(0,100)) + 
+  scale_fill_manual(values = levels(as_factor(pathway.colors$color))[c(1,3)]) + 
+  ylab("Number of genes that perturb each pathway")
+
+```
+Fig 2B: CORUM database complexes enriched in MMEJ
+```{r}
+# Genes in MMEJ
+hits.mmej <- filter(hits.both.screens, pathway == "MMEJ") %>% pull(ID_gene) %>% gsub("_.*$","",.)
+write(hits.mmej, "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211005_mmej_hits.txt")
+
+#Run GO profiler (this gives the whole list that will go to supplementary)
+gotest.mmej <- gost(hits.mmej, organism = "hsapiens",sources = "CORUM")
+
+#Complex selection that goes into main figure
+selected_corum_id <- c("CORUM:2739","CORUM:248","CORUM:2815","CORUM:5197","CORUM:2217","CORUM:1111","CORUM:2218","CORUM:387","CORUM:2766","CORUM:1189","CORUM:6732","CORUM:936","CORUM:1218")
+
+# Data set
+complex.enrichment <- gotest.mmej$result %>% filter(term_id %in% selected_corum_id) %>% dplyr::group_by(term_name, term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)), CORUM_name = paste(term_name, term_id, sep = "_"))
+
+#Plot
+ggplot(complex.enrichment) +
+  geom_col(aes(p_val, reorder(CORUM_name, p_val)), fill = levels(as_factor(pathway.colors$color))[c(1)]) +
+  coord_cartesian(expand = T)+ xlab("-log10(p-adj)") + ylab("") +
+  theme_bw()
+```
+
+Figure 2C: Plot all genes that belong to complexes that favor MMEJ
+```{r}
+# 
+screen.with.genes <- both.screen.gene.value %>% separate(ID_gene, into = "gene", remove = F)
+
+# dt with interesting complexes (Manually curated from CORUM database)
+FA_complex_ID_2378 <- c("BLM","TOP3A","FANCL","FANCA","FANCB","FANCC","FANCE","FANCF","FANCG","RMI","RPA1")
+BRCA1_BARD1_BACH1_ID_2815 <- c("BARD1","BRCA1","RBBP8","RAD50","TOPBP1","MRE11","NBN","BACH1")
+MDC1_MRN_ID_2218 <- c("RAD50","MRE11","MDC1","NBN")
+DNA_synth_ID_1111 <- c("POLA1","POLA2","POLD1","POLD2","POLD3","POLD4","PRIM2","PRIM1","POLE","POLE2","POLE3","POLE4","TOP1","TOP2A","PCNA","RFC1","RPA1")
+MCM_ID_387 <- c("MCM2","MCM3","MCM4","MCM5","MCM6","MCM7")
+
+prot.complexes <- tibble(gene = c(FA_complex_ID_2378,BRCA1_BARD1_BACH1_ID_2815,MDC1_MRN_ID_2218,DNA_synth_ID_1111,MCM_ID_387), complex = c(rep("FA_complex_ID_2378",length(FA_complex_ID_2378)),rep("BRCA1_BARD1_BACH1_ID_2815",length(BRCA1_BARD1_BACH1_ID_2815)),rep("MDC1_MRN_ID_2218",length(MDC1_MRN_ID_2218)),rep("DNA_synth_ID_1111",length(DNA_synth_ID_1111)),rep("MCM_ID_387",length(MCM_ID_387))))
+
+# Left join screening value
+prot.complex.effects <- left_join(prot.complexes,screen.with.genes %>% select(gene,comb.data)) %>% filter(complete.cases(.))
+
+#Figure for paper
+ggplot(prot.complex.effects) + geom_point(aes(reorder(gene, comb.data),complex,color = comb.data, size = abs(comb.data))) + theme_bw() + scale_color_gradient2(high = "#2E358F", mid = "grey80",low = "#EB2030") + xlab("") + ylab("") + facet_wrap(~ complex, scales = "free", ncol = 1) + theme(axis.text.y = element_blank(), legend.position = "top",  axis.ticks.y = element_blank())
+```
+
+Fig 2D: Classification per chromatin
+```{r}
+# How many genes perturb each pathway
+hits.per.library <- both.screen.gene.value %>% filter(pathway != "NA") %>% group_by(library) %>% dplyr::summarise(counts = n())
+ggplot(hits.per.library %>% filter(library != "NA")) + geom_col(aes(fct_relevel(library, c("DNA_repair","Chromatin")),counts, fill = library)) + theme_bw() + coord_cartesian(ylim = c(0,100)) + ylab("Number of hits") + scale_fill_manual(values = levels(as_factor(library.colors$color))) + theme(legend.position = "none")
+```
+
+#Figure 2E: All chromatin genes
+```{r}
+# Chromatin hits
+chromatin.hits <-  both.screen.gene.value %>% filter(pathway != "NA") %>% filter(library == "Chromatin") %>% arrange(desc(comb.data)) %>% separate(ID_gene, into = "gene", remove = T) %>% pull(gene)
+
+#plot 
+ggplot(per_19IPR_data %>% filter(gene %in% chromatin.hits),aes(fct_relevel(gene,chromatin.hits),IPR.z.score, color = library, fill = library)) +
+  geom_quasirandom() + geom_hline(yintercept = c(1.95,-1.95), linetype = 2) + theme_bw() + scale_color_manual(values = levels(as_factor(library.colors$color))) + coord_flip() + stat_mean(geom = "point", color = "black")
+```
+
+# Figure 2F: Follow up SUPT5H and SAP130
+```{r}
+# gRNA difference per gene
+strong_hits <- filter(chromatin.followup, gene %in% c("SUPT5H","SAP130"))
+#Option A (z-scores)
+z.score.plot <- strong_hits %>% 
+  dplyr::group_by(gene,gRNA, barcode) %>% 
+  dplyr::summarise(MMEJfupscore = sum(z.score)/sqrt(n()))
+
+ggplot(z.score.plot) + 
+  geom_quasirandom(aes(fct_relevel(gRNA, c("Combo")),MMEJfupscore)) + 
+  facet_wrap(~ fct_relevel(gene, c("SUPT5H","SAP130"))) +
+  stat_mean(aes(fct_relevel(gRNA, c("Combo")), MMEJfupscore), geom = "point", color ="red") +
+  theme_bw() +
+  geom_hline(yintercept = c(-1.95,1.95), linetype = 2) +
+  ylab("MMEJscore perturbation (z-score)") + 
+  theme(strip.background = element_rect(fill = levels(as_factor(library.colors$color))))
+```
+
+# Number in text
+
+#NOTE: This will change, but every number that I refer in the text will available in this chunk
+```{r}
+```
+
+#Supplementary data
+
+#S2A: POLL effect size
+```{r}
+ggplot(per_19IPR_data %>% filter(gene == "POLL")) +
+  geom_quasirandom(aes(gene,IPR.z.score)) +
+  ylim(c(-5,40)) +
+  geom_hline(yintercept = 0, linetype =2) +
+  theme_bw()
+```
+
+#Figure S2B: All complexes that favor MMEJ
+```{r}
+ggplot(gotest.mmej$result %>% dplyr::group_by(term_name, term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)), CORUM_name = paste0(term_name, term_id, sep = "_"))) + geom_col(aes(p_val,reorder(CORUM_name,p_val)), fill = "#EB2030") + coord_cartesian(expand = F) + theme_minimal() + xlab("-log10(p-adj)") + ylab("")
+```
+
+#Figure S2C: complex that favor NHEJ (non-significant)
+
+```{r}
+# Genes in NHEJ
+hits.nhej <-  filter(hits.both.screens, pathway == "NHEJ") %>% pull(ID_gene) %>% gsub("_.*$","",.)
+write(hits.nhej, "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/xv20211216_nhej_hits.txt")
+
+#Generate enrichment chasrts
+gotest.nhej <- gost(hits.nhej, organism = "hsapiens",sources = "CORUM", significant = F)
+
+#Supplementary plot NHEJ
+ggplot(gotest.nhej$result %>% dplyr::group_by(term_name, term_id) %>% dplyr::summarise(p_val = -log10(mean(p_value)), CORUM_name = paste0(term_name, term_id, sep = "_"))) + geom_col(aes(p_val,reorder(CORUM_name,p_val)), fill = "#2E358F") + coord_cartesian(expand = F) + theme_minimal() + xlab("-log10(p-adj)") + ylab("") 
+
+```
+Suplementary 3: Follow up experiments controls
+
+#S3A: Plate design
+
+#S3B: MMEJscore distribution for both biological replicates
+```{r}
+ggplot(chromatin.followup %>% 
+         filter(gene == "tracr")) + 
+  geom_density(aes(MMEJscore, group = bio.rep), linetype = 2, fill = "grey70", alpha = 0.4) +
+  theme_bw() + xlab("MMEJscore per IPR")
+```
+
+#S3C Control differences:  POLQ and WT (Lig4 failed in these wells)
+```{r}
+# Prepare data tabl for plot
+controls.fup <- chromatin.followup %>% filter(plate == "P1") %>% filter(gene == "tracr" | (gene %in% c("POLQ","LigIV") & gRNA == "Combo")) %>% dplyr::group_by(well,gene,gRNA,plate,bio.rep) %>% dplyr::summarise(gene.value = mean(z.score, na.rm = T))
+
+ggplot(controls.fup) + 
+  geom_hline(yintercept = 0, linetype = 2) + 
+  geom_quasirandom(aes(fct_relevel(gene, c("tracr","POLQ","LigIV")),gene.value)) + 
+  theme_bw() + ylab("MMEJscore per IPR (z-score)") + 
+  scale_color_manual(values = levels(as_factor(library.colors$color))) + 
+  theme(legend.position = "top")
+```
+ #Figure S3D: POLQ all gRNAs
+```{r}
+ggplot(chromatin.fup.IPR %>% filter(gene == "POLQ")) +
+  geom_quasirandom(aes(fct_relevel(gRNA, "Combo"),IPR.z.score)) +
+  theme_bw() +
+  geom_hline(yintercept = 0,linetype = 2)
+```
+
+ #Figure S3E: Lig IV all gRNAs
+```{r}
+ggplot(chromatin.fup.IPR %>% filter(gene == "LigIV")) +
+  geom_quasirandom(aes(fct_relevel(gRNA, "Combo"),IPR.z.score)) +
+  theme_bw() +
+  geom_hline(yintercept = 0,linetype = 2)
+```

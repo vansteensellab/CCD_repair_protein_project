@@ -1,0 +1,334 @@
+---
+title: "xv20230329_RPE1_mapping_clone"
+author: "Xabier Vergara"
+date: "2023-03-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggbeeswarm)
+library(pheatmap)
+library(broom)
+library(scales)
+```
+
+# Patwhay balance in clone 32: After mapping
+## Import data: Balance data and some other details
+```{r, warning=F}
+# Import data for high confidence reporters and calculate mean
+high_confidence_IPR <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/inhibitors/xv20230919_inhibitors_PRO_DEF_freq.rds")
+
+#Import control data
+control_data_DEF <- readRDS("~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/inhibitors/xv20230919_inhibitors_control_data.rds")
+
+#Pools used in the experiment
+selected_pools <- c("RPE1_Low_1000","RPE1Deff_Low_1000","RPE1Proff_Low_250","U2OS_High_100")
+
+#Import chromatin data
+#Export data frame
+chromatin_data_RPE1 <- readRDS(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/validation_screen/xv20230919_chromatin_data_RPE1.rds")
+
+```
+
+#Calculate differentials per replicate
+```{r}
+dmso_balance <- high_confidence_IPR %>% filter(gRNA == "LBR2") %>% ungroup() %>% select(barcode, cell_line, bio_rep, dmso_bal = log2_bal)
+```
+
+#Calculate diff for these the high_confidence barcodes
+```{R}
+#Calculate differential
+diff_gRNA_RPE1 <- high_confidence_IPR %>% 
+  left_join(dmso_balance) %>%
+  mutate(gRNA_diff = log2_bal - dmso_bal) %>%
+  filter(gRNA != "LBR2")
+
+#Average perturbation
+mean_gRNA_effect <- diff_gRNA_RPE1 %>%
+  dplyr::group_by(barcode, gRNA,cell_line) %>%
+  dplyr::summarise(mean_diff = mean(gRNA_diff),
+                   reps = n())
+
+```
+
+
+#Plot pathway balance changes
+```{R}
+ggplot(mean_gRNA_effect) +
+  ggbeeswarm::geom_quasirandom(aes(cell_line, mean_diff)) +
+  facet_wrap(~ gRNA) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+```
+
+#Join chromatin data
+```{r}
+#Create RPE1 dataframe
+inhibitor_effect_chromatin_RPE1 <- mean_gRNA_effect %>%
+  left_join(chromatin_data_RPE1) %>%
+  na.omit()
+```
+
+
+#Plot some control plots
+```{r, fig.width=3, fig.height=4}
+#Import K562 data 
+K562_data <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_inhibitors/xv20220929_drug_differentials_log2_MMEJ_NHEJ_balance.rds") %>% dplyr::select(gRNA = drug, barcode,mean_diff =mean.log2foldchange) %>% mutate(cell_line = "K562")
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230919_ATMi_global_effect.pdf", width=3, height=4)
+ggplot(mean_gRNA_effect  %>% bind_rows(K562_data) %>% filter(gRNA == "ATMi")) +
+  geom_quasirandom(aes(fct_relevel(cell_line,c("K562","DEF","PRO","RPE1")), mean_diff, color = cell_line)) + 
+  geom_hline(yintercept = 0, linetype =2) +
+  scale_color_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  theme_bw() +
+  theme(legend.position = "none") + ylab("∆log2 MMEJ:NHEJ balance") + xlab("Cell line")
+dev.off()
+
+
+```
+
+
+#Calculate global differences
+```{r}
+#Calculate mean effect
+mean_effects <- mean_inhibitor_effect %>% 
+  dplyr::group_by(cell_line, condition) %>%
+  dplyr::summarise(global_diff = mean(mean_diff, na.rm = T))
+
+#Calculate p.value calculation
+p_val_global <- mean_inhibitor_effect %>% 
+  dplyr::group_by(cell_line, condition) %>%
+  rstatix::t_test(mean_diff ~ 0)
+
+#Adjust p-value
+adj_pvalue <- map_dfr(cells, function(x) {
+  p_val_global %>% filter(cell_line == x) %>% mutate(global_p_adj = p.adjust(p, method = "BH"))
+}) 
+
+#Create data frame
+global_effects <- mean_effects %>% 
+  left_join(adj_pvalue) %>%
+  select(cell_line, drug = condition, global_diff, global_p_adj)
+
+
+
+```
+
+
+#Calculate slopes for RPE
+```{r}
+#Create empty dataframe to calculate synergy scores
+drug_CCD_slopes_RPE <- tibble(gRNA = NA, feature = NA, slope.log2 = NA, term = NA,p.value = NA, cell_line = NA, binsize = NA)
+
+#Loop to run linear models on the values
+for (h in unique(inhibitor_effect_chromatin_RPE1$gRNA)) {
+  for(i in unique(inhibitor_effect_chromatin_RPE1$cell_line)) {
+  for (j in colnames(inhibitor_effect_chromatin_RPE1)[6:16]) { #Run this function for each of the 25 high quality chromatin features
+    model.dt <- inhibitor_effect_chromatin_RPE1 %>% filter(gRNA == h & cell_line == i & binsize == 2000) # And For each gene
+   if (nrow(model.dt) == 0) {
+next
+}
+    model.epistasis.log2 <- lm(formula = mean_diff ~ unlist(model.dt[j]), data = model.dt) %>% tidy() #Correlation analysis
+   drug_CCD_slopes_RPE <- drug_CCD_slopes_RPE %>% tibble::add_row(gRNA = h,binsize =2000, feature = j,cell_line = i, slope.log2 = model.epistasis.log2 %>% pull(estimate), term = model.epistasis.log2 %>% pull(term), p.value = model.epistasis.log2 %>% pull(p.value)) #Select valuable parameters and save them in data frame
+  }
+  }
+}
+
+#Retain slopes that 
+drug_CCD_all_values  <- drug_CCD_slopes_RPE %>% 
+  reshape2::dcast(gRNA + feature + cell_line ~ term, value.var = "slope.log2") %>%  #dcast table
+  dplyr::select(gRNA, cell_line,feature,intercept = '(Intercept)', slope = 'unlist(model.dt[j])') %>% #Extract information for slopes only
+  mutate(CCD_value = case_when(gRNA == "ATMi" & slope < 0 ~ slope,
+                               gRNA == "ATMi"& slope > 0 ~ 0,
+                               gRNA == "DNAPKi" & slope > 0 ~ slope,
+                               gRNA == "DNAPKi" & slope < 0 ~ 0, T ~ slope)) 
+#Call M-synergies, N-synergies or no synergies based on the slope and MMEJ:NHEJ differentials
+```
+
+#Plot heterochromatin features
+```{r}
+#K562 inhibitor data
+K562_CCD <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/xv20220816_drug_CCD_results.rds") %>% dplyr::select(gRNA = drug, CCD_value =CCD_synergy_score,chrom_feature) %>% mutate(cell_line = "K562")
+
+RPE_data_CCD <- drug_CCD_all_values %>%  mutate(chrom_feature = str_extract(pattern = "(H3|l|L).*", feature)) %>% select(gRNA, chrom_feature, CCD_value, cell_line)
+
+drug_CCD_all_values_comb <- bind_rows(K562_CCD,RPE_data_CCD)  %>%
+  mutate(brca1_status = case_when(cell_line %in% c("K562","DEF") ~ "BRCA1null",
+                                  cell_line %in% c("PRO","RPE1") ~ "BRCA1pro"))
+
+pdf("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230919_ATMi_CCD_effects.pdf", width=3, height=4)
+ggplot(drug_CCD_all_values_comb %>% filter(chrom_feature %in% c("H3K9me2","H3K9me3","LMNB1","late_replicating","H3K27me3") & gRNA == "ATMi")) +
+  geom_quasirandom(aes(fct_relevel(cell_line,c("K562","DEF","PRO","RPE1")), CCD_value, color = cell_line)) + 
+  geom_hline(yintercept = 0, linetype =2) +
+  scale_color_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  theme_bw() +
+  theme(legend.position = "none") + ylab("CCD score") + xlab("Cell line")
+dev.off()
+
+#Test
+ATMi_CCD_wilcox <- drug_CCD_all_values_comb %>% 
+  filter(chrom_feature %in% c("H3K9me2","H3K9me3","LMNB1","late_replicating","H3K27me3") & CCD_value != 0 & gRNA == "ATMi") %>% 
+  dplyr::group_by(gRNA) %>%
+  rstatix::wilcox_test(CCD_value ~ brca1_status)
+
+```
+
+```{r}
+K562_data_chromatin <- readRDS("/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/processed_data/CCD_inhibitors/xv20220929_drug_log2_MMEJNHEJ_differentials_chromatin_KO.rds") %>% dplyr::select(gRNA = drug, barcode,mean_diff =mean.log2foldchange, H3K27me3, H3K9me2, H3K9me3) %>% mutate(cell_line = "K562")
+
+
+#Interaction with triple heterochromatin
+
+CCD_summary <- drug_CCD_all_values_comb %>% filter(chrom_feature %in% c("H3K9me2","H3K9me3","LMNB1","late_replicating","H3K27me3") & gRNA == "ATMi") %>% dplyr::group_by(cell_line) %>% slice_min(CCD_value) %>% filter(CCD_value != 0)
+
+vector_selection <- CCD_summary %>% select(cell_line, gRNA, max_het = chrom_feature) %>% distinct()
+
+#Filter these values
+trip_het_table <- inhibitor_effect_chromatin_RPE1 %>% filter(binsize == 2000)
+colnames(trip_het_table) <- gsub("dam_|chip_","",colnames(trip_het_table))
+all_trip_het_table <- trip_het_table %>% bind_rows(K562_data_chromatin) %>% right_join(vector_selection) 
+
+max_het_correlation <- map2_dfr(vector_selection$cell_line, vector_selection$gRNA, function(x,y){
+  filter_dt <- all_trip_het_table %>% filter(gRNA == y & cell_line == x)
+  het_feature <- unique(filter_dt$max_het)
+  print(het_feature)
+  filter_dt %>% select(barcode, gRNA, mean_diff, sel_f = het_feature, max_het, cell_line)
+})
+
+#Plot
+pdf(file = "/home/x.vergara/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/export/xv20230307_revision_figures/RPE_PRO_DEF/xv20230919_correlation_max_heterochromatin_inhibitor.pdf", width = 3, height = 3)
+ggplot(max_het_correlation ,aes(sel_f, mean_diff, color = cell_line)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw() +
+  ylab("∆log2 MMEJ::NHEJ") +
+  theme(legend.position = "top") +
+  scale_color_manual(values = c("#9f86bf","grey70","#95c482","#98bad5")) +
+  facet_wrap(~ gRNA, ncol = 1, scales = "free_y") + xlab("Triple heterochromatin feature")
+dev.off()
+
+```
+
+#CONCLUSION: There are chromatin context dependencies and some of them seem to be conserved. Others dependent on the cell type. 
+ATM inhibitor has H3K27me3 CCD in most cell lines and DNAPK inhibitor H3K36me3.
+
+#Plot correlation plots for H3K27me3 & LMNB1 with ATMi and DNAPKi with H3K36me3
+```{r, message=F, warning=F}
+#With H3K27me3 and ATMi
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(gRNA == "ATMi" & binsize == 2000), aes(dam_LMNB2,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+
+```
+
+#Test balances with large bins and only PRO & DEF
+```{r}
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 20000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K27me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 20000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K9me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 20000 & cell_line %in% c("RPEPro","RPEDef")), aes(chip_H3K27ac,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+```
+
+#Test balances with large bins and only PRO & DEF
+```{r}
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "DNAPKi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K27me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "DNAPKi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K9me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "DNAPKi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(chip_H3K36me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+```
+#ATM inhibitor
+```{r}
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K27me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(dam_H3K9me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+ggplot(inhibitor_effect_chromatin_RPE1 %>% filter(condition == "ATMi" & binsize == 2000 & cell_line %in% c("RPEPro","RPEDef")), aes(chip_H3K36me3,mean_diff)) +
+  geom_point() +
+  geom_smooth(se = F, method = "lm") + 
+  ggpubr::stat_cor(method = "pearson") +
+  facet_wrap(~ fct_relevel(cell_line, cells)) +
+  theme_bw() + geom_hline(yintercept = 0, linetype = 2)
+
+```
+
+#PCR modeling: RPE1 data (only reliable dataset)
+```{r}
+#Create an empty dt with CCDs of DDR proteins
+drug_CCDs_dt_RPE1_test <- tibble(cell_line = NA, drug = NA,binsize = NA, r.squared = NA, adj.r.squared = NA,p.value = NA)
+for (j in c("RPEPro","RPEDef")){
+  for (i in unique(inhibitor_effect_chromatin_RPE1$condition)){
+    gene.library.dt <- filter(inhibitor_effect_chromatin_RPE1, condition == i & cell_line == j & binsize == 2000)
+    set.seed(1)
+    PCR_model_DDR_test <- pls::pcr(mean_diff~ dam_H3K9me3+dam_H3K27me3+chip_H3K36me3, data=gene.library.dt , validation="CV") #Run principal component regression
+    pcr_pred <- predict(PCR_model_DDR_test, gene.library.dt, ncomp = 3) #Run model with three PC
+    combined.dt <- tibble(measured = gene.library.dt$mean_diff, predicted = as.numeric(pcr_pred)) #Create table with real and predicted differentials
+    pred_vs_estim <- lm(formula = measured ~ predicted, data = combined.dt) %>% broom::glance() #Predicted vs. measured correlation plot
+    drug_CCDs_dt_RPE1_test <- drug_CCDs_dt_RPE1_test %>% add_row(cell_line = j, drug = i,binsize = 2000, r.squared = pred_vs_estim %>% pull(r.squared), adj.r.squared = pred_vs_estim %>% pull(adj.r.squared), p.value = pred_vs_estim %>% pull(p.value)) #Extract valuable metrics
+  }
+  }
+
+#Adjust per cell line
+adj_drug_dt_RPE1_adjs_pro <- map_dfr(cells, function(x) {
+  drug_CCDs_dt_RPE1_test %>% filter(cell_line == x) %>% mutate(p.adj = p.adjust(p.value, method = "BH"))
+})
+```
+
+
+
+#Export data table
+```{r}
+write_rds(CCD_dt, file = "~/XV_P3_ChromDSBScreen/xv_CRISPR_screen_figures/data/revisions/pools_balance/xv20230814_CCD_analysis_summary.rds")
+
+```
